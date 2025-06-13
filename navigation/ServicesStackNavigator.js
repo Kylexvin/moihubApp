@@ -1,11 +1,12 @@
+// navigation/ServicesStackNavigator.js
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 
 import ServicesScreen from '../screens/ServicesScreen';
 import LocalServices from '../screens/LocalServices';
+import CategoryProviders from '../screens/CategoryProviders';
 import EmergencyServices from '../screens/EmergencyServices';
 import LinkMeNavigator from './LinkMeNavigator'; 
-
 
 const Stack = createStackNavigator();
 
@@ -14,8 +15,9 @@ const ServicesStackNavigator = () => {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="ServicesList" component={ServicesScreen} />
       <Stack.Screen name="LocalServices" component={LocalServices} />
+      <Stack.Screen name="CategoryProviders" component={CategoryProviders} />
       <Stack.Screen name="EmergencyServices" component={EmergencyServices} />
-       <Stack.Screen name="LinkMeStack" component={LinkMeNavigator} />
+      <Stack.Screen name="LinkMeStack" component={LinkMeNavigator} />
     </Stack.Navigator>
   );
 };

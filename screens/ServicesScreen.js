@@ -11,66 +11,72 @@ import { useNavigation } from '@react-navigation/native';
 const ServicesScreen = () => {
   const navigation = useNavigation();
   
-  const services = [
-    // University Services   
-    { 
-      title: "My University", 
-      icon: "school", 
-      category: "uni",
-      color: "#50c878" 
-    },
+const services = [
+  // University Services
+  { 
+    title: "My University", 
+    icon: "school", 
+    category: "uni", 
+    color: "#50c878" 
+  },
 
-    // Rentals/Accommodation Services
-    { 
-      title: "Rental Booking", 
-      icon: "home", 
-      category: "accom",
-      color: "#50c878" 
-    },
-    { 
-      title: "Roommate Finder", 
-      icon: "people", 
-      category: "accom",
-      color: "#50c878" 
-    },
-    { 
-      title: "Second Hand Items", 
-      icon: "pricetag", 
-      category: "accom",
-      color: "#50c878" 
-    },
-   
-    // Food Services
-    { 
-      title: "Food Delivery", 
-      icon: "fast-food", 
-      category: "food",
-      color: "#ff7f50" ,
-      onPress: () => navigation.navigate('FoodStack', { screen: 'FoodHome' })
-    },
-    { 
-      title: "Cafeteria Menu", 
-      icon: "restaurant", 
-      category: "food",
-      color: "#ff7f50" 
-    },
-    { 
-      title: "Groceries", 
-      icon: "cart", 
-      category: "food",
-      color: "#ff7f50" 
-    },
+  // Rentals/Accommodation Services
+  { 
+    title: "Rental Booking", 
+    icon: "home", 
+    category: "accom", 
+    color: "#50c878" 
+  },
+  { 
+    title: "Roommate Finder", 
+    icon: "people", 
+    category: "accom", 
+    color: "#50c878" 
+  },
+  { 
+    title: "Second Hand Items", 
+    icon: "pricetag", 
+    category: "accom", 
+    color: "#50c878" 
+  },
 
+  // Food Services
+  { 
+    title: "Food Delivery", 
+    icon: "fast-food", 
+    category: "food", 
+    color: "#ff7f50" 
+  },
+  { 
+    title: "Cafeteria Menu", 
+    icon: "restaurant", 
+    category: "food", 
+    color: "#ff7f50" 
+  },
+  { 
+    title: "Groceries", 
+    icon: "cart", 
+    category: "food", 
+    color: "#ff7f50" 
+  },
 
+  // Eshop
+  {
+    title: "Eshop",
+    icon: "bag",
+    category: "shop",
+    color: "#ffb347"
+  },
 
-   
-    { 
-      title: "LinkMe", 
-      icon: "heart", 
-      category: "local",
-      color: "red" 
-    }
-  ];
+  // Local Service
+  { 
+    title: "LinkMe", 
+    icon: "heart", 
+    category: "local", 
+    color: "red" 
+  }
+];
+
 
   // Navigate to specific service screens
   const navigateToServiceScreen = (serviceType) => {
@@ -81,7 +87,6 @@ const ServicesScreen = () => {
     }
   };
 
-  // Handle service item press
 const handleServicePress = (service) => {
   switch (service.title) {
     case 'LinkMe':
@@ -101,20 +106,23 @@ const handleServicePress = (service) => {
       break;
 
     case 'Rental Booking':
-  navigation.navigate('AccomStack', { screen: 'RentalHome' });
-  break;
+      navigation.navigate('AccomStack', { screen: 'RentalHome' });
+      break;
 
-case 'Roommate Finder':
-  navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' });
-  break;
-
+    case 'Roommate Finder':
+      navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' });
+      break;
 
     case 'Second Hand Items':
-       navigation.navigate('SecondHandStack', { screen: 'SecondHandHome' });
+      navigation.navigate('SecondHandStack', { screen: 'SecondHandHome' });
       break;
 
     case 'My University':
       navigation.navigate('UniStack', { screen: 'UniHome' });
+      break;
+
+    case 'Eshop':
+      navigation.navigate('EshopNavigator');
       break;
 
     default:
@@ -127,11 +135,12 @@ case 'Roommate Finder':
 };
 
 
+
   // Featured services section
   const FeaturedServices = () => {
     return (
       <View style={styles.featuredContainer}>
-        <Text style={styles.featuredTitle}>Featured Services</Text>
+        <Text style={styles.featuredItemTitle}>Featured</Text>
         <View style={styles.featuredGrid}>
           {/* Emergency Services */}
           <TouchableOpacity 
@@ -164,16 +173,14 @@ case 'Roommate Finder':
   return (
     <View style={styles.screenContainer}>
       {/* Header (simplified without search) */}
-      <View style={styles.header}>
-        <Text style={styles.screenTitle}>MoiHub Services</Text>
-      </View>
+     
 
       {/* Main Content */}
       <ScrollView showsVerticalScrollIndicator={false}>
         <FeaturedServices />
 
         <View style={styles.servicesContainer}>
-          <Text style={styles.sectionTitle}>All Services</Text>
+          {/* <Text style={styles.sectionTitle}>All Services</Text> */}
           <View style={styles.servicesGrid}>
             {services.map((service, idx) => (
               <TouchableOpacity 
@@ -199,13 +206,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
     padding: 16,
-    paddingTop: 50,
+    paddingTop: 20,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 0,
   },
   screenTitle: {
     fontSize: 24,
