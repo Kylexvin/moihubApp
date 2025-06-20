@@ -32,7 +32,7 @@ const MainTabNavigator = () => {
             } else if (route.name === 'Services') {
               iconName = focused ? 'grid' : 'grid-outline';
             } else if (route.name === 'Messages') {
-              iconName = focused ? 'chatbubble' : 'chatbubble-outline';
+              iconName = focused ? 'chatbubble' : 'chatbubble-ellipses-outline';
             } else if (route.name === 'Profile') {
               iconName = focused ? 'person' : 'person-outline';
             }

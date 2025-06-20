@@ -89,31 +89,33 @@ const NewChatScreen = ({ navigation }) => {
     }
   };
 
-  const startConversation = async (user) => {
-    try {
-      const res = await fetch(`${BASE_URL}/messages/conversations`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ participantId: user._id }),
-      });
+const startConversation = async (user) => {
+  try {
+    const res = await fetch(`${BASE_URL}/messages/conversations`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ participantId: user._id, chatType: 'normal' }),
+    });
 
-      if (res.ok) {
-        const convo = await res.json();
-        navigation.replace('ChatScreen', {
-          conversationId: convo._id,
-          conversation: convo,
-          otherUser: user
-        });
-      } else if (res.status === 401) {
-        handleAuthError();
-      }
-    } catch (err) {
-      console.error('Conversation error:', err);
+    if (res.ok) {
+      const convo = await res.json();
+      navigation.replace('ChatScreen', {
+        conversationId: convo._id,
+        conversation: convo,
+        otherUser: user,
+        chatType: convo.chatType || 'normal'
+      });
+    } else if (res.status === 401) {
+      handleAuthError();
     }
-  };
+  } catch (err) {
+    console.error('Conversation error:', err);
+  }
+};
+
 
   const renderUserItem = ({ item }) => (
     <TouchableOpacity style={styles.userItem} onPress={() => startConversation(item)}>
@@ -163,7 +165,7 @@ const NewChatScreen = ({ navigation }) => {
       {/* List */}
       <View style={styles.resultsContainer}>
         {loading ? (
-          <ActivityIndicator size="small" color="#007AFF" />
+          <ActivityIndicator size="small" color="black" />
         ) : (
           <FlatList
             data={dataToRender}
@@ -186,9 +188,9 @@ const NewChatScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
+   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#083028',
   },
   header: {
     flexDirection: 'row',
@@ -197,7 +199,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: '#2A2A2A',
   },
   backButton: {
     padding: 4,
@@ -205,50 +207,71 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#000000',
+    color: '#FFFFFF',
   },
   logoutButton: {
     padding: 4,
   },
- profileContainer: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  padding: 16,
-  backgroundColor: '#f5f5f5',
-  borderBottomWidth: 1,
-  borderBottomColor: '#e0e0e0',
-},
-
-avatarCircle: {
-  width: 40,
-  height: 40,
-  borderRadius: 20,
-  backgroundColor: '#ccc',
-  alignItems: 'center',
-  justifyContent: 'center',
-  marginRight: 12,
-},
-
-avatarText: {
-  color: '#fff',
-  fontSize: 18,
-  fontWeight: 'bold',
-},
-
-profileTextContainer: {
-  flexDirection: 'column',
-},
-
-profileName: {
-  fontSize: 16,
-  fontWeight: 'bold',
-  color: '#222',
-},
-
-profileUsername: {
-  fontSize: 12,
-  color: '#666',
-},
+  profileContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#1A1A1A',
+    borderBottomWidth: 1,
+    borderBottomColor: '#2A2A2A',
+  },
+  avatarCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#4CAF50',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  profileTextContainer: {
+    flexDirection: 'column',
+  },
+  profileName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  profileUsername: {
+    fontSize: 12,
+    color: '#AAAAAA',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  connectionStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#2D1B2E',
+  },
+  connectedStatus: {
+    backgroundColor: '#1B2D1B',
+  },
+  connectionDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FF6B6B',
+    marginRight: 4,
+  },
+  connectedDot: {
+    backgroundColor: '#4CAF50',
+  },
+  connectionText: {
+    fontSize: 10,
+    color: '#4CAF50',
+    fontWeight: '500',
+  },
 
   searchContainer: {
     flexDirection: 'row',
@@ -256,7 +279,7 @@ profileUsername: {
     marginHorizontal: 16,
     marginVertical: 12,
     paddingHorizontal: 12,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#1A1A1A',
     borderRadius: 10,
     height: 40,
   },
@@ -266,7 +289,7 @@ profileUsername: {
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#000000',
+    color: '#FFFFFF',
   },
   resultsContainer: {
     flex: 1,
@@ -277,13 +300,13 @@ profileUsername: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: '#2A2A2A',
   },
   avatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#4CAF50',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -299,17 +322,12 @@ profileUsername: {
   username: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#000000',
+    color: '#FFFFFF',
     marginBottom: 2,
   },
   email: {
     fontSize: 14,
-    color: '#8E8E93',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    color: '#AAAAAA',
   },
   centerLoadingContainer: {
     flexDirection: 'row',
@@ -317,10 +335,15 @@ profileUsername: {
     justifyContent: 'center',
     paddingVertical: 20,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   loadingText: {
     marginLeft: 8,
     fontSize: 14,
-    color: '#8E8E93',
+    color: '#888888',
   },
   emptyContainer: {
     flex: 1,
@@ -332,13 +355,13 @@ profileUsername: {
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#000000',
+    color: '#FFFFFF',
     marginTop: 16,
     textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#8E8E93',
+    color: '#AAAAAA',
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 20,

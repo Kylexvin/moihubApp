@@ -1,4 +1,3 @@
-// navigation/MessageStackNavigator.js
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import ChatListScreen from '../screens/messages/ChatListScreen';
@@ -11,22 +10,20 @@ const MessageStackNavigator = () => {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerShown: false, 
+        headerShown: false,
         gestureEnabled: true,
-        cardStyleInterpolator: ({ current, layouts }) => {
-          return {
-            cardStyle: {
-              transform: [
-                {
-                  translateX: current.progress.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [layouts.screen.width, 0],
-                  }),
-                },
-              ],
-            },
-          };
-        },
+        cardStyleInterpolator: ({ current, layouts }) => ({
+          cardStyle: {
+            transform: [
+              {
+                translateX: current.progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [layouts.screen.width, 0],
+                }),
+              },
+            ],
+          },
+        }),
       }}
     >
       <Stack.Screen 
@@ -49,4 +46,3 @@ const MessageStackNavigator = () => {
 };
 
 export default MessageStackNavigator;
-

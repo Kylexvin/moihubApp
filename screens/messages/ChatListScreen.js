@@ -1,5 +1,4 @@
-// screens/messages/ChatListScreen.js
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,292 +6,188 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
-  RefreshControl,
+  TextInput,
   ActivityIndicator,
   Alert,
-  TextInput,
+  RefreshControl,
   Animated,
-  Modal,
-  Dimensions,
-  Vibration,
-  StatusBar,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import io from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
+import io from 'socket.io-client';
+import Svg, { Path } from 'react-native-svg';
 
-const { width, height } = Dimensions.get('window');
 
 const ChatListScreen = ({ navigation }) => {
   const [conversations, setConversations] = useState([]);
+  const [filteredConversations, setFilteredConversations] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filteredConversations, setFilteredConversations] = useState([]);
+  const [fadeAnim] = useState(new Animated.Value(0));
   const [socket, setSocket] = useState(null);
+  const [connectionState, setConnectionState] = useState('disconnected');
   const [onlineUsers, setOnlineUsers] = useState(new Set());
   const [typingUsers, setTypingUsers] = useState({});
-  const [isDarkTheme, setIsDarkTheme] = useState(false);
-  const [showActionModal, setShowActionModal] = useState(false);
-  const [selectedConversation, setSelectedConversation] = useState(null);
-  const [deletedConversations, setDeletedConversations] = useState(new Set());
-  
-  // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
-  const modalSlideAnim = useRef(new Animated.Value(height)).current;
-  
-  // Use AuthContext
+
   const { currentUser, token, logout, isAuthenticated } = useAuth();
-
+  
   const BASE_URL = 'http://192.168.100.51:5000/api';
-
-  // Load preferences on mount
-  useEffect(() => {
-    loadUserPreferences();
-    animateEntry();
-  }, []);
+  const SOCKET_URL = 'http://192.168.100.51:5000'; // Adjust if different
 
   // Initialize socket connection
   useEffect(() => {
-    if (token && currentUser) {
-      initSocket();
+    if (!isAuthenticated || !token || !currentUser) {
+      return;
     }
-    return () => {
-      if (socket) {
-        socket.disconnect();
-      }
-    };
-  }, [token, currentUser]);
 
-  // Focus effect to refresh data when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      if (isAuthenticated && token) {
-        fetchConversations();
-      }
-    }, [isAuthenticated, token])
-  );
-
-  // Filter conversations based on search and deleted conversations
-  useEffect(() => {
-    let filtered = conversations.filter(conv => !deletedConversations.has(conv._id));
+    console.log('Initializing socket connection...');
     
-    if (searchQuery.trim() !== '') {
-      filtered = filtered.filter(conv => {
-        const otherParticipant = conv.participants.find(p => p._id !== currentUser?.id);
-        return otherParticipant?.username?.toLowerCase().includes(searchQuery.toLowerCase());
+    const socketConnection = io(SOCKET_URL, {
+      auth: {
+        token: token,
+        userId: currentUser._id
+      },
+      transports: ['websocket', 'polling'],
+      timeout: 20000,
+      forceNew: true
+    });
+
+    socketConnection.on('connect', () => {
+      console.log('Socket connected:', socketConnection.id);
+      setConnectionState('connected');
+      
+      // Join user room
+      if (currentUser?._id) {
+        socketConnection.emit('join_user_room', currentUser._id);
+      }
+    });
+
+    socketConnection.on('disconnect', () => {
+      console.log('Socket disconnected');
+      setConnectionState('disconnected');
+    });
+
+    socketConnection.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+      setConnectionState('error');
+    });
+
+    // Handle real-time events
+    socketConnection.on('new_message', (message) => {
+      console.log('Received new message:', message);
+      updateConversationWithNewMessage(message);
+    });
+
+    socketConnection.on('conversation_updated', (updatedConversation) => {
+      console.log('Conversation updated:', updatedConversation);
+      setConversations(prevConversations => {
+        return prevConversations.map(conv => 
+          conv._id === updatedConversation._id ? updatedConversation : conv
+        ).sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
       });
+    });
+
+    socketConnection.on('user_status_changed', ({ userId, status }) => {
+      console.log('User status changed:', userId, status);
+      setOnlineUsers(prev => {
+        const newSet = new Set(prev);
+        if (status === 'online') {
+          newSet.add(userId);
+        } else {
+          newSet.delete(userId);
+        }
+        return newSet;
+      });
+    });
+
+    socketConnection.on('user_typing', ({ conversationId, userId, isTyping }) => {
+      console.log('User typing:', conversationId, userId, isTyping);
+      setTypingUsers(prev => ({
+        ...prev,
+        [conversationId]: isTyping ? { userId, isTyping } : null
+      }));
+    });
+
+   socketConnection.on('message_read', ({ conversationId, messageId, userId }) => {
+  console.log('Message read:', conversationId, messageId, userId);
+
+  setConversations(prev =>
+    prev.map(conv => {
+      if (conv._id !== conversationId) return conv;
+
+      if (!conv.lastMessage || conv.lastMessage._id !== messageId) return conv;
+
+      const alreadyRead = conv.lastMessage.readBy?.some(rb => rb.user === userId);
+      if (alreadyRead) return conv;
+
+      return {
+        ...conv,
+        lastMessage: {
+          ...conv.lastMessage,
+          readBy: [
+            ...(conv.lastMessage.readBy || []),
+            { user: userId, readAt: new Date() }
+          ]
+        }
+      };
+    })
+  );
+    });
+
+
+    setSocket(socketConnection);
+
+    return () => {
+      console.log('Cleaning up socket connection');
+      socketConnection.disconnect();
+    };
+  }, [isAuthenticated, token, currentUser]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !token) {
+      logout();
+      return;
     }
+    fetchConversations();
     
-    setFilteredConversations(filtered);
-  }, [searchQuery, conversations, currentUser, deletedConversations]);
-
-  const animateEntry = () => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-
-  const loadUserPreferences = async () => {
-    try {
-      const darkTheme = await AsyncStorage.getItem('darkTheme');
-      const deletedConvs = await AsyncStorage.getItem('deletedConversations');
-      
-      if (darkTheme !== null) {
-        setIsDarkTheme(JSON.parse(darkTheme));
-      }
-      
-      if (deletedConvs !== null) {
-        setDeletedConversations(new Set(JSON.parse(deletedConvs)));
-      }
-    } catch (error) {
-      console.error('Error loading preferences:', error);
-    }
-  };
-
-  const saveUserPreferences = async (key, value) => {
-    try {
-      await AsyncStorage.setItem(key, JSON.stringify(value));
-    } catch (error) {
-      console.error('Error saving preferences:', error);
-    }
-  };
-
-  const toggleTheme = async () => {
-    const newTheme = !isDarkTheme;
-    setIsDarkTheme(newTheme);
-    await saveUserPreferences('darkTheme', newTheme);
-    
-    // Haptic feedback
-    Vibration.vibrate(50);
-  };
-
-  const deleteConversation = async (conversationId) => {
-    const newDeletedConversations = new Set([...deletedConversations, conversationId]);
-    setDeletedConversations(newDeletedConversations);
-    await saveUserPreferences('deletedConversations', Array.from(newDeletedConversations));
-    
-    // Show undo option
-    Alert.alert(
-      'Conversation Deleted',
-      'The conversation has been removed from your list.',
-      [
-        {
-          text: 'Undo',
-          onPress: async () => {
-            const restoredConversations = new Set(deletedConversations);
-            restoredConversations.delete(conversationId);
-            setDeletedConversations(restoredConversations);
-            await saveUserPreferences('deletedConversations', Array.from(restoredConversations));
-          },
-        },
-        { text: 'OK', style: 'default' },
-      ]
-    );
-  };
-
-  const showActionModalWithAnimation = (conversation) => {
-    setSelectedConversation(conversation);
-    setShowActionModal(true);
-    Vibration.vibrate(100); // Haptic feedback
-    
-    Animated.timing(modalSlideAnim, {
-      toValue: 0,
+    // Animate in
+    Animated.timing(fadeAnim, {
+      toValue: 1,
       duration: 300,
       useNativeDriver: true,
     }).start();
-  };
+  }, [isAuthenticated, token, currentUser]);
 
-  const hideActionModal = () => {
-    Animated.timing(modalSlideAnim, {
-      toValue: height,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      setShowActionModal(false);
-      setSelectedConversation(null);
-    });
-  };
-
-  const initSocket = async () => {
-    try {
-      if (!token) {
-        console.log('No token available for socket connection');
-        return;
-      }
-
-      const socketInstance = io('http://192.168.100.51:5000', {
-        auth: { token }
+  // Search functionality
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      const filtered = conversations.filter(conv => {
+        const otherUser = getOtherUser(conv);
+        return (
+          otherUser?.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          otherUser?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          conv.lastMessage?.content?.toLowerCase().includes(searchQuery.toLowerCase())
+        );
       });
-
-      socketInstance.on('connect', () => {
-        console.log('Socket connected');
-      });
-
-      socketInstance.on('connect_error', (error) => {
-        console.error('Socket connection error:', error);
-        if (error.message === 'Authentication error') {
-          handleAuthError();
-        }
-      });
-
-      socketInstance.on('new_message', handleNewMessage);
-      socketInstance.on('user_status_changed', handleUserStatusChange);
-      socketInstance.on('user_typing', handleUserTyping);
-
-      setSocket(socketInstance);
-    } catch (error) {
-      console.error('Socket init error:', error);
+      setFilteredConversations(filtered);
+    } else {
+      setFilteredConversations(conversations);
     }
-  };
+  }, [searchQuery, conversations]);
 
   const handleAuthError = () => {
-    Alert.alert(
-      'Session Expired', 
-      'Your session has expired. Please log in again.',
-      [
-        {
-          text: 'OK',
-          onPress: () => logout()
-        }
-      ]
-    );
-  };
-
-  const handleNewMessage = (data) => {
-    const { message, conversationId } = data;
-    
-    setConversations(prev => prev.map(conv => {
-      if (conv._id === conversationId) {
-        return {
-          ...conv,
-          lastMessage: message,
-          lastMessageAt: message.createdAt,
-          unreadCount: conv.unreadCount + 1
-        };
-      }
-      return conv;
-    }));
-  };
-
-  const handleUserStatusChange = (data) => {
-    const { userId, status } = data;
-    
-    setOnlineUsers(prev => {
-      const newSet = new Set(prev);
-      if (status === 'online') {
-        newSet.add(userId);
-      } else {
-        newSet.delete(userId);
-      }
-      return newSet;
-    });
-  };
-
-  const handleUserTyping = (data) => {
-    const { conversationId, userId, isTyping } = data;
-    
-    setTypingUsers(prev => ({
-      ...prev,
-      [conversationId]: isTyping ? userId : null
-    }));
-
-    if (isTyping) {
-      setTimeout(() => {
-        setTypingUsers(prev => ({
-          ...prev,
-          [conversationId]: null
-        }));
-      }, 3000);
-    }
+    Alert.alert('Session Expired', 'Please log in again.', [
+      { text: 'OK', onPress: () => logout() }
+    ]);
   };
 
   const fetchConversations = async () => {
-    try {
-      if (!token) {
-        console.log('No token available');
-        logout();
-        return;
-      }
+    if (!token) return handleAuthError();
 
+    try {
+      console.log('Fetching conversations with token:', token ? 'Present' : 'Missing');
+      
       const response = await fetch(`${BASE_URL}/messages/conversations`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -302,152 +197,249 @@ const ChatListScreen = ({ navigation }) => {
 
       if (response.ok) {
         const data = await response.json();
-        setConversations(data);
+        console.log('Fetched conversations:', data);
+        
+        // Validate and clean the data
+        const validConversations = data.filter(conv => {
+          if (!conv._id) {
+            console.warn('Conversation missing ID:', conv);
+            return false;
+          }
+          
+          if (!Array.isArray(conv.participants) || conv.participants.length === 0) {
+            console.warn('Conversation missing participants:', conv);
+            return false;
+          }
+          
+          return true;
+        }).map(conv => ({
+          ...conv,
+          // Normalize unreadCount - handle both number and array formats
+          unreadCount: typeof conv.unreadCount === 'number' ? conv.unreadCount : 
+                      Array.isArray(conv.unreadCount) ? 
+                        conv.unreadCount.find(uc => uc.user === currentUser._id)?.count || 0 :
+                        0
+        }));
+        
+        console.log('Valid conversations:', validConversations.length);
+        setConversations(validConversations);
       } else if (response.status === 401) {
-        console.log('Token expired or invalid');
         handleAuthError();
       } else {
-        throw new Error('Failed to fetch conversations');
+        const errorText = await response.text();
+        console.error('Fetch conversations failed:', response.status, errorText);
+        throw new Error(`Failed to fetch conversations: ${response.status}`);
       }
     } catch (error) {
       console.error('Fetch conversations error:', error);
       Alert.alert('Error', 'Failed to load conversations');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
-  const onRefresh = () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    fetchConversations();
+    await fetchConversations();
+    setRefreshing(false);
+  }, []);
+
+  const updateConversationWithNewMessage = (message) => {
+    console.log('Updating conversation with new message:', message);
+    setConversations(prevConversations => {
+      return prevConversations.map(conv => {
+        if (conv._id === message.conversation) {
+          // Get sender ID properly
+          const senderId = typeof message.sender === 'object' 
+            ? message.sender._id 
+            : message.sender;
+          
+          const currentUserId = currentUser._id;
+          const isFromOtherUser = senderId !== currentUserId;
+
+          console.log('Message from other user:', isFromOtherUser, 'SenderId:', senderId, 'CurrentUserId:', currentUserId);
+
+          return {
+            ...conv,
+            lastMessage: message,
+            lastMessageAt: message.createdAt,
+            unreadCount: isFromOtherUser ? (conv.unreadCount || 0) + 1 : conv.unreadCount
+          };
+        }
+        return conv;
+      }).sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
+    });
+  };
+
+  // Fixed getOtherUser function with better error handling
+const getOtherUser = (conversation) => {
+  const rawUserId = currentUser?._id || currentUser?.userId;
+  if (!rawUserId || !Array.isArray(conversation?.participants)) {
+    console.warn('Missing currentUser or participants:', currentUser, conversation?.participants);
+    return defaultUnknownUser();
+  }
+
+  const currentUserId = rawUserId.toString();
+
+  for (const participant of conversation.participants) {
+    const participantId = participant?._id?.toString();
+    if (participantId && participantId !== currentUserId) {
+      return {
+        _id: participant._id,
+        username: participant.username || 'Unknown User',
+        email: participant.email || '',
+        profilePicture: participant.profilePicture || null
+      };
+    }
+  }
+
+  console.warn('No other user found, fallback triggered');
+  return defaultUnknownUser();
+};
+
+
+const defaultUnknownUser = () => ({
+  _id: 'unknown',
+  username: 'Unknown User',
+  email: '',
+  profilePicture: null
+});
+
+
+  const formatTime = (timestamp) => {
+    if (!timestamp) return '';
+    
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffInMs = now - date;
+    const diffInHours = diffInMs / (1000 * 60 * 60);
+    const diffInDays = diffInMs / (1000 * 60 * 60 * 24);
+
+    if (diffInHours < 1) {
+      return `${Math.floor(diffInMs / (1000 * 60))}m`;
+    } else if (diffInHours < 24) {
+      return `${Math.floor(diffInHours)}h`;
+    } else if (diffInDays < 7) {
+      return `${Math.floor(diffInDays)}d`;
+    } else {
+      return date.toLocaleDateString();
+    }
+  };
+
+  const truncateMessage = (message, maxLength = 35) => {
+    if (!message) return '';
+    return message.length > maxLength ? message.substring(0, maxLength) + '...' : message;
+  };
+
+  const getTypingIndicator = (conversationId) => {
+    const typingUser = typingUsers[conversationId];
+    if (typingUser && typingUser.userId !== currentUser._id) {
+      return 'typing...';
+    }
+    return null;
+  };
+
+  const isUserOnline = (userId) => {
+    return onlineUsers.has(userId);
   };
 
   const navigateToChat = (conversation) => {
-  const otherParticipant = conversation.participants.find(p => p._id !== currentUser?.id);
-  
-  navigation.navigate('ChatScreen', {
-    conversationId: conversation._id,
-    conversation: conversation,
-    otherUser: otherParticipant
-  });
-};
+    const otherUser = getOtherUser(conversation);
+    navigation.navigate('ChatScreen', {
+      conversationId: conversation._id,
+      conversation,
+      otherUser
+    });
+  };
+
   const navigateToNewChat = () => {
     navigation.navigate('NewChatScreen');
   };
 
-  const formatTime = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now - date;
-    
-    if (diff < 24 * 60 * 60 * 1000) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-    
-    if (diff < 7 * 24 * 60 * 60 * 1000) {
-      return date.toLocaleDateString([], { weekday: 'short' });
-    }
-    
-    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  };
+  const renderConversationItem = ({ item, index }) => {
+    const otherUser = getOtherUser(item);
+    const isOnline = isUserOnline(otherUser?._id);
+    const typingIndicator = getTypingIndicator(item._id);
+    const isLinkMe = item.chatType === 'linkme';
 
-  const AnimatedConversationItem = ({ item, index }) => {
-    const itemAnimValue = useRef(new Animated.Value(0)).current;
-    const scaleValue = useRef(new Animated.Value(1)).current;
-
-    useEffect(() => {
-      Animated.timing(itemAnimValue, {
-        toValue: 1,
-        duration: 600,
-        delay: index * 100,
-        useNativeDriver: true,
-      }).start();
-    }, []);
-
-    const handlePressIn = () => {
-      Animated.spring(scaleValue, {
-        toValue: 0.95,
-        useNativeDriver: true,
-      }).start();
-    };
-
-    const handlePressOut = () => {
-      Animated.spring(scaleValue, {
-        toValue: 1,
-        useNativeDriver: true,
-      }).start();
-    };
-
-    const handleLongPress = () => {
-      showActionModalWithAnimation(item);
-    };
-
-    const otherParticipant = item.participants.find(p => p._id !== currentUser?.id);
-    const isOnline = onlineUsers.has(otherParticipant?._id);
-    const isTyping = typingUsers[item._id];
-
-    const currentStyles = isDarkTheme ? darkStyles : lightStyles;
+    // Debug logging
+    console.log('Rendering conversation item:', {
+      conversationId: item._id,
+      otherUser: otherUser?.username,
+      isOnline,
+      unreadCount: item.unreadCount,
+      participants: item.participants?.map(p => p.username)
+    });
 
     return (
       <Animated.View
         style={[
-          {
-            opacity: itemAnimValue,
-            transform: [
-              {
-                translateY: itemAnimValue.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [50, 0],
-                }),
-              },
-              { scale: scaleValue },
-            ],
-          },
+          styles.conversationItem,
+          isLinkMe && styles.linkMeItem,
+          { opacity: fadeAnim }
         ]}
       >
         <TouchableOpacity
-          style={[styles.conversationItem, currentStyles.conversationItem]}
+          style={styles.conversationTouchable}
           onPress={() => navigateToChat(item)}
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
-          onLongPress={handleLongPress}
-          delayLongPress={500}
           activeOpacity={0.7}
         >
           <View style={styles.avatarContainer}>
-            <View style={[styles.avatar, currentStyles.avatar]}>
-              <Text style={styles.avatarText}>
-                {otherParticipant?.username?.charAt(0).toUpperCase() || '?'}
-              </Text>
-            </View>
-            {isOnline && <View style={styles.onlineIndicator} />}
-          </View>
+  <View style={[styles.avatar, isLinkMe && styles.linkMeAvatar]}>
+    <Text style={[styles.avatarText, isLinkMe && styles.linkMeAvatarText]}>
+      {otherUser?.username?.charAt(0)?.toUpperCase() || '?'}
+    </Text>
+
+    {/* 💘 Small emoji badge for LinkMe */}
+    {isLinkMe && (
+      <Text style={{
+        position: 'absolute',
+        bottom: -6,
+        right: -6,
+        fontSize: 14,
+        backgroundColor: 'white',
+        borderRadius: 10,
+        paddingHorizontal: 2,
+        paddingVertical: 0,
+        color: 'purple',
+        overflow: 'hidden',
+      }}>
+        💘
+      </Text>
+    )}
+  </View>
+
+  {isOnline && (
+    <View style={styles.onlineIndicator} />
+  )}
+</View>
+
 
           <View style={styles.conversationInfo}>
             <View style={styles.conversationHeader}>
-              <Text style={[styles.participantName, currentStyles.participantName]}>
-                {otherParticipant?.username || 'Unknown User'}
+              <Text style={[styles.username, isLinkMe && styles.linkMeUsername]}>
+                {otherUser?.username || 'Unknown User'}
               </Text>
-              <Text style={[styles.timestamp, currentStyles.timestamp]}>
-                {item.lastMessageAt ? formatTime(item.lastMessageAt) : ''}
-              </Text>
+              <View style={styles.rightSection}>
+                <Text style={styles.timestamp}>
+                  {formatTime(item.lastMessageAt)}
+                </Text>
+                {item.unreadCount > 0 && (
+                  <View style={[styles.unreadBadge, isLinkMe && styles.linkMeUnreadBadge]}>
+                    <Text style={styles.unreadText}>
+                      {item.unreadCount > 99 ? '99+' : item.unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
 
             <View style={styles.lastMessageContainer}>
-              <Text style={[styles.lastMessage, currentStyles.lastMessage]} numberOfLines={1}>
-                {isTyping ? (
-                  <Text style={styles.typingText}>typing...</Text>
-                ) : (
-                  item.lastMessage?.content || 'No messages yet'
-                )}
+              <Text style={styles.lastMessage}>
+                {typingIndicator || truncateMessage(item.lastMessage?.content)}
               </Text>
-              {item.unreadCount > 0 && (
-                <Animated.View style={[styles.unreadBadge, { transform: [{ scale: scaleValue }] }]}>
-                  <Text style={styles.unreadCount}>
-                    {item.unreadCount > 99 ? '99+' : item.unreadCount}
-                  </Text>
-                </Animated.View>
+              {connectionState !== 'connected' && (
+                <Icon name="schedule" size={12} color="#FF6B6B" style={styles.pendingIcon} />
               )}
             </View>
           </View>
@@ -456,196 +448,122 @@ const ChatListScreen = ({ navigation }) => {
     );
   };
 
-  const renderConversationItem = ({ item, index }) => (
-    <AnimatedConversationItem item={item} index={index} />
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>Messages</Text>
+      <View style={styles.headerRight}>
+        <View style={[styles.connectionStatus, connectionState === 'connected' && styles.connectedStatus]}>
+          <View style={[styles.connectionDot, connectionState === 'connected' && styles.connectedDot]} />
+          <Text style={styles.connectionText}>
+            {connectionState === 'connected' ? 'Online' : 'Offline'}
+          </Text>
+        </View>
+       
+      </View>
+    </View>
   );
 
-  const ActionModal = () => {
-    if (!selectedConversation) return null;
-
-    const otherParticipant = selectedConversation.participants.find(p => p._id !== currentUser?.id);
-    const currentStyles = isDarkTheme ? darkStyles : lightStyles;
-
-    return (
-      <Modal
-        visible={showActionModal}
-        transparent={true}
-        animationType="none"
-        onRequestClose={hideActionModal}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={hideActionModal}
-        >
-          <Animated.View
-            style={[
-              styles.actionModal,
-              currentStyles.actionModal,
-              {
-                transform: [{ translateY: modalSlideAnim }],
-              },
-            ]}
-          >
-            <View style={styles.modalHandle} />
-            
-            <View style={styles.modalHeader}>
-              <View style={[styles.modalAvatar, currentStyles.avatar]}>
-                <Text style={styles.avatarText}>
-                  {otherParticipant?.username?.charAt(0).toUpperCase() || '?'}
-                </Text>
-              </View>
-              <Text style={[styles.modalUsername, currentStyles.participantName]}>
-                {otherParticipant?.username || 'Unknown User'}
-              </Text>
-            </View>
-
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={[styles.actionButton, currentStyles.actionButton]}
-                onPress={() => {
-                  hideActionModal();
-                  navigateToChat(selectedConversation);
-                }}
-              >
-                <Icon name="chat" size={24} color={isDarkTheme ? '#FFFFFF' : '#007AFF'} />
-                <Text style={[styles.actionButtonText, currentStyles.actionButtonText]}>Open Chat</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.actionButton, currentStyles.actionButton]}
-                onPress={() => {
-                  hideActionModal();
-                  deleteConversation(selectedConversation._id);
-                }}
-              >
-                <Icon name="delete" size={24} color="#FF3B30" />
-                <Text style={[styles.actionButtonText, { color: '#FF3B30' }]}>Delete</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.actionButton, currentStyles.actionButton]}
-                onPress={() => {
-                  hideActionModal();
-                  toggleTheme();
-                }}
-              >
-                <Icon 
-                  name={isDarkTheme ? "light-mode" : "dark-mode"} 
-                  size={24} 
-                  color={isDarkTheme ? '#FFFFFF' : '#007AFF'} 
-                />
-                <Text style={[styles.actionButtonText, currentStyles.actionButtonText]}>
-                  {isDarkTheme ? 'Light Theme' : 'Dark Theme'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
+  const renderSearchBar = () => (
+    <View style={styles.searchContainer}>
+      <Icon name="search" size={20} color="#8E8E93" style={styles.searchIcon} />
+      <TextInput
+        style={styles.searchInput}
+        placeholder="Search conversations..."
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        placeholderTextColor="#8E8E93"
+      />
+      {searchQuery.length > 0 && (
+        <TouchableOpacity onPress={() => setSearchQuery('')}>
+          <Icon name="clear" size={20} color="#8E8E93" />
         </TouchableOpacity>
-      </Modal>
-    );
-  };
+      )}
+    </View>
+  );
 
-  if (!isAuthenticated || loading) {
-    const currentStyles = isDarkTheme ? darkStyles : lightStyles;
+  const renderEmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <Icon name="chat-bubble-outline" size={64} color="#ccc" />
+      <Text style={styles.emptyTitle}>No conversations yet</Text>
+      <Text style={styles.emptySubtitle}>
+        Start a new conversation by tapping the + button
+      </Text>
+    </View>
+  );
+
+  if (loading) {
     return (
-      <SafeAreaView style={[styles.container, currentStyles.container]}>
-        <StatusBar barStyle={isDarkTheme ? 'light-content' : 'dark-content'} />
+      <SafeAreaView style={styles.container}>
+        {renderHeader()}
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={[styles.loadingText, currentStyles.loadingText]}>Loading conversations...</Text>
+          <Text style={styles.loadingText}>Loading conversations...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  const currentStyles = isDarkTheme ? darkStyles : lightStyles;
-
   return (
-    <SafeAreaView style={[styles.container, currentStyles.container]}>
-      <StatusBar barStyle={isDarkTheme ? 'light-content' : 'dark-content'} />
+    <SafeAreaView style={styles.container}>
+       {/* SVG Futuristic Background */}
+          <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 0 }}>
+            <Svg
+              height="100%"
+              width="100%"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="xMidYMid slice"
+            >
+             <Path
+        d="
+          M12 18 C15 12, 25 12, 28 18
+          M62 14 C65 10, 75 10, 78 14
       
-      <Animated.View
-        style={[
-          styles.content,
-          {
-            opacity: fadeAnim,
-            transform: [
-              { translateY: slideAnim },
-              { scale: scaleAnim },
-            ],
-          },
-        ]}
+          M20 80 C22 85, 28 85, 30 80
+          M70 82 C72 87, 78 87, 80 82
+      
+          M34 34 Q40 28, 46 34
+          M60 60 Q66 66, 72 60
+      
+          M25 65 C30 58, 40 58, 45 65
+          M10 45 C15 52, 25 52, 30 45
+      
+          M58 26 Q64 20, 70 26
+          M42 78 Q48 72, 54 78
+      
+          M5 5 C8 3, 12 3, 15 5
+          M85 95 C88 93, 92 93, 95 95
+        "
+        stroke="#1E90FF22"
+        strokeWidth="0.35"
+        fill="none"
+      />
+      
+      
+            </Svg>
+          </View>
+      {renderHeader()}
+      {renderSearchBar()}
+      
+      <FlatList
+        data={filteredConversations}
+        keyExtractor={(item) => item._id}
+        renderItem={renderConversationItem}
+        ListEmptyComponent={renderEmptyState}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={filteredConversations.length === 0 && styles.emptyListContainer}
+      />
+
+      {/* Floating Action Button */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={navigateToNewChat}
+        activeOpacity={0.8}
       >
-        {/* Header */}
-        <View style={[styles.header, currentStyles.header]}>
-          <Text style={[styles.headerTitle, currentStyles.headerTitle]}>Messages</Text>
-          <TouchableOpacity onPress={toggleTheme} style={styles.themeButton}>
-            <Icon 
-              name={isDarkTheme ? "light-mode" : "dark-mode"} 
-              size={24} 
-              color={isDarkTheme ? '#FFFFFF' : '#007AFF'} 
-            />
-          </TouchableOpacity>
-        </View>
-
-        {/* Search Bar */}
-        <View style={[styles.searchContainer, currentStyles.searchContainer]}>
-          <Icon name="search" size={20} color="#8E8E93" style={styles.searchIcon} />
-          <TextInput
-            style={[styles.searchInput, currentStyles.searchInput]}
-            placeholder="Search conversations..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor="#8E8E93"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Icon name="clear" size={20} color="#8E8E93" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Conversations List */}
-        <FlatList
-          data={filteredConversations}
-          keyExtractor={(item) => item._id}
-          renderItem={renderConversationItem}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Icon name="chat-bubble-outline" size={64} color="#C7C7CC" />
-              <Text style={[styles.emptyTitle, currentStyles.emptyTitle]}>No conversations yet</Text>
-              <Text style={[styles.emptySubtitle, currentStyles.emptySubtitle]}>
-                Start a new conversation by tapping the + button
-              </Text>
-            </View>
-          }
-        />
-
-        {/* Floating Action Button */}
-        <Animated.View
-          style={[
-            styles.fab,
-            {
-              transform: [{ scale: scaleAnim }],
-            },
-          ]}
-        >
-          <TouchableOpacity
-            style={styles.fabButton}
-            onPress={navigateToNewChat}
-            activeOpacity={0.8}
-          >
-            <Icon name="add" size={24} color="white" />
-          </TouchableOpacity>
-        </Animated.View>
-      </Animated.View>
-
-      <ActionModal />
+        <Icon name="add" size={28} color="white" />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 };
@@ -653,9 +571,7 @@ const ChatListScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  content: {
-    flex: 1,
+    backgroundColor: '#083028',
   },
   header: {
     flexDirection: 'row',
@@ -664,22 +580,54 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
+    borderBottomColor: '#2A2A2A',
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
+    color: '#FFFFFF',
   },
-  themeButton: {
-    padding: 8,
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
+  connectionStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#2D1B2E',
+  },
+  connectedStatus: {
+    backgroundColor: '#1B2D1B',
+  },
+  connectionDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FF6B6B',
+    marginRight: 4,
+  },
+  connectedDot: {
+    backgroundColor: '#4CAF50',
+  },
+  connectionText: {
+    fontSize: 10,
+    color: '#4CAF50',
+    fontWeight: '500',
+  },
+
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#1A1A1A',
     marginHorizontal: 16,
     marginVertical: 8,
     paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 10,
-    height: 40,
   },
   searchIcon: {
     marginRight: 8,
@@ -687,12 +635,34 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
+    color: '#FFFFFF',
   },
   conversationItem: {
+    backgroundColor: '#174f3a', // Clean white for other messages
+    borderBottomLeftRadius: 6, // Tail effect
+    borderWidth: 1,
+    borderColor: '#E8E8ED',
+    marginHorizontal: 16,
+    marginVertical: 4,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  linkMeItem: {
+    backgroundColor: '#230c3a',
+    borderLeftWidth: 4,
+    borderLeftColor: 'red',
+  },
+  conversationTouchable: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
+    padding: 12,
+    alignItems: 'center',
   },
   avatarContainer: {
     position: 'relative',
@@ -702,29 +672,34 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#083028',
+    backgroundColor: '#2E7D2E',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  linkMeAvatar: {
+    backgroundColor: '#4CAF50',
   },
   avatarText: {
     color: 'white',
     fontSize: 18,
     fontWeight: 'bold',
   },
+  linkMeAvatarText: {
+    color: '#FFF',
+  },
   onlineIndicator: {
     position: 'absolute',
     bottom: 2,
     right: 2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#34C759',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#4CAF50',
     borderWidth: 2,
-    borderColor: 'white',
+    borderColor: '#1C1C1C',
   },
   conversationInfo: {
     flex: 1,
-    justifyContent: 'center',
   },
   conversationHeader: {
     flexDirection: 'row',
@@ -732,246 +707,102 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 4,
   },
-  participantName: {
+  username: {
     fontSize: 16,
     fontWeight: '600',
+    color: '#FFFFFF',
+    flex: 1,
+  },
+  linkMeUsername: {
+    color: '#66BB6A',
+  },
+  rightSection: {
+    alignItems: 'flex-end',
+    gap: 4,
   },
   timestamp: {
     fontSize: 12,
+    color: '#888888',
+  },
+  unreadBadge: {
+    backgroundColor: '#4CAF50',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  linkMeUnreadBadge: {
+    backgroundColor: '#66BB6A',
+  },
+  unreadText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   lastMessageContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
   lastMessage: {
-    flex: 1,
     fontSize: 14,
-    marginRight: 8,
+    color: '#AAAAAA',
+    flex: 1,
   },
-  typingText: {
-    fontStyle: 'italic',
-    color: '#007AFF',
-  },
-  unreadBadge: {
-    backgroundColor: '#007AFF',
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    minWidth: 20,
-    alignItems: 'center',
-  },
-  unreadCount: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
+  pendingIcon: {
+    marginLeft: 4,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 16,
   },
   loadingText: {
-    marginTop: 16,
     fontSize: 16,
+    color: '#888888',
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 100,
+    paddingHorizontal: 32,
+    gap: 16,
+  },
+  emptyListContainer: {
+    flexGrow: 1,
   },
   emptyTitle: {
     fontSize: 20,
     fontWeight: '600',
-    marginTop: 16,
+    color: '#AAAAAA',
   },
   emptySubtitle: {
-    fontSize: 14,
+    fontSize: 16,
+    color: '#888888',
     textAlign: 'center',
-    marginTop: 8,
-    paddingHorizontal: 32,
+    lineHeight: 22,
   },
   fab: {
     position: 'absolute',
     bottom: 20,
     right: 20,
-  },
-  fabButton: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#083028',
+    backgroundColor: '#4CAF50',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  actionModal: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 8,
-    paddingBottom: 34,
-    paddingHorizontal: 16,
-    minHeight: 300,
-  },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#C7C7CC',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  modalHeader: {
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  modalAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#083028',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  modalUsername: {
-    fontSize: 20,
-    fontWeight: '600',
-  },
-  actionButtons: {
-    gap: 16,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  actionButtonText: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginLeft: 12,
-  },
-});
-
-// Light theme styles
-const lightStyles = StyleSheet.create({
-  container: {
-    backgroundColor: '#FFFFFF',
-  },
-  header: {
-    borderBottomColor: '#E5E5EA',
-  },
-  headerTitle: {
-    color: '#000000',
-  },
-  searchContainer: {
-    backgroundColor: '#F2F2F7',
-  },
-  searchInput: {
-    color: '#000000',
-  },
-  conversationItem: {
-    borderBottomColor: '#E5E5EA',
-  },
-  avatar: {
-    backgroundColor: '#083028',
-  },
-  participantName: {
-    color: '#000000',
-  },
-  timestamp: {
-    color: '#8E8E93',
-  },
-  lastMessage: {
-    color: '#8E8E93',
-  },
-  loadingText: {
-    color: '#8E8E93',
-  },
-  emptyTitle: {
-    color: '#000000',
-  },
-  emptySubtitle: {
-    color: '#8E8E93',
-  },
-  actionModal: {
-    backgroundColor: '#FFFFFF',
-  },
-  actionButton: {
-    backgroundColor: '#F2F2F7',
-    borderColor: '#E5E5EA',
-  },
-  actionButtonText: {
-    color: '#083028',
-  },
-});
-
-// Dark theme styles
-const darkStyles = StyleSheet.create({
-  container: {
-    backgroundColor: '#0D1A16',
-  },
-  header: {
-    borderBottomColor: '#2C2C2E',
-  },
-  headerTitle: {
-    color: '#FFFFFF',
-  },
-  searchContainer: {
-    backgroundColor: '#1C1C1E',
-  },
-  searchInput: {
-    color: '#FFFFFF',
-  },
-  conversationItem: {
-    borderBottomColor: '#2C2C2E',
-  },
-  avatar: {
-    backgroundColor: '#8E8E93',
-  },
-  participantName: {
-    color: '#FFFFFF',
-  },
-  timestamp: {
-    color: '#8E8E93',
-  },
-  lastMessage: {
-    color: '#8E8E93',
-  },
-  loadingText: {
-    color: '#8E8E93',
-  },
-  emptyTitle: {
-    color: '#FFFFFF',
-  },
-  emptySubtitle: {
-    color: '#8E8E93',
-  },
-  actionModal: {
-    backgroundColor: '#1C1C1E',
-  },
-  actionButton: {
-    backgroundColor: '#2C2C2E',
-    borderColor: '#3A3A3C',
-  },
-  actionButtonText: {
-    color: '#FFFFFF',
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 8,
   },
 });
 

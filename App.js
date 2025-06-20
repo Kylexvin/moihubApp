@@ -11,7 +11,7 @@ import axios from 'axios';
 
 import SplashScreen from './screens/SplashScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
-
+import { CartProvider } from './context/CartContext';
 import MainTabNavigator from './navigation/MainTabNavigator';
 import FoodNavigator from './navigation/FoodNavigator'; 
 import AccomStack from './screens/accom/AccomStack';
@@ -22,6 +22,9 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { FoodProvider } from './context/FoodContext';
 import MessageStackNavigator from './navigation/MessageStackNavigator';
 import EshopNavigator from './navigation/EshopNavigator';
+import LinkMeNavigator from './navigation/LinkMeNavigator';
+import MySchoolNavigator from './navigation/MySchoolNavigator';
+
 
 const Stack = createNativeStackNavigator();
 
@@ -109,7 +112,8 @@ function AppNavigator() {
     return <OnboardingScreen onComplete={handleOnboardingComplete} />;
   }
 
-  return (
+ return (
+  <CartProvider>
     <View style={{ 
       flex: 1, 
       backgroundColor: '#093028',
@@ -121,7 +125,6 @@ function AppNavigator() {
           contentStyle: { backgroundColor: '#093028' },
           animation: 'fade',
           presentation: 'card',
-          // Prevent zoom issues
           gestureEnabled: false,
         }}
       >
@@ -134,13 +137,20 @@ function AppNavigator() {
             <Stack.Screen name="AccomStack" component={AccomStack} />
             <Stack.Screen name="RoommateStack" component={RoommateStack} />
             <Stack.Screen name='EshopNavigator' component={EshopNavigator} />
+            <Stack.Screen name="LinkMe" component={LinkMeNavigator} />
+            <Stack.Screen name="MySchoolNavigator" component={MySchoolNavigator} />
+
+
+
+
           </>
         ) : (
           <Stack.Screen name="Auth" component={AuthStackNavigator} />
         )}
       </Stack.Navigator>
     </View>
-  );
+  </CartProvider>
+);
 }
 
 export default function App() {

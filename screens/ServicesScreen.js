@@ -3,11 +3,12 @@ import {
   Text, 
   View, 
   TouchableOpacity, 
-  ScrollView,
+  ScrollView,SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-
+import Svg, { Path } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
 const ServicesScreen = () => {
   const navigation = useNavigation();
   
@@ -47,18 +48,7 @@ const services = [
     category: "food", 
     color: "#ff7f50" 
   },
-  { 
-    title: "Cafeteria Menu", 
-    icon: "restaurant", 
-    category: "food", 
-    color: "#ff7f50" 
-  },
-  { 
-    title: "Groceries", 
-    icon: "cart", 
-    category: "food", 
-    color: "#ff7f50" 
-  },
+ 
 
   // Eshop
   {
@@ -90,21 +80,15 @@ const services = [
 const handleServicePress = (service) => {
   switch (service.title) {
     case 'LinkMe':
-      navigation.navigate('LinkMeStack');
-      break;
+  navigation.navigate('LinkMe');
+  break;
+
 
     case 'Food Delivery':
       navigation.navigate('FoodStack', { screen: 'FoodHome' });
       break;
 
-    case 'Cafeteria Menu':
-      navigation.navigate('CafeteriaStack', { screen: 'CafeteriaHome' });
-      break;
-
-    case 'Groceries':
-      navigation.navigate('GroceryStack', { screen: 'GroceryHome' });
-      break;
-
+  
     case 'Rental Booking':
       navigation.navigate('AccomStack', { screen: 'RentalHome' });
       break;
@@ -118,8 +102,9 @@ const handleServicePress = (service) => {
       break;
 
     case 'My University':
-      navigation.navigate('UniStack', { screen: 'UniHome' });
-      break;
+  navigation.navigate('MySchoolNavigator', { screen: 'MySchoolHome' });
+  break;
+
 
     case 'Eshop':
       navigation.navigate('EshopNavigator');
@@ -170,41 +155,82 @@ const handleServicePress = (service) => {
     );
   };
 
-  return (
-    <View style={styles.screenContainer}>
-      {/* Header (simplified without search) */}
-     
+return (
+  <SafeAreaView style={styles.safeArea}>
+    {/* Gradient overlay for depth */}
+    <LinearGradient
+      colors={['#ffffff00', '#2c5f2d11']}
+      style={{ ...StyleSheet.absoluteFillObject }}
+      pointerEvents="none"
+    />
 
-      {/* Main Content */}
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <FeaturedServices />
-
-        <View style={styles.servicesContainer}>
-          {/* <Text style={styles.sectionTitle}>All Services</Text> */}
-          <View style={styles.servicesGrid}>
-            {services.map((service, idx) => (
-              <TouchableOpacity 
-                key={idx} 
-                style={styles.serviceItem}
-                onPress={() => handleServicePress(service)}
-              >
-                <View style={[styles.iconContainer, { backgroundColor: service.color + '20' }]}>
-                  <Ionicons name={service.icon} size={28} color={service.color} />
-                </View>
-                <Text style={styles.serviceTitle}>{service.title}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </ScrollView>
+    {/* Futuristic SVG background */}
+    <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 0 }}>
+      <Svg
+        height="100%"
+        width="100%"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="xMidYMid slice"
+      >
+        <Path
+          d="
+            M12 18 C15 12, 25 12, 28 18
+            M62 14 C65 10, 75 10, 78 14
+            M20 80 C22 85, 28 85, 30 80
+            M70 82 C72 87, 78 87, 80 82
+            M34 34 Q40 28, 46 34
+            M60 60 Q66 66, 72 60
+            M25 65 C30 58, 40 58, 45 65
+            M10 45 C15 52, 25 52, 30 45
+            M58 26 Q64 20, 70 26
+            M42 78 Q48 72, 54 78
+            M5 5 C8 3, 12 3, 15 5
+            M85 95 C88 93, 92 93, 95 95
+          "
+          stroke="green"
+          strokeWidth="0.25"
+          fill="none"
+        />
+      </Svg>
     </View>
-  );
+
+    {/* Main Scrollable Content */}
+    <ScrollView showsVerticalScrollIndicator={false} style={{ zIndex: 1 }}>
+      
+     
+      <FeaturedServices />
+
+      {/* Separator */}
+      <View style={styles.separator} />
+
+      <View style={styles.servicesContainer}>
+        <Text style={styles.sectionTitle}>All Services</Text>
+
+        <View style={styles.servicesGrid}>
+          {services.map((service, idx) => (
+            <TouchableOpacity 
+              key={idx} 
+              style={styles.serviceItem}
+              onPress={() => handleServicePress(service)}
+            >
+              <View style={[styles.iconContainer, { backgroundColor: service.color + '20' }]}>
+                <Ionicons name={service.icon} size={28} color={service.color} />
+              </View>
+              <Text style={styles.serviceTitle}>{service.title}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    </ScrollView>
+  </SafeAreaView>
+);
+
 };
 
 const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: 'ivory',
     padding: 16,
     paddingTop: 20,
   },
@@ -219,8 +245,29 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333333',
   },
+  safeArea: {
+  flex: 1,
+  backgroundColor: '#FFFFFF',
+},
+
+sectionTitle: {
+  fontSize: 18,
+  fontWeight: '600',
+  color: '#1C1C1E',
+  marginTop: 16,
+  marginBottom: 10,
+  marginHorizontal: 16,
+},
+
+separator: {
+  height: 1,
+  backgroundColor: '#EAEAEA',
+  marginVertical: 16,
+  marginHorizontal: 20,
+},
+
   featuredContainer: {
-    marginBottom: 20,
+    margin: 10,
   },
   featuredTitle: {
     fontSize: 18,
@@ -230,7 +277,7 @@ const styles = StyleSheet.create({
   },
   featuredGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-between',margin: 10,
   },
   featuredItem: {
     width: '48%',
@@ -252,7 +299,7 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 12,margin: 10,
   },
   featuredItemTitle: {
     fontSize: 16,
@@ -267,7 +314,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   servicesContainer: {
-    marginBottom: 20,
+    marginBottom: 20,margin: 10,
   },
   sectionTitle: {
     fontSize: 18,

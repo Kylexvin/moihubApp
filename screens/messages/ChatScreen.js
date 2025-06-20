@@ -1,5 +1,5 @@
 // screens/messages/ChatScreen.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -23,17 +23,19 @@ import { TouchableWithoutFeedback } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useAuth } from '../../context/AuthContext';
 import io from 'socket.io-client';
+import Svg, { Path } from 'react-native-svg';
 
 const { height: screenHeight } = Dimensions.get('window');
 
 const ChatScreen = ({ route, navigation }) => {
-  // Safely extract route params with defaults
-  const routeParams = route?.params || {};
-  const { 
-    conversationId = null, 
-    conversation = null, 
-    otherUser = null 
-  } = routeParams;
+  
+const routeParams = route?.params || {};
+const {
+  conversationId = null,
+  conversation = null,
+  otherUser = null,
+  chatType = 'normal'
+} = routeParams;
 
   const { currentUser, token, logout } = useAuth();
   
@@ -64,15 +66,29 @@ const ChatScreen = ({ route, navigation }) => {
   const socketRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const lastMessageIdRef = useRef(null);
-  const currentUserIdRef = useRef(currentUser?.id || currentUser?._id);
+  const currentUserIdRef = useRef(null);
   const modalAnimatedValue = useRef(new Animated.Value(0)).current;
 
   const BASE_URL = 'http://192.168.100.51:5000/api';
   const SOCKET_URL = 'http://192.168.100.51:5000';
 
+  // Helper function to get consistent user ID
+const getCurrentUserId = () => {
+  return currentUser?.userId || currentUser?._id || currentUser?.id || currentUserIdRef.current;
+};
+
   // Update current user ID ref when currentUser changes
+// Add this in your ChatScreen component
+useEffect(() => {
+  console.log('Auth Context User:', currentUser);
+  console.log('User ID from context:', currentUser?._id);
+  console.log('Token exists:', !!token);
+}, [currentUser, token]);
+
   useEffect(() => {
-    currentUserIdRef.current = currentUser?.id || currentUser?._id;
+    console.log('Chat type:', chatType);
+    console.log('Current user:', currentUser);
+    console.log('Current user ID:', getCurrentUserId());
   }, [currentUser]);
 
   // Keyboard listeners
@@ -81,13 +97,11 @@ const ChatScreen = ({ route, navigation }) => {
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
       (e) => {
         setKeyboardHeight(e.endCoordinates.height);
-        // Scroll to bottom when keyboard appears
-       setTimeout(() => {
-  if (flatListRef.current && messages.length > 0) {
-    flatListRef.current.scrollToIndex({ index: 0, animated: true });
-  }
-}, 100);
-
+        setTimeout(() => {
+          if (flatListRef.current && messages.length > 0) {
+            flatListRef.current.scrollToIndex({ index: 0, animated: true });
+          }
+        }, 100);
       }
     );
 
@@ -123,16 +137,16 @@ const ChatScreen = ({ route, navigation }) => {
       console.log('Using provided otherUser:', otherUser);
       setDerivedOtherUser(otherUser);
     } else if (conversation && conversation.participants) {
-      // Extract other user from conversation participants
+      const currentUserId = getCurrentUserId();
       const otherParticipant = conversation.participants.find(p => 
-        (p._id || p.id) !== currentUserIdRef.current
+        (p._id || p.id) !== currentUserId
       );
       console.log('Found other participant from conversation:', otherParticipant);
       setDerivedOtherUser(otherParticipant);
     } else {
       console.log('No otherUser info available, will fetch from messages');
     }
-  }, [otherUser, conversation]);
+  }, [otherUser, conversation, currentUser]);
 
   useEffect(() => {
     if (conversationId && (derivedOtherUser || !conversation)) {
@@ -143,35 +157,74 @@ const ChatScreen = ({ route, navigation }) => {
     };
   }, [conversationId, derivedOtherUser]);
 
- useEffect(() => {
-  if (!flatListRef.current || messages.length === 0 || loadingMore || loading) return;
+  useEffect(() => {
+    if (!flatListRef.current || messages.length === 0 || loadingMore || loading) return;
 
-  setTimeout(() => {
-    try {
-      flatListRef.current.scrollToIndex({ index: 0, animated: true });
-    } catch (error) {
-      flatListRef.current.scrollToEnd({ animated: true });
-    }
-  }, 100);
-}, [messages.length, loadingMore, loading]);
-
-// Enhanced message normalization to handle readBy array
-const normalizeMessage = (msg) => {
-  // Convert readBy array to readByUserIds for easier checking
-  const readByUserIds = msg.readBy ? msg.readBy.map(readItem => readItem.user) : [];
+    setTimeout(() => {
+      try {
+        flatListRef.current?.scrollToIndex({ index: 0, animated: true });
+      } catch (error) {
+        console.warn('scrollToIndex failed:', error);
+        if (flatListRef.current?.scrollToEnd) {
+          flatListRef.current.scrollToEnd({ animated: true });
+        }
+      }
+    }, 100);
+  }, [messages.length, loadingMore, loading]);
+useEffect(() => {
+  debugCurrentUser();
   
-  return {
-    ...msg,
-    readByUserIds,
-    // Keep original readBy for detailed info if needed
-    readBy: msg.readBy || [],
-    // Handle deliveredTo array
-    deliveredToUserIds: msg.deliveredTo ? msg.deliveredTo.map(item => 
-      typeof item === 'string' ? item : item.user
-    ) : [],
+  // Debug messages when they load
+  if (messages.length > 0) {
+    console.log('=== MESSAGES DEBUG ===');
+    console.log('Total messages:', messages.length);
+    messages.slice(0, 3).forEach((msg, index) => {
+      console.log(`Message ${index}:`, {
+        id: msg._id,
+        content: msg.content?.substring(0, 20),
+        senderId: msg.sender?._id || msg.sender?.id,
+        senderUsername: msg.sender?.username,
+        timestamp: msg.createdAt
+      });
+    });
+    console.log('====================');
+  }
+}, [messages, currentUser]);
+// Add this useEffect after your existing useEffects
+useEffect(() => {
+  // Call the debug function whenever messages or currentUser changes
+  if (messages.length > 0 && currentUser) {
+    testUserComparison();
+  }
+}, [messages, currentUser]);
+  // Enhanced message normalization to handle readBy array
+  const normalizeMessage = (msg) => {
+    const readByUserIds = msg.readBy ? msg.readBy.map(readItem => readItem.user) : [];
+    
+    return {
+      ...msg,
+      readByUserIds,
+      readBy: msg.readBy || [],
+      deliveredToUserIds: msg.deliveredTo ? msg.deliveredTo.map(item => 
+        typeof item === 'string' ? item : item.user
+      ) : [],
+    };
   };
+const testUserComparison = () => {
+  if (messages.length > 0) {
+    const testMessage = messages[0];
+    const msgSenderId = String(testMessage.sender?._id || testMessage.sender?.id || '');
+    const currUserId = String(getCurrentUserId() || '');
+    
+    console.log('=== USER COMPARISON TEST ===');
+    console.log('Test message sender ID:', msgSenderId);
+    console.log('Current user ID:', currUserId);
+    console.log('Are they equal?', msgSenderId === currUserId);
+    console.log('Length comparison:', msgSenderId.length, 'vs', currUserId.length);
+    console.log('Type comparison:', typeof msgSenderId, 'vs', typeof currUserId);
+    console.log('============================');
+  }
 };
-
   const initializeChat = async () => {
     if (!conversationId) {
       console.error('Cannot initialize chat without conversationId');
@@ -209,7 +262,6 @@ const normalizeMessage = (msg) => {
         console.log('Socket connected:', socketRef.current.id);
         setReconnecting(false);
         
-        // Join conversation room
         socketRef.current.emit('join_conversation', { conversationId });
         console.log('Emitted join_conversation for:', conversationId);
       });
@@ -254,11 +306,11 @@ const normalizeMessage = (msg) => {
       // Typing events
       socketRef.current.on('user_typing', (data) => {
         console.log('User typing received:', data);
-        if (data.userId !== currentUserIdRef.current) {
+        const currentUserId = getCurrentUserId();
+        if (data.userId !== currentUserId) {
           setOtherUserTyping(data.isTyping);
           
           if (data.isTyping) {
-            // Auto-clear typing indicator after 3 seconds
             setTimeout(() => setOtherUserTyping(false), 3000);
           }
         }
@@ -283,50 +335,67 @@ const normalizeMessage = (msg) => {
     }
   };
 
-const loadMessages = async (pageNum = 1, isLoadMore = false) => {
-  if (!token) {
-    console.log('No token for loading messages');
-    logout();
-    return;
-  }
-
-  if (!conversationId) {
-    console.error('Cannot load messages without conversationId');
-    return;
-  }
-
-  try {
-    console.log(`Loading messages - page: ${pageNum}, isLoadMore: ${isLoadMore}`);
-
-    if (isLoadMore) {
-      setLoadingMore(true);
-    } else {
-      setLoading(true);
+  const loadMessages = async (pageNum = 1, isLoadMore = false) => {
+    if (!token) {
+      console.warn('No token – aborting message load');
+      logout();
+      return;
     }
 
-    const response = await fetch(
-      `${BASE_URL}/messages/conversations/${conversationId}/messages?page=${pageNum}&limit=20`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+    if (!conversationId) {
+      console.error('No conversationId – aborting message load');
+      return;
+    }
+
+    try {
+      console.log(`Loading messages [page=${pageNum}, isLoadMore=${isLoadMore}]...`);
+
+      if (isLoadMore) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
       }
-    );
 
-    if (response.ok) {
-      const data = await response.json();
-      console.log('Messages API response:', data);
+      const response = await fetch(
+        `${BASE_URL}/messages/conversations/${conversationId}/messages?page=${pageNum}&limit=20`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
-      const newMessagesRaw = data.messages || data.data || data || [];
-      const normalizedMessages = newMessagesRaw.map(normalizeMessage);
+      if (!response.ok) {
+        const errorText = await response.text();
+        if (response.status === 401) {
+          console.warn('Unauthorized – logging out');
+          logout();
+        } else {
+          console.error(`Message load failed [${response.status}]:`, errorText);
+          throw new Error('Failed to load messages');
+        }
+        return;
+      }
+
+      const raw = await response.json();
+      const rawMessages = raw.messages || raw.data || raw || [];
+
+      const normalizedMessages = rawMessages.map((msg) => ({
+        ...msg,
+        sender: msg.sender || {},
+        readByUserIds: (msg.readBy || []).map((r) => r.user),
+        deliveredToUserIds: (msg.deliveredTo || []).map((d) => d.user),
+      }));
+
       console.log('Normalized messages:', normalizedMessages);
 
       if (isLoadMore) {
-        setMessages(prev => [...prev, ...normalizedMessages]);
+        setMessages((prev) => [...prev, ...normalizedMessages]);
       } else {
-        const sortedMessages = normalizedMessages.sort((a, b) =>
-          new Date(b.createdAt) - new Date(a.createdAt)
+        const sortedMessages = normalizedMessages.sort(
+          (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
         );
         setMessages(sortedMessages);
       }
@@ -335,69 +404,55 @@ const loadMessages = async (pageNum = 1, isLoadMore = false) => {
       setPage(pageNum);
 
       if (normalizedMessages.length > 0) {
-        const sortedMessages = normalizedMessages.sort((a, b) =>
-          new Date(b.createdAt) - new Date(a.createdAt)
-        );
-        const latestMessage = sortedMessages[0];
-        lastMessageIdRef.current = latestMessage._id;
+        const latest = normalizedMessages[normalizedMessages.length - 1];
+        lastMessageIdRef.current = latest._id;
 
-        if (!derivedOtherUser && latestMessage.sender) {
-          const messageSenderId = latestMessage.sender._id || latestMessage.sender.id;
-          if (messageSenderId !== currentUserIdRef.current) {
-            console.log('Deriving other user from message sender:', latestMessage.sender);
-            setDerivedOtherUser(latestMessage.sender);
-          } else {
-            const otherSender = normalizedMessages.find(msg =>
-              (msg.sender._id || msg.sender.id) !== currentUserIdRef.current
-            )?.sender;
-            if (otherSender) {
-              console.log('Found other sender in messages:', otherSender);
-              setDerivedOtherUser(otherSender);
-            }
+        if (!derivedOtherUser) {
+          const currentUserId = getCurrentUserId();
+          const other = normalizedMessages.find(
+            (m) => (m.sender._id || m.sender.id) !== currentUserId
+          )?.sender;
+
+          if (other) {
+            console.log('Derived other user:', other);
+            setDerivedOtherUser(other);
           }
         }
       }
 
-      console.log('Messages state updated, total messages:', normalizedMessages.length);
+      console.log(`Loaded ${normalizedMessages.length} messages`);
 
-    } else if (response.status === 401) {
-      console.log('Unauthorized - logging out');
-      logout();
-    } else {
-      const errorText = await response.text();
-      console.error('Failed to load messages:', response.status, errorText);
-      throw new Error('Failed to load messages');
+    } catch (error) {
+      console.error('Error loading messages:', error.message || error);
+      Alert.alert('Error', 'Could not load chat messages');
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
     }
-  } catch (error) {
-    console.error('Load messages error:', error);
-    Alert.alert('Error', 'Failed to load messages');
-  } finally {
-    setLoading(false);
-    setLoadingMore(false);
-  }
-};
+  };
 
-const handleNewMessage = (messageData) => {
-  console.log('Handling new message:', messageData);
+  const handleNewMessage = (messageData) => {
+    console.log('Handling new message:', messageData);
 
-  const normalized = normalizeMessage(messageData);
+    const normalized = normalizeMessage(messageData);
 
-  setMessages(prev => {
-    const exists = prev.some(msg => msg._id === normalized._id);
-    if (exists) {
-      console.log('Message already exists, skipping duplicate');
-      return prev;
+    setMessages(prev => {
+      const exists = prev.some(msg => msg._id === normalized._id);
+      if (exists) {
+        console.log('Message already exists, skipping duplicate');
+        return prev;
+      }
+
+      console.log('Adding new message to state');
+      return [normalized, ...prev];
+    });
+
+    const messageSenderId = normalized.sender._id || normalized.sender.id;
+    const currentUserId = getCurrentUserId();
+    if (messageSenderId !== currentUserId) {
+      setTimeout(() => markMessageAsRead(normalized._id), 500);
     }
-
-    console.log('Adding new message to state');
-    return [normalized, ...prev];
-  });
-
-  const messageSenderId = normalized.sender._id || normalized.sender.id;
-  if (messageSenderId !== currentUserIdRef.current) {
-    setTimeout(() => markMessageAsRead(normalized._id), 500);
-  }
-};
+  };
 
   const updateMessageStatus = (identifier, messageData, status) => {
     console.log('Updating message status:', { identifier, status, messageData });
@@ -410,7 +465,6 @@ const handleNewMessage = (messageData) => {
           status,
         };
         
-        // Remove temp ID once real message is received
         if (messageData && messageData._id) {
           delete updatedMessage.tempId;
         }
@@ -422,7 +476,6 @@ const handleNewMessage = (messageData) => {
     }));
   };
 
-  // New function to handle read status updates
   const updateMessageReadStatus = (messageId, readByArray) => {
     console.log('Updating message read status:', { messageId, readByArray });
     
@@ -456,13 +509,14 @@ const handleNewMessage = (messageData) => {
     }
 
     const tempId = 'temp_' + Date.now();
+    const currentUserId = getCurrentUserId();
     const tempMessage = {
       _id: tempId,
       tempId,
       content,
       sender: {
-        _id: currentUserIdRef.current,
-        id: currentUserIdRef.current,
+        _id: currentUserId,
+        id: currentUserId,
         username: currentUser?.username,
         ...currentUser
       },
@@ -473,9 +527,8 @@ const handleNewMessage = (messageData) => {
       deliveredToUserIds: [],
     };
 
-    console.log('Sending message:', { content, tempId, conversationId });
+    console.log('Sending message:', { content, tempId, conversationId, currentUserId });
 
-    // Add message optimistically to the beginning of the list
     setMessages(prev => [tempMessage, ...prev]);
     setNewMessage('');
     setSending(true);
@@ -486,14 +539,13 @@ const handleNewMessage = (messageData) => {
         content,
         messageType: 'text',
         tempId,
+        chatType
       });
       
       console.log('Message sent via socket');
       
-      // Stop typing indicator
       handleTyping(false);
       
-      // Scroll to bottom after sending
       setTimeout(() => {
         try {
           flatListRef.current?.scrollToIndex({ index: 0, animated: true });
@@ -504,7 +556,6 @@ const handleNewMessage = (messageData) => {
       
     } catch (error) {
       console.error('Send message error:', error);
-      // Remove failed message
       setMessages(prev => prev.filter(msg => msg.tempId !== tempId));
       Alert.alert('Error', 'Failed to send message');
     } finally {
@@ -522,12 +573,10 @@ const handleNewMessage = (messageData) => {
       isTyping: typing,
     });
 
-    // Clear typing timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
-    // Auto-stop typing after 3 seconds
     if (typing) {
       typingTimeoutRef.current = setTimeout(() => {
         handleTyping(false);
@@ -628,7 +677,6 @@ const handleNewMessage = (messageData) => {
               });
 
               if (response.ok) {
-                // Remove message from local state
                 setMessages(prev => prev.filter(msg => msg._id !== selectedMessage._id));
                 Alert.alert('Success', 'Message deleted');
               } else {
@@ -666,113 +714,146 @@ const handleNewMessage = (messageData) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-// Enhanced message status with proper blue ticks
-const getMessageStatus = (message) => {
-  const messageSenderId = message.sender?._id || message.sender?.id;
-  if (messageSenderId !== currentUserIdRef.current) return null;
+// Enhanced message status with proper blue ticks and string conversion
+// Fixed getMessageStatus function for blue ticks
+const getMessageStatus = (message, currentUserId, otherUserId) => { 
+  const messageSenderId = String(message.sender?._id || message.sender?.id || '');
 
-  const otherUserId = derivedOtherUser?._id || derivedOtherUser?.id;
-  const readByUserIds = message.readByUserIds || [];
-  const deliveredToUserIds = message.deliveredToUserIds || [];
+  // Only show status for your own messages
+  if (messageSenderId !== currentUserId) return null;
 
-  console.log('Message status check:', {
-    messageId: message._id,
-    readByUserIds,
-    deliveredToUserIds,
-    otherUserId,
-    status: message.status
-  });
+  // Normalize user IDs from readBy and deliveredTo
+  const readUserIds = (message.readBy || []).map(entry =>
+    String(entry.user?._id || entry.user?.id || entry.user || '')
+  );
+  const deliveredUserIds = (message.deliveredTo || []).map(entry =>
+    String(entry.user?._id || entry.user?.id || entry.user || '')
+  );
 
-  // Check if message is read by other user (blue double ticks)
-  if (readByUserIds.includes(otherUserId)) {
-    return <Icon name="done-all" size={14} color="#007AFF" />; // blue double tick
+  const isReadByOther = readUserIds.includes(String(otherUserId));
+  const isDeliveredToOther = deliveredUserIds.includes(String(otherUserId));
+
+  // Blue double tick - message has been read
+  if (isReadByOther) {
+    return (
+      <View style={styles.blueTickContainer}>
+        <Icon name="done-all" size={14} color="#FFFFFF" />
+      </View>
+    );
   } 
-  // Check if message is delivered (grey double ticks)
-  else if (deliveredToUserIds.includes(otherUserId) || message.status === 'delivered') {
-    return <Icon name="done-all" size={14} color="#8E8E93" />; // grey double tick
+  // Grey double tick - message has been delivered but not read
+  else if (isDeliveredToOther || message.status === 'delivered') {
+    return <Icon name="done-all" size={14} color="rgba(255, 255, 255, 0.7)" />;
   } 
-  // Message sent but not delivered (single grey tick)
-  else if (message.status === 'sent' || message._id) {
-    return <Icon name="check" size={14} color="#8E8E93" />; // grey single tick
-  }
-  // Message sending (clock icon)
+  // Grey single tick - message has been sent but not delivered
+  else if (message.status === 'sent') {
+    return <Icon name="check" size={14} color="rgba(255, 255, 255, 0.7)" />;
+  } 
+  // Clock - message is being sent
   else if (message.status === 'sending') {
-    return <Icon name="schedule" size={14} color="#8E8E93" />; // clock icon
+    return <Icon name="schedule" size={14} color="rgba(255, 255, 255, 0.7)" />;
   }
 
-  return <Icon name="check" size={14} color="#8E8E93" />; // default single tick
+  // Fallback
+  console.log('Returning FALLBACK single tick');
+  return <Icon name="check" size={14} color="#8E8E93" />; // Fallback
 };
 
-  const renderMessage = ({ item: message }) => {
-    if (!message || !message.sender) {
-      console.warn('Invalid message data:', message);
-      return null;
-    }
 
-    // Fix: Use consistent sender ID comparison
-    const messageSenderId = message.sender._id || message.sender.id;
-    const isOwnMessage = messageSenderId === currentUserIdRef.current;
-    
-    console.log('Rendering message:', {
-      id: message._id,
-      content: message.content,
-      senderId: messageSenderId,
-      currentUserId: currentUserIdRef.current,
-      isOwnMessage,
-      sender: message.sender?.username,
-      readByUserIds: message.readByUserIds
-    });
-    
-    return (
-      <TouchableOpacity
-        onLongPress={() => handleLongPress(message)}
-        activeOpacity={0.8}
-        delayLongPress={500}
-      >
-        <View style={[styles.messageContainer, isOwnMessage ? styles.ownMessage : styles.otherMessage]}>
-          {!isOwnMessage && (
-            <View style={styles.otherAvatar}>
-              <Text style={styles.avatarText}>
-                {(derivedOtherUser?.username || message.sender?.username)?.charAt(0).toUpperCase() || '?'}
-              </Text>
-            </View>
-          )}
-          
-          <View style={[styles.messageBubble, isOwnMessage ? styles.ownBubble : styles.otherBubble]}>
-            <Text style={[styles.messageText, isOwnMessage ? styles.ownMessageText : styles.otherMessageText]}>
-              {message.content}
+const renderMessage = ({ item: message }) => {
+  if (!message || !message.sender) return null;
+
+  const messageSenderId = String(message.sender._id || message.sender.id || '');
+  const currentUserId = String(getCurrentUserId() || '');
+  const otherUserId = String(derivedOtherUser?._id || derivedOtherUser?.id || '');
+  const isOwnMessage = messageSenderId === currentUserId;
+
+  const avatarText = (message.sender?.username || '?')[0].toUpperCase();
+  const messageStatus = getMessageStatus(message, currentUserId, otherUserId);
+
+  return (
+    <TouchableOpacity
+      onLongPress={() => handleLongPress(message)}
+      activeOpacity={0.8}
+      style={[
+        styles.messageContainer,
+        isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer
+      ]}
+    >
+      <View style={[
+        styles.messageWrapper,
+        isOwnMessage ? styles.ownMessageWrapper : styles.otherMessageWrapper
+      ]}>
+        {/* Avatar for other messages only */}
+        {!isOwnMessage && (
+          <View style={styles.otherAvatar}>
+            <Text style={styles.avatarText}>
+              {avatarText}
             </Text>
-            
-            <View style={styles.messageFooter}>
-              <Text style={[styles.messageTime, isOwnMessage ? styles.ownMessageTime : styles.otherMessageTime]}>
-                {formatTime(message.createdAt)}
-              </Text>
-              {isOwnMessage && (
-                <View style={styles.messageStatus}>
-                  {getMessageStatus(message)}
-                </View>
-              )}
-            </View>
+          </View>
+        )}
+
+        {/* Message bubble */}
+        <View style={[
+          styles.messageBubble,
+          isOwnMessage ? styles.ownBubble : styles.otherBubble
+        ]}>
+          <Text style={[
+            styles.messageText,
+            isOwnMessage ? styles.ownMessageText : styles.otherMessageText
+          ]}>
+            {message.content}
+          </Text>
+
+          {/* Message footer with time and status */}
+          <View style={styles.messageFooter}>
+            <Text style={[
+              styles.messageTime, 
+              isOwnMessage ? styles.ownMessageTime : styles.otherMessageTime
+            ]}>
+              {formatTime(message.createdAt)}
+            </Text>
+            {/* Only show status for own messages */}
+            {isOwnMessage && messageStatus && (
+              <View style={styles.messageStatus}>
+                {messageStatus}
+              </View>
+            )}
           </View>
         </View>
-      </TouchableOpacity>
-    );
-  };
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+// Add this debug function to test your current user ID
+const debugCurrentUser = () => {
+  console.log('=== CURRENT USER DEBUG ===');
+  console.log('currentUser object:', currentUser);
+  console.log('currentUser._id:', currentUser?._id);
+  console.log('currentUser.id:', currentUser?.id);
+  console.log('getCurrentUserId():', getCurrentUserId());
+  console.log('currentUserIdRef.current:', currentUserIdRef.current);
+  console.log('token:', token ? 'EXISTS' : 'NULL');
+  console.log('==========================');
+};
 
   const renderTypingIndicator = () => {
     if (!otherUserTyping || !derivedOtherUser) return null;
     
     return (
-      <View style={[styles.messageContainer, styles.otherMessage]}>
-        <View style={styles.otherAvatar}>
-          <Text style={styles.avatarText}>
-            {derivedOtherUser.username?.charAt(0).toUpperCase() || '?'}
-          </Text>
-        </View>
-        <View style={[styles.messageBubble, styles.otherBubble, styles.typingBubble]}>
-          <Text style={styles.typingText}>
-            {derivedOtherUser.username || 'User'} is typing...
-          </Text>
+      <View style={[styles.messageContainer, styles.otherMessageContainer]}>
+        <View style={styles.messageWrapper}>
+          <View style={styles.otherAvatar}>
+            <Text style={styles.avatarText}>
+              {derivedOtherUser.username?.charAt(0).toUpperCase() || '?'}
+            </Text>
+          </View>
+          <View style={[styles.messageBubble, styles.otherBubble, styles.typingBubble]}>
+            <Text style={styles.typingText}>
+              {derivedOtherUser.username || 'User'} is typing...
+            </Text>
+          </View>
         </View>
       </View>
     );
@@ -782,7 +863,8 @@ const getMessageStatus = (message) => {
   const renderLongPressModal = () => {
     if (!modalVisible || !selectedMessage) return null;
 
-    const isOwnMessage = (selectedMessage.sender?._id || selectedMessage.sender?.id) === currentUserIdRef.current;
+    const currentUserId = getCurrentUserId();
+    const isOwnMessage = (selectedMessage.sender?._id || selectedMessage.sender?.id) === currentUserId;
 
     return (
       <Modal
@@ -854,21 +936,59 @@ const getMessageStatus = (message) => {
   console.log('Rendering ChatScreen with messages:', messages.length, 'otherUser:', derivedOtherUser?.username);
 
 return (
-  <SafeAreaView style={styles.container}>
+  <SafeAreaView style={{ flex: 1 }}>
+    {/* SVG Futuristic Background */}
+    <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 0 }}>
+      <Svg
+        height="100%"
+        width="100%"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="xMidYMid slice"
+      >
+       <Path
+  d="
+    M12 18 C15 12, 25 12, 28 18
+    M62 14 C65 10, 75 10, 78 14
+
+    M20 80 C22 85, 28 85, 30 80
+    M70 82 C72 87, 78 87, 80 82
+
+    M34 34 Q40 28, 46 34
+    M60 60 Q66 66, 72 60
+
+    M25 65 C30 58, 40 58, 45 65
+    M10 45 C15 52, 25 52, 30 45
+
+    M58 26 Q64 20, 70 26
+    M42 78 Q48 72, 54 78
+
+    M5 5 C8 3, 12 3, 15 5
+    M85 95 C88 93, 92 93, 95 95
+  "
+  stroke="#1E90FF22"
+  strokeWidth="0.35"
+  fill="none"
+/>
+
+
+      </Svg>
+    </View>
+
+    {/* Chat UI */}
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0} // adjust based on header height
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
       >
         <View style={{ flex: 1 }}>
           {/* Header */}
-          <View style={styles.header}>
+          <View style={[styles.header, { zIndex: 1 }]}>
             <TouchableOpacity
               style={styles.backButton}
               onPress={() => navigation.goBack()}
             >
-              <Icon name="arrow-back" size={24} color="#007AFF" />
+              <Icon name="arrow-back" size={24} color="white" />
             </TouchableOpacity>
 
             <View style={styles.headerInfo}>
@@ -881,20 +1001,19 @@ return (
             </View>
 
             <TouchableOpacity style={styles.headerAction}>
-              <Icon name="more-vert" size={24} color="#007AFF" />
+              <Icon name="more-vert" size={24} color="white" />
             </TouchableOpacity>
           </View>
 
-          {/* Connection Status */}
+          {/* Reconnecting status */}
           {reconnecting && (
-            <View style={styles.connectionStatus}>
+            <View style={[styles.connectionStatus, { zIndex: 1 }]}>
               <Text style={styles.connectionText}>Reconnecting...</Text>
             </View>
           )}
 
-          {/* Chat Container */}
-          <View style={styles.chatContainer}>
-            {/* Messages List */}
+          {/* Messages */}
+          <View style={[styles.chatContainer, { zIndex: 1, flex: 1 }]}>
             <FlatList
               ref={flatListRef}
               data={[...messages]}
@@ -918,11 +1037,15 @@ return (
                 minIndexForVisible: 0,
                 autoscrollToTopThreshold: 100,
               }}
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={10}
+              windowSize={10}
+              initialNumToRender={20}
             />
           </View>
 
-          {/* Input Container */}
-          <View style={[styles.inputContainer, { marginBottom: keyboardHeight > 0 ? 0 : 20 }]}>
+          {/* Input */}
+          <View style={[styles.inputContainer, { zIndex: 1 }]}>
             <View style={styles.inputRow}>
               <TextInput
                 style={styles.textInput}
@@ -943,7 +1066,6 @@ return (
                 onSubmitEditing={sendMessage}
                 blurOnSubmit={false}
               />
-              
               <TouchableOpacity
                 style={[
                   styles.sendButton,
@@ -967,18 +1089,20 @@ return (
       </KeyboardAvoidingView>
     </TouchableWithoutFeedback>
   </SafeAreaView>
-   );
+);
+
  };
 const styles = StyleSheet.create({
-  container: {
+ container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F7F7F7',
   },
+
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F7F7F7',
   },
   loadingText: {
     marginTop: 10,
@@ -990,17 +1114,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#03604d', 
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: '#006400',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 1,
+      height: 2,
     },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 4,
   },
   backButton: {
     padding: 8,
@@ -1013,11 +1137,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#000000',
+    color: '#fff',
   },
   headerSubtitle: {
     fontSize: 12,
-    color: '#8E8E93',
+    color: 'white',
     marginTop: 2,
   },
   headerAction: {
@@ -1037,199 +1161,338 @@ const styles = StyleSheet.create({
   },
   chatContainer: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 10,
+    paddingBottom: 8,
   },
+
+  // Message List Styles
   messagesList: {
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
+
+  // Message Container Styles
   messageContainer: {
+    marginVertical: 3,
+    width: '100%',
+  },
+
+  ownMessageContainer: {
+    alignItems: 'flex-end',
+  },
+
+  otherMessageContainer: {
+    alignItems: 'flex-start',
+  },
+
+  // Message Wrapper Styles
+  messageWrapper: {
     flexDirection: 'row',
-    marginVertical: 4,
-    maxWidth: '80%',
+    maxWidth: '85%',
+    alignItems: 'flex-end',
   },
-  ownMessage: {
-    alignSelf: 'flex-end',
+
+  ownMessageWrapper: {
     flexDirection: 'row-reverse',
+    justifyContent: 'flex-start',
   },
-  otherMessage: {
-    alignSelf: 'flex-start',
+
+  otherMessageWrapper: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
   },
+
+  // Avatar Styles
   otherAvatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#007AFF',
+    backgroundColor: 'grey', // Nice green color
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
-    marginTop: 4,
+    marginRight: 10,
+    marginBottom: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
+
   avatarText: {
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
   },
+
+  // Message Bubble Styles
   messageBubble: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
     maxWidth: '100%',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
   },
+
   ownBubble: {
-    backgroundColor: 'grey',
-    marginRight: 8,
+    backgroundColor: '#174f3a', // Beautiful blue for own messages
+    borderBottomRightRadius: 6, // Tail effect
   },
+
   otherBubble: {
-    backgroundColor: '#E5E5EA',
-    marginLeft: 0,
+    backgroundColor: '#174f3a', // Clean white for other messages
+    borderBottomLeftRadius: 6, // Tail effect
+    borderWidth: 1,
+    borderColor: '#E8E8ED',
   },
+
+  // Message Text Styles
   messageText: {
     fontSize: 16,
-    lineHeight: 20,
+    lineHeight: 21,
+    fontWeight: '400',
   },
+
   ownMessageText: {
     color: '#FFFFFF',
   },
+
   otherMessageText: {
-    color: '#000000',
+    color: '#FFFFFF',
   },
+
+  // Message Footer Styles
   messageFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
     justifyContent: 'flex-end',
+    marginTop: 6,
   },
+
   messageTime: {
     fontSize: 11,
-    marginRight: 4,
+    marginRight: 6,
+    fontWeight: '500',
   },
+
   ownMessageTime: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: 'rgb(255, 255, 255)', // Better contrast for blue background
   },
+
   otherMessageTime: {
     color: '#8E8E93',
   },
+
   messageStatus: {
     marginLeft: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
+
+  // Typing Indicator Styles (WhatsApp-like)
   typingBubble: {
-    backgroundColor: '#E5E5EA',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderBottomLeftRadius: 6,
     paddingHorizontal: 16,
     paddingVertical: 12,
+    marginHorizontal: 16,
+    marginVertical: 4,
+    alignSelf: 'flex-start',
+    maxWidth: '70%',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#E8E8ED',
   },
+
   typingText: {
     fontSize: 14,
     color: '#8E8E93',
     fontStyle: 'italic',
+    fontWeight: '400',
   },
+
+  // Loading More Messages
   loadingMore: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
   },
+
   loadingMoreText: {
     marginLeft: 8,
     fontSize: 14,
     color: '#8E8E93',
   },
+
+  // Input Container Styles
   inputContainer: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5EA',
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-  },
+  backgroundColor: '#FFFFFF',
+  paddingHorizontal: 16,
+  paddingTop: 12,
+  paddingBottom: Platform.OS === 'ios' ? 16 : 8, // slightly more bottom padding for iOS
+  borderTopWidth: 1,
+  borderTopColor: '#E1E1E6',
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: -1 },
+  shadowOpacity: 0.05,
+  shadowRadius: 3,
+  elevation: 3,
+},
+
+inputRow: {
+  flexDirection: 'row',
+  alignItems: 'flex-end',
+},
+
+
   textInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
-    borderRadius: 20,
+    borderColor: '#E1E1E6',
+    borderRadius: 22,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
     maxHeight: 100,
-    marginRight: 8,
+    marginRight: 10,
     backgroundColor: '#F8F8F8',
-    color: '#000000',
-  },
-  sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#007AFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sendButtonDisabled: {
-    backgroundColor: '#8E8E93',
-    opacity: 0.5,
-  },
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 20,
-    minWidth: 250,
+    color: '#1C1C1E',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: 1,
     },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 10,
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
+
+  sendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#007AFF',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+
+  sendButtonDisabled: {
+    backgroundColor: '#C7C7CC',
+    opacity: 0.6,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    minWidth: 280,
+    maxWidth: '90%',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#000000',
+    color: '#1C1C1E',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
+
   modalOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: 10,
     marginBottom: 8,
+    backgroundColor: '#F8F8F8',
   },
+
   modalOptionText: {
     fontSize: 16,
     color: '#007AFF',
     marginLeft: 12,
+    fontWeight: '500',
   },
+
   deleteOption: {
-    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    backgroundColor: 'rgba(255, 59, 48, 0.08)',
   },
+
   deleteOptionText: {
     color: '#FF3B30',
+    fontWeight: '600',
   },
+
   modalCancel: {
-    marginTop: 12,
-    paddingVertical: 12,
+    marginTop: 16,
+    paddingVertical: 14,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: '#F2F2F7',
     alignItems: 'center',
   },
+
   modalCancelText: {
     fontSize: 16,
     color: '#8E8E93',
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+
+  // Enhanced status icons with better visibility
+  statusIcon: {
+    marginLeft: 4,
+  },
+
+  blueTickContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)', // Subtle background for blue ticks
+    borderRadius: 8,
+    padding: 2,
+    marginLeft: 4,
   },
 });
 
