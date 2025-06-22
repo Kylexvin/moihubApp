@@ -1,5 +1,5 @@
 {
-  "name": "myapp",
+  "name": "MoiHub",
   "version": "1.0.0",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
@@ -40,7 +40,11 @@
     "react-native-screens": "~4.11.1",
     "react-native-svg": "15.11.2",
     "react-native-url-polyfill": "^2.0.0",
-    "socket.io-client": "^4.8.1"
+    "react-native-webview": "^13.15.0",
+    "socket.io-client": "^4.8.1",
+    "expo-av": "~15.1.6",
+    "expo-audio": "~0.4.6",
+    "expo-screen-capture": "~7.1.4"
   },
   "devDependencies": {
     "@babel/core": "^7.24.0",

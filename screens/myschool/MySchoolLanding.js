@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
-  Image,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 
 const { width } = Dimensions.get('window');
 
@@ -15,47 +15,44 @@ const MySchoolLanding = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('Portal');
   const [blogs, setBlogs] = useState([]);
 
-  // Mock blog data - replace with API call
   useEffect(() => {
-    // fetchSchoolBlogs();
     setBlogs([
       {
         id: 1,
-        title: 'How to Register for Units - Step by Step Guide',
-        excerpt: 'Complete guide on unit registration process...',
+        title: 'Unit Registration Guide',
+        excerpt: 'Step-by-step registration process',
         date: '2024-06-15',
-        category: 'Registration'
+        category: 'Academic'
       },
       {
         id: 2,
         title: 'Academic Calendar 2024/2025',
-        excerpt: 'Important dates and deadlines for the academic year...',
+        excerpt: 'Important dates and deadlines',
         date: '2024-06-10',
         category: 'Calendar'
       },
       {
         id: 3,
-        title: 'E-Learning Platform Updates',
-        excerpt: 'New features and improvements to Musomi platform...',
+        title: 'E-Learning Updates',
+        excerpt: 'New Musomi platform features',
         date: '2024-06-08',
-        category: 'E-Learning'
+        category: 'Platform'
       }
     ]);
   }, []);
 
   const tabs = [
-    { name: 'Portal', icon: '🎓', screen: 'Portal' },
-    { name: 'Musomi', icon: '📚', screen: 'Musomi' },
-    { name: 'ChatGPT', icon: '🤖', screen: 'ChatGPT' },
-    { name: 'MOI', icon: '🌐', screen: 'MoiWebsite' },
-    { name: 'Organizations', icon: '🏢', screen: 'Organizations' }
+    { name: 'Portal', icon: 'school', screen: 'Portal' },
+    { name: 'Musomi', icon: 'menu-book', screen: 'Musomi' },
+    { name: 'ChatGPT', icon: 'smart-toy', screen: 'ChatGPT' },
+    { name: 'MOI', icon: 'language', screen: 'MoiWebsite' },
+    { name: 'Organizations', icon: 'business', screen: 'Organizations' }
   ];
 
   const services = [
-    { name: 'Past Papers', status: 'Coming Soon', icon: '📄', color: '#FEF3C7' },
-    { name: 'Exam Timetable', status: 'Available', icon: '📅', color: '#D1FAE5' },
-    { name: 'Fee Statement', status: 'Available', icon: '💰', color: '#DBEAFE' },
-    { name: 'Library Access', status: 'Available', icon: '📖', color: '#E5E7EB' }
+    { name: 'Past Papers', status: 'Soon', icon: 'description', available: false },
+    { name: 'Exam Schedule', status: 'soon', icon: 'event', available: false },
+    
   ];
 
   const handleTabPress = (tab) => {
@@ -65,51 +62,98 @@ const MySchoolLanding = ({ navigation }) => {
 
   const renderTabBar = () => (
     <View style={styles.tabContainer}>
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tabScrollContent}
-      >
-        {tabs.map((tab) => (
-          <TouchableOpacity
+      <View style={styles.tabWrapper}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabScrollContent}
+          decelerationRate="fast"
+          snapToInterval={90}
+          snapToAlignment="start"
+        >
+          {tabs.map((tab, index) => (
+            <TouchableOpacity
+              key={tab.name}
+              style={[
+                styles.tab,
+                activeTab === tab.name && styles.activeTab,
+                index === 0 && styles.firstTab,
+                index === tabs.length - 1 && styles.lastTab
+              ]}
+              onPress={() => handleTabPress(tab)}
+            >
+              <Icon 
+                name={tab.icon} 
+                size={20} 
+                color={activeTab === tab.name ? '#FFFFFF' : '#6B7280'} 
+              />
+              <Text style={[
+                styles.tabText,
+                activeTab === tab.name && styles.activeTabText
+              ]}>
+                {tab.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        
+        {/* Swipe indicators */}
+        <View style={styles.swipeIndicators}>
+          <View style={styles.leftIndicator}>
+            <Icon name="chevron-left" size={16} color="#D1D5DB" />
+          </View>
+          <View style={styles.rightIndicator}>
+            <Icon name="chevron-right" size={16} color="#D1D5DB" />
+          </View>
+        </View>
+      </View>
+      
+      {/* Breadcrumb dots */}
+      <View style={styles.breadcrumbContainer}>
+        {tabs.map((tab, index) => (
+          <View
             key={tab.name}
             style={[
-              styles.tab,
-              activeTab === tab.name && styles.activeTab
+              styles.breadcrumbDot,
+              activeTab === tab.name && styles.activeBreadcrumbDot
             ]}
-            onPress={() => handleTabPress(tab)}
-          >
-            <Text style={styles.tabIcon}>{tab.icon}</Text>
-            <Text style={[
-              styles.tabText,
-              activeTab === tab.name && styles.activeTabText
-            ]}>
-              {tab.name}
-            </Text>
-          </TouchableOpacity>
+          />
         ))}
-      </ScrollView>
+      </View>
     </View>
   );
 
   const renderServices = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Services</Text>
+    <View style={styles.servicesSection}>
       <View style={styles.servicesGrid}>
         {services.map((service, index) => (
           <TouchableOpacity
             key={index}
-            style={[styles.serviceCard, { backgroundColor: service.color }]}
-            disabled={service.status === 'Coming Soon'}
+            style={[
+              styles.serviceCard,
+              !service.available && styles.serviceCardDisabled
+            ]}
+            disabled={!service.available}
           >
-            <Text style={styles.serviceIcon}>{service.icon}</Text>
+            <View style={styles.serviceIconContainer}>
+              <Icon 
+                name={service.icon} 
+                size={28} 
+                color={service.available ? '#1B5E20' : '#9E9E9E'} 
+              />
+            </View>
             <Text style={styles.serviceName}>{service.name}</Text>
-            <Text style={[
-              styles.serviceStatus,
-              service.status === 'Coming Soon' && styles.comingSoon
+            <View style={[
+              styles.statusBadge,
+              service.available ? styles.statusLive : styles.statusSoon
             ]}>
-              {service.status}
-            </Text>
+              <Text style={[
+                styles.statusText,
+                service.available ? styles.statusTextLive : styles.statusTextSoon
+              ]}>
+                {service.status}
+              </Text>
+            </View>
           </TouchableOpacity>
         ))}
       </View>
@@ -117,29 +161,33 @@ const MySchoolLanding = ({ navigation }) => {
   );
 
   const renderBlogs = () => (
-    <View style={styles.section}>
+    <View style={styles.blogsSection}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>School Blogs</Text>
-        <TouchableOpacity>
-          <Text style={styles.seeAllText}>See All</Text>
+        <Text style={styles.sectionTitle}>Updates</Text>
+        <TouchableOpacity style={styles.seeAllButton}>
+          <Text style={styles.seeAllText}>View all</Text>
+          <Icon name="arrow-forward" size={16} color="#2E7D32" />
         </TouchableOpacity>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      
+      <View style={styles.blogsList}>
         {blogs.map((blog) => (
-          <TouchableOpacity key={blog.id} style={styles.blogCard}>
-            <View style={styles.blogCategory}>
-              <Text style={styles.blogCategoryText}>{blog.category}</Text>
+          <TouchableOpacity key={blog.id} style={styles.blogItem}>
+            <View style={styles.blogIconContainer}>
+              <Icon name="article" size={20} color="#2E7D32" />
             </View>
-            <Text style={styles.blogTitle} numberOfLines={2}>
-              {blog.title}
-            </Text>
-            <Text style={styles.blogExcerpt} numberOfLines={3}>
-              {blog.excerpt}
-            </Text>
-            <Text style={styles.blogDate}>{blog.date}</Text>
+            <View style={styles.blogContent}>
+              <View style={styles.blogHeader}>
+                <Text style={styles.blogCategory}>{blog.category}</Text>
+                <Text style={styles.blogDate}>{blog.date}</Text>
+              </View>
+              <Text style={styles.blogTitle}>{blog.title}</Text>
+              <Text style={styles.blogExcerpt}>{blog.excerpt}</Text>
+            </View>
+            <Icon name="chevron-right" size={20} color="#C4C4C4" />
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </View>
     </View>
   );
 
@@ -147,19 +195,8 @@ const MySchoolLanding = ({ navigation }) => {
     <View style={styles.container}>
       {renderTabBar()}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.welcomeSection}>
-          <Text style={styles.welcomeText}>Welcome to My School Hub</Text>
-          <Text style={styles.welcomeSubtext}>
-            Your one-stop destination for all school services and information
-          </Text>
-        </View>
-        
         {renderServices()}
         {renderBlogs()}
-        
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>More features coming soon! 🚀</Text>
-        </View>
       </ScrollView>
     </View>
   );
@@ -168,78 +205,193 @@ const MySchoolLanding = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F8F9FA',
   },
+  
+  // Tab Bar Styles
   tabContainer: {
     backgroundColor: '#FFFFFF',
-    elevation: 2,
+    paddingTop: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  tabWrapper: {
+    position: 'relative',
   },
   tabScrollContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: 'center',
   },
   tab: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
+    paddingVertical: 10,
+    marginRight: 12,
     borderRadius: 20,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F3F4F6',
     minWidth: 80,
+    justifyContent: 'center',
+  },
+  firstTab: {
+    marginLeft: 0,
+  },
+  lastTab: {
+    marginRight: 20,
   },
   activeTab: {
-    backgroundColor: '#4F46E5',
-  },
-  tabIcon: {
-    fontSize: 20,
-    marginBottom: 4,
+    backgroundColor: '#2E7D32',
+    shadowColor: '#2E7D32',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   tabText: {
     fontSize: 12,
-    fontWeight: '500',
-    color: '#64748B',
+    color: '#6B7280',
+    fontWeight: '600',
+    marginLeft: 6,
   },
   activeTabText: {
     color: '#FFFFFF',
   },
+  
+  // Swipe Indicators
+  swipeIndicators: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    pointerEvents: 'none',
+  },
+  leftIndicator: {
+    marginLeft: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 12,
+    padding: 2,
+  },
+  rightIndicator: {
+    marginRight: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 12,
+    padding: 2,
+  },
+  
+  // Breadcrumb Dots
+  breadcrumbContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 6,
+  },
+  breadcrumbDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#D1D5DB',
+  },
+  activeBreadcrumbDot: {
+    backgroundColor: '#2E7D32',
+    width: 20,
+  },
+  
+  // Content Styles
   content: {
     flex: 1,
   },
-  welcomeSection: {
-    padding: 20,
-    alignItems: 'center',
+  
+  // Services Section
+  servicesSection: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 16,
+  },
+  servicesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  serviceCard: {
+    width: (width - 52) / 2,
     backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  serviceCardDisabled: {
+    opacity: 0.6,
+  },
+  serviceIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#E8F5E8',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  welcomeText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1E293B',
+  serviceName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
     textAlign: 'center',
     marginBottom: 8,
   },
-  welcomeSubtext: {
-    fontSize: 16,
-    color: '#64748B',
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  section: {
-    backgroundColor: '#FFFFFF',
-    margin: 12,
-    marginTop: 0,
-    padding: 20,
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 12,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+  },
+  statusLive: {
+    backgroundColor: '#E8F5E8',
+  },
+  statusSoon: {
+    backgroundColor: '#FFF3CD',
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  statusTextLive: {
+    color: '#1B5E20',
+  },
+  statusTextSoon: {
+    color: '#8A6914',
+  },
+  
+  // Blogs Section
+  blogsSection: {
+    paddingHorizontal: 20,
+    paddingBottom: 24,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -249,92 +401,81 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1E293B',
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  seeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   seeAllText: {
     fontSize: 14,
-    color: '#4F46E5',
-    fontWeight: '500',
-  },
-  servicesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  serviceCard: {
-    width: (width - 64) / 2,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  serviceIcon: {
-    fontSize: 24,
-    marginBottom: 8,
-  },
-  serviceName: {
-    fontSize: 14,
+    color: '#2E7D32',
     fontWeight: '600',
-    color: '#1E293B',
-    textAlign: 'center',
-    marginBottom: 4,
   },
-  serviceStatus: {
-    fontSize: 12,
-    color: '#059669',
-    fontWeight: '500',
+  blogsList: {
+    gap: 12,
   },
-  comingSoon: {
-    color: '#D97706',
-  },
-  blogCard: {
-    width: 280,
-    backgroundColor: '#F8FAFC',
+  blogItem: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
-    marginRight: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#F0F0F0',
+  },
+  blogIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E8F5E8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  blogContent: {
+    flex: 1,
+  },
+  blogHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
   },
   blogCategory: {
-    backgroundColor: '#4F46E5',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    alignSelf: 'flex-start',
-    marginBottom: 12,
-  },
-  blogCategoryText: {
-    fontSize: 10,
-    color: '#FFFFFF',
+    fontSize: 12,
+    color: '#2E7D32',
     fontWeight: '600',
-  },
-  blogTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1E293B',
-    marginBottom: 8,
-    lineHeight: 22,
-  },
-  blogExcerpt: {
-    fontSize: 14,
-    color: '#64748B',
-    lineHeight: 20,
-    marginBottom: 12,
+    backgroundColor: '#E8F5E8',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
   blogDate: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: '#9CA3AF',
   },
-  footer: {
-    padding: 20,
-    alignItems: 'center',
+  blogTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+    lineHeight: 20,
   },
-  footerText: {
-    fontSize: 14,
-    color: '#64748B',
-    fontStyle: 'italic',
+  blogExcerpt: {
+    fontSize: 13,
+    color: '#6B7280',
+    lineHeight: 18,
   },
 });
 

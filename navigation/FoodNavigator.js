@@ -7,8 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 // Import food-related screens
 import FoodScreen from '../screens/food/FoodScreen';
 import FoodVendorScreen from '../screens/food/FoodVendorScreen';
- import OrderScreen from '../screens/food/OrderScreen';
- import MyOrdersScreen from '../screens/food/MyOrdersScreen';
+import OrderScreen from '../screens/food/OrderScreen';
+import MyOrdersScreen from '../screens/food/MyOrdersScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -17,39 +17,89 @@ const FoodNavigator = () => {
     <Stack.Navigator
       initialRouteName="FoodHome"
       screenOptions={{
-        headerStyle: {
-          backgroundColor: '#005f4b',
-        },
-        headerTintColor: '#fff',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
-        headerBackTitleVisible: false,
-        headerShadowVisible: false,
-        headerBackImage: ({ tintColor }) => (
-          <Ionicons name="chevron-back" size={24} color={tintColor} style={{ marginLeft: Platform.OS === 'ios' ? 10 : 0 }} />
-        ),
+        headerShown: false, // Hide all headers by default
+        gestureEnabled: true
+        
       }}
     >
       <Stack.Screen 
         name="FoodHome" 
         component={FoodScreen} 
-        options={{ title: 'Food Delivery' }}
       />
       <Stack.Screen 
         name="FoodVendor" 
-        component={FoodVendorScreen} 
-        options={({ route }) => ({ title: route.params?.shopName || 'Food Vendor' })}
+        component={FoodVendorScreen}
+        options={{
+          headerShown: false, // Show header for vendor screen
+          headerStyle: {
+            backgroundColor: 'ivory',
+          },
+          headerTintColor: '#fff',
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+          headerBackTitleVisible: false,
+          headerShadowVisible: false,
+          headerBackImage: ({ tintColor }) => (
+            <Ionicons 
+              name="chevron-back" 
+              size={24} 
+              color={tintColor} 
+              style={{ marginLeft: Platform.OS === 'ios' ? 10 : 0 }} 
+            />
+          ),
+          title: 'Restaurant',
+        }}
       />
       <Stack.Screen 
         name="Order" 
-        component={OrderScreen} 
-        options={{ title: 'Place Order' }}
+        component={OrderScreen}
+        options={{
+          headerShown: false, // Show header for order screen
+          headerStyle: {
+            backgroundColor: '#005f4b',
+          },
+          headerTintColor: '#fff',
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+          headerBackTitleVisible: false,
+          headerShadowVisible: false,
+          headerBackImage: ({ tintColor }) => (
+            <Ionicons 
+              name="chevron-back" 
+              size={24} 
+              color={tintColor} 
+              style={{ marginLeft: Platform.OS === 'ios' ? 10 : 0 }} 
+            />
+          ),
+          title: 'Your Order',
+        }}
       />
       <Stack.Screen 
         name="MyOrders" 
-        component={MyOrdersScreen} 
-        options={{ title: 'My Orders' }}
+        component={MyOrdersScreen}
+        options={{
+          headerShown: false, // Show header for orders history
+          headerStyle: {
+            backgroundColor: '#005f4b',
+          },
+          headerTintColor: '#fff',
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+          headerBackTitleVisible: false,
+          headerShadowVisible: false,
+          headerBackImage: ({ tintColor }) => (
+            <Ionicons 
+              name="chevron-back" 
+              size={24} 
+              color={tintColor} 
+              style={{ marginLeft: Platform.OS === 'ios' ? 10 : 0 }} 
+            />
+          ),
+          title: 'Order History',
+        }}
       />
     </Stack.Navigator>
   );

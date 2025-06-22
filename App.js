@@ -24,7 +24,8 @@ import MessageStackNavigator from './navigation/MessageStackNavigator';
 import EshopNavigator from './navigation/EshopNavigator';
 import LinkMeNavigator from './navigation/LinkMeNavigator';
 import MySchoolNavigator from './navigation/MySchoolNavigator';
-
+import BlogsNavigator from './navigation/BlogsNavigator';
+import AdminNavigator from './navigation/AdminNavigator';
 
 const Stack = createNativeStackNavigator();
 
@@ -32,7 +33,7 @@ const MyTheme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
-    background: '#093028',
+    background: 'ivory',
     card: '#093028',
     text: '#E0FFF5',
     border: 'transparent',
@@ -139,6 +140,8 @@ function AppNavigator() {
             <Stack.Screen name='EshopNavigator' component={EshopNavigator} />
             <Stack.Screen name="LinkMe" component={LinkMeNavigator} />
             <Stack.Screen name="MySchoolNavigator" component={MySchoolNavigator} />
+            <Stack.Screen name="BlogsNavigator" component={BlogsNavigator} />
+            <Stack.Screen  name="Admin"   component={AdminNavigator} />
 
 
 

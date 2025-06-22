@@ -185,9 +185,7 @@ const OrderScreen = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Your Cart</Text>
-      </View>
+
       
       {cart.length === 0 ? (
         <View style={styles.emptyCart}>
@@ -249,19 +247,9 @@ const OrderScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'ivory',
   },
-  header: {
-    backgroundColor: '#004d40',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    elevation: 3,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
+
   emptyCart: {
     flex: 1,
     justifyContent: 'center',
@@ -274,7 +262,7 @@ const styles = StyleSheet.create({
     color: '#78909c',
   },
   shopButton: {
-    backgroundColor: '#004d40',
+    backgroundColor: '#fe5722',
     paddingVertical: 12,
     paddingHorizontal: 30,
     borderRadius: 25,
@@ -315,7 +303,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor:'#fe5722',
   },
   itemImage: {
     width: 60,
@@ -341,7 +329,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   quantityButton: {
-    backgroundColor: '#004d40',
+    backgroundColor: '#fe5722',
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -369,7 +357,7 @@ const styles = StyleSheet.create({
   },
   deliveryInput: {
     borderWidth: 1,
-    borderColor: '#b2dfdb',
+    borderColor: '#fe5722',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -401,7 +389,7 @@ const styles = StyleSheet.create({
     color: '#004d40',
   },
   placeOrderButton: {
-    backgroundColor: '#004d40',
+    backgroundColor:'#fe5722',
     paddingVertical: 14,
     borderRadius: 25,
     alignItems: 'center',

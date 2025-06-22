@@ -8,11 +8,11 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
- "splash": {
-    "backgroundColor": "#005f4b", 
-    "resizeMode": "contain",
-    "image": "./assets/moihublogo.png"
-  },
+    "splash": {
+      "backgroundColor": "#005f4b",
+      "resizeMode": "contain",
+      "image": "./assets/moihublogo.png"
+    },
     "ios": {
       "supportsTablet": true
     },
@@ -24,6 +24,9 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-audio"
+    ]
   }
 }

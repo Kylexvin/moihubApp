@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Animatable from 'react-native-animatable';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
@@ -183,7 +184,10 @@ const serviceCategories = [
   return (
     <View style={styles.container}>
       <StatusBar backgroundColor="#02604c" barStyle="light-content" />
-      
+       <LinearGradient
+        colors={['#083028','#0a0a0a',  '#0a0a0a']}
+        style={styles.background}
+      />
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
@@ -335,7 +339,7 @@ const serviceCategories = [
             </TouchableOpacity>
             <Text style={styles.footerDivider}>|</Text>
             <TouchableOpacity>
-              <Text style={styles.footerLink}>Contact</Text>
+              <Text style={styles.footerLink}>Policy</Text>
             </TouchableOpacity>
           </View>
           <Text style={styles.footerText}>Version 1.0.0</Text>

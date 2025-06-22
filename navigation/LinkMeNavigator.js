@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ScreenCapture from 'expo-screen-capture'; // Screenshot protection
 
 import LinkMeEntry from '../screens/LinkMe/LinkMeEntry';
 import OnboardingStart from '../screens/LinkMe/OnboardingStart';
@@ -16,11 +17,8 @@ import AwaitingApproval from '../screens/LinkMe/AwaitingApproval';
 import RejectionScreen from '../screens/LinkMe/RejectionScreen';
 import SwipeFeed from '../screens/LinkMe/SwipeFeed';
 import MatchesScreen from '../screens/LinkMe/MatchesScreen';
-
-// Import your existing MessageStackNavigator
 import MessageStackNavigator from './MessageStackNavigator';
 
-// Enhanced placeholder screens with futuristic design
 const ProfileScreen = () => (
   <LinearGradient colors={['#0a0a0a', '#1a1a2e']} style={styles.placeholderContainer}>
     <Icon name="person-circle" size={80} color="#7b20a1" />
@@ -33,7 +31,6 @@ const ProfileScreen = () => (
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// Main tab navigator for the feed and other main screens
 const MainTabNavigator = () => {
   return (
     <Tab.Navigator
@@ -89,36 +86,35 @@ const MainTabNavigator = () => {
       <Tab.Screen 
         name="Discover" 
         component={SwipeFeed}
-        options={{
-          tabBarLabel: 'Discover',
-        }}
+        options={{ tabBarLabel: 'Discover' }}
       />
       <Tab.Screen 
         name="Matches" 
         component={MatchesScreen}
-        options={{
-          tabBarLabel: 'Matches',
-        }}
+        options={{ tabBarLabel: 'Matches' }}
       />
       <Tab.Screen 
         name="Messages" 
         component={MessageStackNavigator}
-        options={{
-          tabBarLabel: 'Messages',
-        }}
+        options={{ tabBarLabel: 'Messages' }}
       />
       <Tab.Screen 
         name="Profile" 
         component={ProfileScreen}
-        options={{
-          tabBarLabel: 'Profile',
-        }}
+        options={{ tabBarLabel: 'Profile' }}
       />
     </Tab.Navigator>
   );
 };
 
 const LinkMeNavigator = () => {
+  useEffect(() => {
+    ScreenCapture.preventScreenCaptureAsync();
+    return () => {
+      ScreenCapture.allowScreenCaptureAsync();
+    };
+  }, []);
+
   return (
     <Stack.Navigator initialRouteName="LinkMeEntry">
       <Stack.Screen
@@ -126,63 +122,50 @@ const LinkMeNavigator = () => {
         component={LinkMeEntry}
         options={{ headerTitle: 'LinkMe', headerShown: true }}
       />
-      
       <Stack.Screen
         name="OnboardingStart"
         component={OnboardingStart}
         options={{ headerShown: false }}
       />
-      
       <Stack.Screen
         name="IdentityStep"
         component={IdentityStep}
         options={{ headerShown: false }}
       />
-      
       <Stack.Screen
         name="PersonalityStep"
         component={PersonalityStep}
         options={{ headerShown: false }}
       />
-      
       <Stack.Screen
         name="SelfieStep"
         component={SelfieStep}
         options={{ headerShown: false }}
       />
-      
       <Stack.Screen
         name="ProfilePhotoStep"
         component={ProfilePhotoStep}
         options={{ headerShown: false }}
       />
-      
       <Stack.Screen
         name="ReviewSubmit"
         component={ReviewSubmit}
         options={{ headerShown: false }}
       />
-      
       <Stack.Screen
         name="AwaitingApproval"
         component={AwaitingApproval}
         options={{ headerShown: false }}
       />
-      
       <Stack.Screen
         name="RejectionScreen"
         component={RejectionScreen}
         options={{ headerShown: false }}
       />
-      
-      {/* Main tab navigator with futuristic design */}
       <Stack.Screen
         name="SwipeFeed"
         component={MainTabNavigator}
-        options={{ 
-          headerShown: false,
-          gestureEnabled: false,
-        }}
+        options={{ headerShown: false, gestureEnabled: false }}
       />
     </Stack.Navigator>
   );

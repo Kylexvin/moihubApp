@@ -170,7 +170,7 @@ const MyOrdersScreen = () => {
     return (
       <TouchableOpacity 
         style={styles.orderCard}
-        onPress={() => navigation.navigate('OrderDetails', { orderId: item._id })}
+        
       >
         <View style={styles.orderHeader}>
           <Text style={styles.orderId}>Order #{item._id.substring(item._id.length - 6)}</Text>
@@ -185,7 +185,7 @@ const MyOrdersScreen = () => {
         </View>
         
         <View style={styles.orderFooter}>
-          <Ionicons name="restaurant-outline" size={18} color="#004d40" />
+          <Ionicons name="restaurant-outline" size={18} color='#fe5722' />
           <Text style={styles.vendorText}>
             {vendorName} {vendorLocation ? `• ${vendorLocation}` : ''} • {item.items.length} item(s)
           </Text>
@@ -274,10 +274,10 @@ const MyOrdersScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'ivory',
   },
   header: {
-    backgroundColor: '#004d40',
+    backgroundColor:'#fe5722',
     paddingVertical: 16,
     paddingHorizontal: 20,
     elevation: 3,

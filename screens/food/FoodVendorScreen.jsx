@@ -151,11 +151,7 @@ const FoodVendorScreen = () => {
     <>
       {vendor && (
         <View style={styles.vendorHeader}>
-          <Image
-            source={require('../../assets/image.jpg')}
-            style={styles.vendorImage}
-            resizeMode="cover"
-          />
+
           
           <View style={styles.vendorInfo}>
             <Text style={styles.vendorName}>{vendor.shopName}</Text>
@@ -258,14 +254,15 @@ const FoodVendorScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'ivory',
   },
   cartIndicator: {
     position: 'absolute',
-    top: 15,
+    bottom: 15,
     right: 15,
     zIndex: 10,
-    backgroundColor: '#004d40', // deep emerald green
+    // backgroundColor: '#004d40', 
+    backgroundColor: '#fe5722', // deep emerald green
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
@@ -294,12 +291,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 16,
     marginBottom: 10,
   },
-  vendorImage: {
-    width: '100%',
-    height: 180,
-    borderRadius: 12,
-    marginBottom: 10,
-  },
+ 
   vendorInfo: {
     paddingHorizontal: 5,
   },
@@ -351,7 +343,7 @@ const styles = StyleSheet.create({
   },
   menuDivider: {
     height: 2,
-    backgroundColor: '#004d40',
+    backgroundColor: '#fe5722',
     width: 80,
     marginTop: 6,
   },
@@ -396,7 +388,7 @@ const styles = StyleSheet.create({
     color: '#00796b', // slightly lighter emerald accent
   },
   addButton: {
-    backgroundColor: '#004d40',
+    backgroundColor: '#fe5722',
     width: 44,
     justifyContent: 'center',
     alignItems: 'center',

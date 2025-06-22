@@ -7,9 +7,9 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
-  Image,
   RefreshControl,
-  TextInput
+  TextInput,
+  StatusBar
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFoodContext } from '../../context/FoodContext';
@@ -37,7 +37,7 @@ const FoodScreen = () => {
     <Animatable.View
       animation="fadeInUp"
       delay={index * 100}
-      duration={500}
+      duration={600}
     >
       <TouchableOpacity
         style={styles.vendorCard}
@@ -45,101 +45,120 @@ const FoodScreen = () => {
           vendorId: item._id,
           shopName: item.shopName 
         })}
+        activeOpacity={0.8}
       >
-        <View style={styles.vendorImageContainer}>
-          {/* Placeholder image, in a real app you'd use the vendor's image */}
-          <Image
-            source={require('../../assets/image.jpg')}
-            style={styles.vendorImage}
-            resizeMode="cover"
-          />
-          {item.isOpen && (
-            <View style={styles.openBadge}>
-              <Text style={styles.openBadgeText}>Open</Text>
+        <View style={styles.cardContent}>
+          <View style={styles.vendorInfo}>
+            <View style={styles.vendorHeader}>
+              <Text style={styles.vendorName}>{item.shopName}</Text>
+              {item.isOpen ? (
+                <View style={styles.statusOpen}>
+                  <View style={styles.statusDot} />
+                  <Text style={styles.statusText}>Open</Text>
+                </View>
+              ) : (
+                <View style={styles.statusClosed}>
+                  <View style={[styles.statusDot, styles.closedDot]} />
+                  <Text style={[styles.statusText, styles.closedText]}>Closed</Text>
+                </View>
+              )}
             </View>
-          )}
-        </View>
-        
-        <View style={styles.vendorDetails}>
-          <Text style={styles.vendorName}>{item.shopName}</Text>
-          <View style={styles.locationContainer}>
-            <Ionicons name="location-outline" size={14} color="#666" />
-            <Text style={styles.locationText}>{item.location}</Text>
+            
+            <View style={styles.locationContainer}>
+              <Ionicons name="location-outline" size={16} color="#8DA99F" />
+              <Text style={styles.locationText}>{item.location}</Text>
+            </View>
+            
+            {item.description && (
+              <Text style={styles.vendorDescription} numberOfLines={2}>
+                {item.description}
+              </Text>
+            )}
           </View>
-          <Text style={styles.vendorDescription} numberOfLines={2}>
-            {item.description || "Delicious food delivered to your door"}
-          </Text>
+          
+          <Ionicons name="chevron-forward" size={20} color="#556B66" />
         </View>
       </TouchableOpacity>
     </Animatable.View>
   );
 
+
+
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#fe5722" />
+      
+
+
       {/* Search Bar */}
       <View style={styles.searchContainer}>
-        <Ionicons name="search-outline" size={20} color="#666" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search for food vendors..."
-          placeholderTextColor="#999"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={20} color="#666" />
-          </TouchableOpacity>
-        )}
+        <View style={styles.searchInputContainer}>
+          <Ionicons name="search-outline" size={20} color="#8DA99F" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search restaurants, cuisine..."
+            placeholderTextColor="#556B66"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+              <Ionicons name="close-circle" size={20} color="#8DA99F" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
-      {/* My Orders Button */}
-      <TouchableOpacity 
-        style={styles.myOrdersButton}
-        onPress={() => navigation.navigate('MyOrders')}
-      >
-        <Ionicons name="receipt-outline" size={18} color="#005f4b" />
-        <Text style={styles.myOrdersText}>My Orders</Text>
-      </TouchableOpacity>
-
-      {/* Cart Indicator */}
-      {cart.length > 0 && (
+      {/* Quick Actions */}
+      <View style={styles.quickActionsContainer}>
         <TouchableOpacity 
-          style={styles.cartIndicator}
-          onPress={() => navigation.navigate('Order')}
+          style={styles.quickActionButton}
+          onPress={() => navigation.navigate('MyOrders')}
         >
-          <View style={styles.cartContent}>
-            <Ionicons name="cart-outline" size={20} color="#FFF" />
-            <Text style={styles.cartCount}>{cart.reduce((total, item) => total + item.quantity, 0)}</Text>
+          <View style={styles.quickActionIcon}>
+            <Ionicons name="receipt-outline" size={20} color="#A7C4A0" />
           </View>
-          <Text style={styles.viewCartText}>View Cart</Text>
+          <Text style={styles.quickActionText}>My Orders</Text>
         </TouchableOpacity>
-      )}
+      </View>
 
       {/* Content */}
       {loadingVendors && !refreshing ? (
         <View style={styles.loaderContainer}>
-          <ActivityIndicator size="large" color="#005f4b" />
-          <Text style={styles.loadingText}>Loading food vendors...</Text>
+          <ActivityIndicator size="large" color="#A7C4A0" />
+          <Text style={styles.loadingText}>Finding restaurants near you...</Text>
         </View>
       ) : vendorError ? (
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={60} color="#FF6B6B" />
+          <View style={styles.errorIcon}>
+            <Ionicons name="restaurant-outline" size={50} color="#E74C3C" />
+          </View>
+          <Text style={styles.errorTitle}>Oops! Something went wrong</Text>
           <Text style={styles.errorText}>{vendorError}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={loadVendors}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>Try Again</Text>
           </TouchableOpacity>
         </View>
       ) : filteredVendors.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="fast-food-outline" size={60} color="#999" />
+          <View style={styles.emptyIcon}>
+            <Ionicons name="fast-food-outline" size={50} color="#556B66" />
+          </View>
+          <Text style={styles.emptyTitle}>
+            {searchQuery.length > 0 
+              ? 'No restaurants found'
+              : 'No restaurants available'}
+          </Text>
           <Text style={styles.emptyText}>
             {searchQuery.length > 0 
-              ? 'No vendors match your search'
-              : 'No food vendors available yet'}
+              ? 'Try searching with different keywords'
+              : 'Check back later for new restaurants'}
           </Text>
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <TouchableOpacity 
+              style={styles.clearSearchButton}
+              onPress={() => setSearchQuery('')}
+            >
               <Text style={styles.clearSearchText}>Clear Search</Text>
             </TouchableOpacity>
           )}
@@ -155,11 +174,40 @@ const FoodScreen = () => {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={['#005f4b']}
-              tintColor="#005f4b"
+              colors={['#A7C4A0']}
+              tintColor="#A7C4A0"
             />
           }
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
+      )}
+
+      {/* Floating Cart Button */}
+      {cart.length > 0 && (
+        <Animatable.View 
+          animation="slideInUp" 
+          duration={300}
+          style={styles.floatingCart}
+        >
+          <TouchableOpacity 
+            style={styles.cartButton}
+            onPress={() => navigation.navigate('Order')}
+            activeOpacity={0.9}
+          >
+            <View style={styles.cartInfo}>
+              <View style={styles.cartIcon}>
+                <Ionicons name="cart" size={20} color="#FFF" />
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>
+                    {cart.reduce((total, item) => total + item.quantity, 0)}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.cartText}>View Cart</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#FFF" />
+          </TouchableOpacity>
+        </Animatable.View>
       )}
     </View>
   );
@@ -168,168 +216,371 @@ const FoodScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F9F8',
-    paddingHorizontal: 16,
-    paddingTop: 10,
+    backgroundColor: 'ivory',
   },
+  
+  // Header Styles
+  headerContainer: {
+    backgroundColor: '#fe5722',
+    paddingTop: 10,
+    paddingBottom: 15,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 25,
+    borderBottomRightRadius: 25,
+    shadowColor: '#fe5722',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+ 
+
+  // Search Bar Styles
   searchContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    backgroundColor: '#FAFAFA',
+  },
+  searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E0EFEC',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    marginBottom: 12,
-    height: 44,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 15,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    shadowColor: '#fe5722',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
   },
   searchIcon: {
-    marginRight: 8,
+    marginRight: 10,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
+    color: '#fe5722',
+    fontWeight: '500',
   },
-  myOrdersButton: {
+  clearButton: {
+    padding: 5,
+  },
+
+  // Quick Actions Styles
+  quickActionsContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 15,
+  },
+  quickActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-end',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: '#BDE2D7',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F5F5F5',
+  },
+  quickActionIcon: {
+    width: 35,
+    height: 35,
     borderRadius: 8,
-    marginBottom: 12,
+    backgroundColor: '#FFF3F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
-  myOrdersText: {
-    marginLeft: 6,
-    color: '#005f4b',
+  quickActionText: {
+    fontSize: 16,
     fontWeight: '600',
+    color: '#fe5722',
   },
-  cartIndicator: {
+
+  // List Styles
+  listContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 100,
+  },
+  separator: {
+    height: 12,
+  },
+
+  // Vendor Card Styles
+  vendorCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginVertical: 6,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#fe5722',
+  },
+  cardContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#007d63',
-    padding: 10,
-    borderRadius: 10,
-    marginBottom: 14,
+    padding: 18,
   },
-  cartContent: {
+  vendorInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  vendorHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  cartCount: {
-    marginLeft: 6,
-    color: '#FFF',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  viewCartText: {
-    color: '#FFF',
-    fontWeight: '500',
-  },
-  vendorCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    marginBottom: 16,
-    overflow: 'hidden',
-    elevation: 3,
-  },
-  vendorImageContainer: {
-    position: 'relative',
-    height: 160,
-    backgroundColor: '#EEE',
-  },
-  vendorImage: {
-    width: '100%',
-    height: '100%',
-  },
-  openBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  openBadgeText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  vendorDetails: {
-    padding: 12,
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
   vendorName: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#222',
-    marginBottom: 4,
+    fontWeight: 'bold',
+    color: '#2C2C2C',
+    flex: 1,
+    marginRight: 10,
   },
+  
+  // Status Styles
+  statusOpen: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E8',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusClosed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF0F0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#4CAF50',
+    marginRight: 5,
+  },
+  closedDot: {
+    backgroundColor: '#F44336',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4CAF50',
+  },
+  closedText: {
+    color: '#F44336',
+  },
+
+  // Location and Description Styles
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 8,
   },
   locationText: {
-    marginLeft: 4,
-    color: '#666',
     fontSize: 14,
+    color: '#666666',
+    marginLeft: 5,
+    fontWeight: '500',
   },
   vendorDescription: {
-    color: '#444',
     fontSize: 14,
+    color: '#888888',
+    lineHeight: 20,
+    marginTop: 2,
   },
+
+  // Loading States
   loaderContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 50,
   },
   loadingText: {
-    marginTop: 10,
+    marginTop: 15,
     fontSize: 16,
-    color: '#666',
+    color: '#666666',
+    fontWeight: '500',
   },
+
+  // Error States
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 30,
+    paddingVertical: 50,
+  },
+  errorIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#FFF0F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2C2C2C',
+    marginBottom: 10,
+    textAlign: 'center',
   },
   errorText: {
-    color: '#FF6B6B',
     fontSize: 16,
+    color: '#666666',
     textAlign: 'center',
-    marginVertical: 12,
+    lineHeight: 22,
+    marginBottom: 25,
   },
   retryButton: {
-    backgroundColor: '#FF6B6B',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    backgroundColor: '#fe5722',
+    paddingHorizontal: 25,
+    paddingVertical: 12,
+    borderRadius: 25,
+    shadowColor: '#fe5722',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
   },
   retryButtonText: {
-    color: '#FFF',
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
+
+  // Empty States
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 30,
+    paddingVertical: 50,
   },
-  emptyText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#999',
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F8F8F8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2C2C2C',
+    marginBottom: 10,
     textAlign: 'center',
   },
-  clearSearchText: {
-    marginTop: 8,
-    color: '#007d63',
-    fontWeight: '500',
+  emptyText: {
+    fontSize: 16,
+    color: '#666666',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 25,
   },
-  listContainer: {
-    paddingBottom: 20,
+  clearSearchButton: {
+    backgroundColor: '#F8F8F8',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  clearSearchText: {
+    color: '#666666',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  // Floating Cart Styles
+  floatingCart: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: '#fe5722',
+    borderRadius: 16,
+    shadowColor: '#fe5722',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  cartButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  cartInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cartIcon: {
+    position: 'relative',
+    marginRight: 12,
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#FF8A50',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fe5722',
+  },
+  cartBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  cartText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });
 

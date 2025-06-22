@@ -18,6 +18,8 @@ import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Audio } from 'expo-av'; // ✅ This one works
+
 
 const { width, height } = Dimensions.get('window');
 const API_URL = 'http://192.168.100.51:5000/api';
@@ -40,7 +42,41 @@ const SwipeFeed = ({ navigation }) => {
   const bioCardTranslateY = useRef(new Animated.Value(height)).current;
   const likeScale = useRef(new Animated.Value(0)).current;
   const passScale = useRef(new Animated.Value(0)).current;
-  
+  const matchSoundRef = useRef(null);
+
+useEffect(() => {
+  // Preload sound
+  const loadSound = async () => {
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        require('../../assets/sounds/moihub_sound.mp3')
+      );
+      matchSoundRef.current = sound;
+    } catch (err) {
+      console.error('Failed to load match sound:', err);
+    }
+  };
+
+  loadSound();
+
+  return () => {
+    // Cleanup
+    if (matchSoundRef.current) {
+      matchSoundRef.current.unloadAsync();
+    }
+  };
+}, []);
+
+const playMatchSound = async () => {
+  try {
+    if (matchSoundRef.current) {
+      await matchSoundRef.current.replayAsync(); // replay avoids delay
+    }
+  } catch (err) {
+    console.error('Error playing match sound:', err);
+  }
+};
+
   const fetchFeed = async (refresh = false) => {
     try {
       if (refresh) {
@@ -120,74 +156,87 @@ const SwipeFeed = ({ navigation }) => {
     fetchFeed(true);
   };
 
-  const handleSwipe = async (candidateUserId, direction) => {
-    try {
-      const response = await axios.post(`${API_URL}/linkme/swipe`, 
-        { 
-          swipedUserId: candidateUserId,
-          direction: direction
+
+const handleSwipe = async (candidateUserId, direction) => {
+  try {
+    const response = await axios.post(`${API_URL}/linkme/swipe`, 
+      { 
+        swipedUserId: candidateUserId,
+        direction: direction
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const { isMatch, match, nextCandidate } = response.data.data;
-      
-      setCurrentIndex(prev => prev + 1);
-      setShowBioCard(false);
-      
-      if (nextCandidate) {
-        setCandidates(prev => {
-          const existingIds = new Set(prev.map(c => c._id));
-          if (!existingIds.has(nextCandidate._id)) {
-            return [...prev, nextCandidate];
-          }
-          return prev;
-        });
       }
+    );
 
-      // Reset animations
-      pan.setValue({ x: 0, y: 0 });
+    const { isMatch, match } = response.data.data;
+    
+    // Move to next candidate
+    const nextIndex = currentIndex + 1;
+    setCurrentIndex(nextIndex);
+    setShowBioCard(false);
+    
+    // Check if we need to load more candidates
+    if (nextIndex >= candidates.length - 2 && hasMore) {
+      fetchFeed(false); // Load more candidates
+    }
+    
+    // Reset animations with proper timing
+    pan.setValue({ x: 0, y: 0 });
+    bioCardTranslateY.setValue(height);
+    
+    // Only animate if there are more candidates
+    if (nextIndex < candidates.length) {
       scale.setValue(0.95);
       opacity.setValue(0);
       likeScale.setValue(0);
       passScale.setValue(0);
-      bioCardTranslateY.setValue(height);
       
-      Animated.parallel([
-        Animated.timing(scale, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-
-      if (isMatch && match) {
-        Alert.alert(
-          '💖 It\'s a Match!', 
-          `You and ${match.user.displayName} liked each other!`,
-          [
-            { text: 'Keep Swiping', style: 'default' },
-            { text: 'Send Message', style: 'default', onPress: () => {
-              navigation.navigate('Messages');
-            }}
-          ]
-        );
-      }
-      
-    } catch (err) {
-      console.error('Error swiping:', err);
-      Alert.alert('Oops!', 'Failed to process swipe. Please try again.');
+      // Animate next card entrance
+      setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(scale, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(opacity, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }, 100);
     }
-  };
+
+    // Handle match notification
+    if (isMatch && match) {
+  playMatchSound(); // Add this
+
+  Alert.alert(
+    '💖 It\'s a Match!', 
+    `You and ${match.user.displayName} liked each other!`,
+    [
+      { text: 'Keep Swiping', style: 'default' },
+      { text: 'Send Message', style: 'default', onPress: () => {
+        navigation.navigate('Messages');
+      }}
+    ]
+  );
+}
+
+    
+  } catch (err) {
+    console.error('Error swiping:', err);
+    
+    // Reset the index if swipe failed
+    setCurrentIndex(prev => Math.max(0, prev - 1));
+    
+    Alert.alert('Oops!', 'Failed to process swipe. Please try again.');
+  }
+};
 
   const animateSwipe = (direction) => {
     const toValue = direction === 'right' ? width + 100 : -width - 100;
@@ -515,22 +564,24 @@ const SwipeFeed = ({ navigation }) => {
     );
   }
 
-  return (
-    <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.container}>
+return (
+  <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.container}>
+    <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
       {/* Cards container */}
       <View style={styles.cardsContainer}>
-        {candidates.slice(currentIndex, currentIndex + 3).map((candidate, index) => 
+        {candidates.slice(currentIndex, currentIndex + 3).map((candidate, index) =>
           renderCard(candidate, currentIndex + index)
         )}
       </View>
 
       {/* Action buttons */}
       {renderActionButtons()}
-      
+
       {/* Bio card */}
       {renderBioCard()}
-    </LinearGradient>
-  );
+    </ScrollView>
+  </LinearGradient>
+);
 };
 
 const styles = StyleSheet.create({

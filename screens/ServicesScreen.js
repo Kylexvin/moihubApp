@@ -3,15 +3,17 @@ import {
   Text, 
   View, 
   TouchableOpacity, 
-  ScrollView,SafeAreaView,
+  ScrollView,SafeAreaView,Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import Svg, { Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 const ServicesScreen = () => {
-  const navigation = useNavigation();
-  
+const navigation = useNavigation();
+
+const { width, height } = Dimensions.get('window');
+
 const services = [
   // University Services
   { 
@@ -64,7 +66,14 @@ const services = [
     icon: "heart", 
     category: "local", 
     color: "red" 
-  }
+  },
+{
+  title: "Blogs",
+  icon: "book",
+  category: "local",
+  color: "#3498db"
+}
+
 ];
 
 
@@ -80,15 +89,13 @@ const services = [
 const handleServicePress = (service) => {
   switch (service.title) {
     case 'LinkMe':
-  navigation.navigate('LinkMe');
-  break;
-
+      navigation.navigate('LinkMe');
+      break;
 
     case 'Food Delivery':
       navigation.navigate('FoodStack', { screen: 'FoodHome' });
       break;
 
-  
     case 'Rental Booking':
       navigation.navigate('AccomStack', { screen: 'RentalHome' });
       break;
@@ -102,12 +109,15 @@ const handleServicePress = (service) => {
       break;
 
     case 'My University':
-  navigation.navigate('MySchoolNavigator', { screen: 'MySchoolHome' });
-  break;
-
+      navigation.navigate('MySchoolNavigator', { screen: 'MySchoolHome' });
+      break;
 
     case 'Eshop':
       navigation.navigate('EshopNavigator');
+      break;
+
+    case 'Blogs':
+      navigation.navigate('BlogsNavigator');
       break;
 
     default:
@@ -118,6 +128,7 @@ const handleServicePress = (service) => {
       }
   }
 };
+
 
 
 
@@ -158,11 +169,11 @@ const handleServicePress = (service) => {
 return (
   <SafeAreaView style={styles.safeArea}>
     {/* Gradient overlay for depth */}
-    <LinearGradient
-      colors={['#ffffff00', '#2c5f2d11']}
-      style={{ ...StyleSheet.absoluteFillObject }}
-      pointerEvents="none"
-    />
+   {/* Animated Background */}
+         <LinearGradient
+           colors={['#083028','#0a0a0a',  '#0a0a0a']}
+           style={styles.background}
+         />
 
     {/* Futuristic SVG background */}
     <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 0 }}>
@@ -233,6 +244,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'ivory',
     padding: 16,
     paddingTop: 20,
+  },
+  background: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    
   },
   header: {
     flexDirection: 'row',
