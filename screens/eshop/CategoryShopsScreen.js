@@ -28,7 +28,7 @@ const CategoryShopsScreen = ({ navigation, route }) => {
   const fetchShops = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`http://192.168.100.51:5000/api/eshop/vendor/categories/${categorySlug}/shops`);
+      const response = await fetch(`https://moihub.onrender.com/api/eshop/vendor/categories/${categorySlug}/shops`);
       const data = await response.json();
       
       if (data.success) {

@@ -1,32 +1,46 @@
 {
   "expo": {
-    "name": "myapp",
-    "slug": "myapp",
+    "name": "MoiHub",
+    "slug": "moihubapp",
     "version": "1.0.0",
     "sdkVersion": "53.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/logo.jpg",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
       "backgroundColor": "#005f4b",
       "resizeMode": "contain",
       "image": "./assets/moihublogo.png"
     },
+    "android": {
+      "package": "com.kylexvin.moihub",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/moihublogo.png",
+        "backgroundColor": "#005f4b"
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
+    },
     "ios": {
+      "bundleIdentifier": "com.kylexvin.moihub",
       "supportsTablet": true
     },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      }
-    },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/moihublogo.png"
     },
     "plugins": [
-      "expo-audio"
-    ]
+      "expo-audio",
+      "expo-web-browser"
+    ],
+    "scheme": "moihubapp",
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "packagerOpts": {
+      "hostType": "lan"
+    }
   }
 }

@@ -7,16 +7,19 @@ import ShopProductsScreen from '../screens/eshop/ShopProductsScreen';
 import ProductDetailScreen from '../screens/eshop/ProductDetailScreen';
 import CartScreen from '../screens/eshop/CartScreen';
 import OrdersScreen from '../screens/eshop/OrdersScreen';
+import { useAuth } from '../context/AuthContext';
 
 const Stack = createStackNavigator();
 
 const EshopNavigator = () => {
+  const { currentUser } = useAuth();
+
   return (
     <Stack.Navigator
       initialRouteName="EshopHome"
       screenOptions={{
         headerStyle: {
-          backgroundColor: '#059669', // Emerald 600
+          backgroundColor: '#059669',
           elevation: 4,
           shadowOpacity: 0.1,
         },
@@ -36,12 +39,7 @@ const EshopNavigator = () => {
         component={EshopHomeScreen}
         options={{
           title: '🛍️ E-Shop',
-          headerStyle: {
-            backgroundColor: '#059669',
-            elevation: 0,
-            shadowOpacity: 0,
-          },
-          headerShown: false, // Hide header for home screen since we have custom header
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -49,10 +47,7 @@ const EshopNavigator = () => {
         component={CategoryShopsScreen}
         options={({ route }) => ({
           title: `🏪 ${route.params?.categoryName || 'Shops'}`,
-          headerStyle: {
-            backgroundColor: '#047857', // Emerald 700
-          },
-           headerShown: false, 
+          headerShown: false,
         })}
       />
       <Stack.Screen
@@ -60,10 +55,7 @@ const EshopNavigator = () => {
         component={ShopProductsScreen}
         options={({ route }) => ({
           title: `📦 ${route.params?.shopName || 'Products'}`,
-          headerStyle: {
-            backgroundColor: '#047857', // Emerald 700
-          },
-           headerShown: false, 
+          headerShown: false,
         })}
       />
       <Stack.Screen
@@ -71,9 +63,6 @@ const EshopNavigator = () => {
         component={ProductDetailScreen}
         options={{
           title: '📱 Product Details',
-          headerStyle: {
-            backgroundColor: '#047857', // Emerald 700
-          },
           headerBackTitleVisible: false,
         }}
       />
@@ -82,9 +71,7 @@ const EshopNavigator = () => {
         component={CartScreen}
         options={{
           title: '🛒 Shopping Cart',
-          headerStyle: {
-            backgroundColor: '#10b981', // Emerald 500
-          },  headerShown: false, 
+          headerShown: false,
           headerBackTitleVisible: false,
         }}
       />
@@ -92,11 +79,13 @@ const EshopNavigator = () => {
         name="Orders"
         component={OrdersScreen}
         options={{
-          title: '📋 My Orders',
+          headerTitle: currentUser?.username
+            ? `📋 ${currentUser.username}'s Orders`
+            : '📋 My Orders',
           headerStyle: {
-            backgroundColor: '#10b981', // Emerald 500
+            backgroundColor: '#10b981',
           },
-          headerBackTitleVisible: false, 
+          headerBackTitleVisible: false,
         }}
       />
     </Stack.Navigator>

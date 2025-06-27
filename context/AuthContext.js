@@ -1,8 +1,6 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import { createContext, useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const API_URL = 'http://192.168.100.51:5000/api';
 
 const AuthContext = createContext();
 
@@ -45,7 +43,9 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
 
     try {
-      const response = await axios.post(`${API_URL}/auth/register`, userData);
+      const response = await axios.post('/api/auth/register', userData);
+      
+      console.log('Register response:', response.data);
 
       // Auto-login after successful registration
       if (response.data.token) {
@@ -54,6 +54,7 @@ export const AuthProvider = ({ children }) => {
 
       return response.data;
     } catch (err) {
+      console.error('Registration error:', err);
       setError(err.response?.data?.message || 'Registration failed');
       throw err;
     } finally {
@@ -61,39 +62,120 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-const login = async (emailOrUsername, password) => {
-  setError('');
-  setLoading(true);
+  const login = async (emailOrUsername, password) => {
+    setError('');
+    setLoading(true);
 
-  try {
-    const response = await axios.post(`${API_URL}/auth/login`, {
-      emailOrUsername,
-      password
-    });
+    try {
+      const response = await axios.post('/api/auth/login', {
+        emailOrUsername,
+        password,
+      });
 
-    const { token, user } = response.data;
+      console.log('Login response:', response.data);
+      console.log('Response data type:', typeof response.data);
+      console.log('Response data keys:', Object.keys(response.data));
+      
+      // More detailed logging
+      console.log('Token exists:', !!response.data.token);
+      console.log('User exists:', !!response.data.user);
+      console.log('User type:', typeof response.data.user);
+      
+      if (response.data.user) {
+        console.log('User keys:', Object.keys(response.data.user));
+        console.log('User data:', JSON.stringify(response.data.user, null, 2));
+      }
 
-    await AsyncStorage.setItem('authToken', token);
-    await AsyncStorage.setItem('user', JSON.stringify(user));
+      const { token, user } = response.data;
 
-    setToken(token);
-    setCurrentUser(user);
-    setIsAuthenticated(true);
+      // Validate data before storing
+      if (!token) {
+        console.error('Token validation failed - token:', token);
+        throw new Error('No token received from server');
+      }
 
-    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      if (!user) {
+        console.error('User validation failed - user:', user);
+        console.error('Full response data:', JSON.stringify(response.data, null, 2));
+        throw new Error('No user data received from server');
+      }
 
-    return user;
-  } catch (err) {
-    console.error('Login error:', err);
-    setError(err.response?.data?.message || 'Login failed');
-    throw err;
-  } finally {
-    setLoading(false);
-  }
-};
+      // Additional validation for user object
+      if (typeof user !== 'object' || user === null) {
+        console.error('User is not an object:', user, typeof user);
+        throw new Error('Invalid user data format received from server');
+      }
 
+      // Store with proper validation
+      console.log('Storing token:', token);
+      console.log('Storing user:', JSON.stringify(user, null, 2));
+      
+      await AsyncStorage.setItem('authToken', token);
+      await AsyncStorage.setItem('user', JSON.stringify(user));
+
+      setToken(token);
+      setCurrentUser(user);
+      setIsAuthenticated(true);
+
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+      console.log('Login successful - currentUser set to:', user);
+      return user;
+    } catch (err) {
+      console.error('Login error:', err);
+      console.error('Error message:', err.message);
+      console.error('Error response:', err.response?.data);
+      setError(err.response?.data?.message || err.message || 'Login failed');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const socialLogin = async (provider, userData) => {
+    setError('');
+    setLoading(true);
+
+    try {
+      const response = await axios.post('/api/auth/social-login', {
+        provider,
+        ...userData,
+      });
+
+      console.log('Social login response:', response.data);
+
+      const { token, user } = response.data;
+
+      // Validate data before storing
+      if (!token) {
+        throw new Error('No token received from server');
+      }
+
+      if (!user) {
+        throw new Error('No user data received from server');
+      }
+
+      await AsyncStorage.setItem('authToken', token);
+      await AsyncStorage.setItem('user', JSON.stringify(user));
+
+      setToken(token);
+      setCurrentUser(user);
+      setIsAuthenticated(true);
+
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+      return user;
+    } catch (err) {
+      console.error('Social login error:', err);
+      setError(err.response?.data?.message || err.message || 'Social login failed');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const logout = async () => {
+    setLoading(true);
     try {
       await AsyncStorage.removeItem('authToken');
       await AsyncStorage.removeItem('user');
@@ -105,6 +187,8 @@ const login = async (emailOrUsername, password) => {
       delete axios.defaults.headers.common['Authorization'];
     } catch (error) {
       console.error('Logout error:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -115,9 +199,11 @@ const login = async (emailOrUsername, password) => {
     error,
     register,
     login,
+    socialLogin,
     logout,
     isAuthenticated,
     setIsAuthenticated,
+    setError,
   };
 
   return (

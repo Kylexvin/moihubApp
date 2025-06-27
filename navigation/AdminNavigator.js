@@ -5,6 +5,7 @@ import { View, Text, StyleSheet } from 'react-native';
 
 // Import screens
 import AdminDashboard from '../screens/admin/AdminDashboard';
+import StatsScreen from '../screens/admin/StatsScreen';
 import RentalsManagement from '../screens/admin/RentalsManagement';
 import EshopsManagement from '../screens/admin/EshopsManagement';
 import LinkmeManagement from '../screens/admin/LinkmeManagement';
@@ -49,7 +50,19 @@ const AdminNavigator = () => {
     <AdminAccessControl>
       <Stack.Navigator
         initialRouteName="AdminDashboard"
-       
+        screenOptions={{
+          headerStyle: {
+            backgroundColor: '#fff',
+            elevation: 0,
+            shadowOpacity: 0,
+            borderBottomWidth: 1,
+            borderBottomColor: '#e5e7eb',
+          },
+          headerTintColor: '#374151',
+          headerTitleStyle: {
+            fontWeight: '600',
+          },
+        }}
       >
         <Stack.Screen
           name="AdminDashboard"
@@ -60,6 +73,14 @@ const AdminNavigator = () => {
           }}
         />
         <Stack.Screen
+          name="StatsScreen"
+          component={StatsScreen}
+          options={{ 
+            title: 'Platform Statistics',
+            headerShown: false, // Stats screen has its own header
+          }}
+        />
+        <Stack.Screen
           name="RentalsManagement"
           component={RentalsManagement}
           options={{ title: 'Rentals Management' }}
@@ -67,7 +88,7 @@ const AdminNavigator = () => {
         <Stack.Screen
           name="EshopsManagement"
           component={EshopsManagement}
-          options={{ title: 'E-shops Management' }}
+          options={{ title: 'E-shops Management',headerShown: false, }}
         />
         <Stack.Screen
           name="LinkmeManagement"

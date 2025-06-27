@@ -30,9 +30,9 @@ const EshopHomeScreen = ({ navigation }) => {
   const fetchCategories = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://192.168.100.51:5000/api/eshop/vendor/categories');
+      const response = await fetch('https://moihub.onrender.com/api/eshop/vendor/categories');
       const data = await response.json();
-      
+        
       if (data.success) {
         setCategories(data.data);
       } else {
@@ -92,19 +92,11 @@ const EshopHomeScreen = ({ navigation }) => {
     return iconMap[iconName] || 'category';
   };
 
-  const renderPromoBanner = () => (
-    <View style={styles.promoBanner}>
-      <View style={styles.promoContent}>
-        <Text style={styles.promoTitle}>🎉 Special Offers on orders!</Text>
-        {/* <Text style={styles.promoSubtitle}>Up to 50% off on selected items</Text> */}
-      </View>
-      
-    </View>
-  );
+
 
   const renderQuickActions = () => (
     <View style={styles.quickActionsContainer}>
-      <Text style={styles.sectionTitle}>Quick Actions</Text>
+     
       <View style={styles.quickActionsRow}>
         <TouchableOpacity 
           style={styles.quickActionButton}
@@ -141,26 +133,7 @@ const EshopHomeScreen = ({ navigation }) => {
     </View>
   );
 
-  const renderStats = () => (
-    <View style={styles.statsContainer}>
-      <View style={styles.statItem}>
-        <Text style={styles.statNumber}>{categories.length}</Text>
-        <Text style={styles.statLabel}>Categories</Text>
-      </View>
-      <View style={styles.statItem}>
-        <Text style={styles.statNumber}>500+</Text>
-        <Text style={styles.statLabel}>Products</Text>
-      </View>
-      {/* <View style={styles.statItem}>
-        <Text style={styles.statNumber}>10+</Text>
-        <Text style={styles.statLabel}>Vendors</Text>
-      </View> */}
-      <View style={styles.statItem}>
-        <Text style={styles.statNumber}>4.8★</Text>
-        <Text style={styles.statLabel}>Rating</Text>
-      </View>
-    </View>
-  );
+
 
   const renderCategoryItem = ({ item, index }) => (
     <TouchableOpacity
@@ -180,14 +153,21 @@ const EshopHomeScreen = ({ navigation }) => {
         {item.description}
       </Text>
       <View style={styles.categoryFooter}>
-        <Text style={styles.shopText}>Explore</Text>
-        <Icon name="arrow-forward" size={16} color="#fff" />
+       
       </View>
     </TouchableOpacity>
   );
 
   const getCategoryColor = (index) => {
     const emeraldColors = [
+      '#059669', // Emerald 600
+      '#047857', // Emerald 700
+      '#065f46', // Emerald 800
+      '#10b981', // Emerald 500
+      '#34d399', // Emerald 400
+      '#6ee7b7', // Emerald 300
+      '#0d9488', // Teal 600
+      '#0f766e', // Teal 700
       '#059669', // Emerald 600
       '#047857', // Emerald 700
       '#065f46', // Emerald 800
@@ -226,16 +206,11 @@ const EshopHomeScreen = ({ navigation }) => {
         <View style={styles.header}>
           {/* <Text style={styles.welcomeText}>Welcome back! 👋</Text> */}
           <Text style={styles.headerTitle}>Discover Amazing Deals</Text>
-          {/* <Text style={styles.headerSubtitle}>
-            Shop from local vendors in your area
-          </Text> */}
+          
         </View>
 
-        {/* Promo Banner */}
-        {renderPromoBanner()}
-
-        {/* Stats */}
-        {renderStats()}
+       
+     
 
         {/* Quick Actions */}
         {renderQuickActions()}

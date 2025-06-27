@@ -15,6 +15,13 @@ const AdminDashboard = ({ navigation }) => {
 
   const adminCards = [
     {
+      title: 'Platform Statistics',
+      subtitle: 'View detailed analytics and metrics',
+      icon: 'analytics',
+      color: '#6366f1',
+      route: 'StatsScreen',
+    },
+    {
       title: 'Rentals Management',
       subtitle: 'Manage rental listings and bookings',
       icon: 'home',
@@ -83,17 +90,18 @@ const AdminDashboard = ({ navigation }) => {
     navigation.navigate(route);
   };
 
-  const handleLogout = () => {
-    logout();
-  };
+
 
   return (
     <SafeAreaView style={styles.container}>
-    
-
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionTitle}>Management Dashboard</Text>
-        
+        {/* <TouchableOpacity
+      style={styles.button}
+      onPress={() => navigation.navigate('OAuthDebug')}
+    >
+      <Text style={styles.text}>Go to OAuth Debug</Text>
+    </TouchableOpacity> */}
         <View style={styles.cardsContainer}>
           {adminCards.map((card, index) => (
             <TouchableOpacity
@@ -116,53 +124,56 @@ const AdminDashboard = ({ navigation }) => {
           ))}
         </View>
 
-       <View style={styles.statsContainer}>
-  <Text style={styles.statsTitle}>Quick Stats</Text>
-  <View style={styles.statsGrid}>
-    <View style={styles.statCard}>
-      <Text style={styles.statNumber}>0</Text>
-      <Text style={styles.statLabel}>Total Users</Text>
-    </View>
-    <View style={styles.statCard}>
-      <Text style={styles.statNumber}>0</Text>
-      <Text style={styles.statLabel}>Active Listings</Text>
-    </View>
-    <View style={styles.statCard}>
-      <Text style={styles.statNumber}>0</Text>
-      <Text style={styles.statLabel}>Pending Reviews</Text>
-    </View>
-    <View style={styles.statCard}>
-      <Text style={styles.statNumber}>0</Text>
-      <Text style={styles.statLabel}>Total Orders</Text>
-    </View>
-    <View style={styles.statCard}>
-      <Text style={styles.statNumber}>0</Text>
-      <Text style={styles.statLabel}>Rental Units</Text>
-    </View>
-    <View style={styles.statCard}>
-      <Text style={styles.statNumber}>0</Text>
-      <Text style={styles.statLabel}>Blog Posts</Text>
-    </View>
-    <View style={styles.statCard}>
-      <Text style={styles.statNumber}>0</Text>
-      <Text style={styles.statLabel}>Food Vendors</Text>
-    </View>
-    <View style={styles.statCard}>
-      <Text style={styles.statNumber}>0</Text>
-      <Text style={styles.statLabel}>Online Pharmacies</Text>
-    </View>
-  </View>
-</View>
+        <View style={styles.statsContainer}>
+          <View style={styles.statsHeader}>
+            <Text style={styles.statsTitle}>Quick Overview</Text>
+            <TouchableOpacity 
+              style={styles.viewAllButton}
+              onPress={() => handleCardPress('StatsScreen')}
+            >
+              <Text style={styles.viewAllText}>View All Stats</Text>
+              <Icon name="arrow-forward" size={16} color="#3b82f6" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>158</Text>
+              <Text style={styles.statLabel}>Total Users</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>7</Text>
+              <Text style={styles.statLabel}>Total Businesses</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>1</Text>
+              <Text style={styles.statLabel}>Active Listings</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>6</Text>
+              <Text style={styles.statLabel}>Recent Activity</Text>
+            </View>
+          </View>
+        </View>
 
       </ScrollView>
     </SafeAreaView>
   );
 };
 
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
+  },   button: {
+    padding: 10,
+    backgroundColor: '#007AFF',
+    borderRadius: 5,
+    alignSelf: 'flex-start', // or use 'center', 'flex-end' as needed
+  },
+  text: {
+    color: 'white',
+    fontWeight: 'bold',
   },
   header: {
     flexDirection: 'row',
@@ -286,6 +297,44 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#2563eb',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'center',
+  },
+ viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#eff6ff',
+    borderRadius: 20,
+  },
+  viewAllText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#3b82f6',
+    marginRight: 4,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  statCard: {
+    width: '48%',
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1f2937',
     marginBottom: 4,
   },
   statLabel: {

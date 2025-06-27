@@ -17,7 +17,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext'; // Adjust path as needed
 
-const API_URL = 'http://192.168.100.51:5000/api';
+const API_URL = 'https://moihub.onrender.com/api';
 
 const OrdersScreen = ({ navigation }) => {
   const { isAuthenticated, token, currentUser } = useAuth();
@@ -334,16 +334,9 @@ const OrdersScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity 
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <Icon name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
+        
       
-        {currentUser && (
-          <Text style={styles.userInfo}>Welcome, {currentUser?.username || 'Guest'}</Text>
-        )}
+        
       </View>
 
       <FlatList

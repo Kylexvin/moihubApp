@@ -15,7 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import axios from 'axios';
 
-const API_URL = 'http://192.168.100.51:5000/api';
+const API_URL = 'https://moihub.onrender.com/api';
 
 const RoommateCreate = () => {
   const navigation = useNavigation();
@@ -144,7 +144,7 @@ const RoommateCreate = () => {
               />
               <SelectButton
                 title="Without a room"
-                value="needs_room"
+                value="looking_for_room"
                 currentValue={formData.type}
                 onPress={(value) => handleInputChange('type', value)}
               />

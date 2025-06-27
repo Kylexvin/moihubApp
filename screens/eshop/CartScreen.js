@@ -148,7 +148,7 @@ const CartScreen = ({ navigation }) => {
 
       // Place order for each shop
       const orderPromises = Object.values(itemsByShop).map(async (shopOrder) => {
-        const response = await fetch('http://192.168.100.51:5000/api/eshop/orders/place', {
+        const response = await fetch('https://moihub.onrender.com/api/eshop/orders/place', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

@@ -1,4 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import Icon from 'react-native-vector-icons/FontAwesome';
+// import * as AuthSession from 'expo-auth-session';
+// import * as Google from 'expo-auth-session/providers/google';
+
 import { 
   View, 
   Text, 
@@ -32,6 +36,9 @@ const RegisterScreen = ({ navigation }) => {
   const fadeAnim = useState(new Animated.Value(0))[0];
   const slideAnim = useState(new Animated.Value(50))[0];
   
+  // Google Sign-in coming soon flag
+  const GOOGLE_SIGNIN_ENABLED = false; // Set to true when ready to enable
+
   useEffect(() => {
     // Entrance animation
     Animated.parallel([
@@ -95,6 +102,14 @@ const RegisterScreen = ({ navigation }) => {
     }
   };
 
+  const handleComingSoonPress = () => {
+    Alert.alert(
+      'Coming Soon!', 
+      'Google Sign-in will be available in a future update. For now, please use traditional registration.',
+      [{ text: 'OK', style: 'default' }]
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.glowCircle} />
@@ -122,6 +137,51 @@ const RegisterScreen = ({ navigation }) => {
           <Text style={styles.title}>CREATE ACCOUNT</Text>
           <Text style={styles.subtitle}>Join our ecosystem</Text>
 
+          {/* Social Sign-Up Section - Coming Soon */}
+          {GOOGLE_SIGNIN_ENABLED ? (
+            <>
+              <View style={styles.socialSection}>
+                <TouchableOpacity 
+                  style={styles.googleButton}
+                  onPress={() => {/* Google sign-in logic when enabled */}}
+                >
+                  <Icon name="google" size={24} color="#DB4437" style={styles.icon} />
+                  <Text style={styles.googleButtonText}>Continue with Google</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Divider */}
+              <View style={styles.dividerContainer}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>OR</Text>
+                <View style={styles.dividerLine} />
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.socialSection}>
+                <TouchableOpacity 
+                  style={[styles.googleButton, styles.comingSoonButton]}
+                  onPress={handleComingSoonPress}
+                >
+                  <Icon name="google" size={24} color="#DB4437" style={styles.icon} />
+                  <Text style={styles.googleButtonText}>Continue with Google</Text>
+                  <View style={styles.comingSoonBadge}>
+                    <Text style={styles.comingSoonText}>COMING SOON</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+
+              {/* Divider */}
+              <View style={styles.dividerContainer}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>OR REGISTER WITH EMAIL</Text>
+                <View style={styles.dividerLine} />
+              </View>
+            </>
+          )}
+
+          {/* Traditional Registration Form */}
           <View style={styles.form}>
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Username</Text>
@@ -251,8 +311,73 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#88A99B',
-    marginBottom: 40,
+    marginBottom: 30,
     textAlign: 'center',
+  },
+  socialSection: {
+    marginBottom: 20,
+  },
+  googleButton: {
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    position: 'relative',
+  },
+  comingSoonButton: {
+    opacity: 0.7,
+    backgroundColor: '#f5f5f5',
+  },
+  comingSoonBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#FF6B6B',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  comingSoonText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  icon: {
+    marginRight: 12,
+  },
+  googleButtonText: {
+    color: '#333',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#0F5443',
+  },
+  dividerText: {
+    color: '#88A99B',
+    paddingHorizontal: 15,
+    fontSize: 14,
   },
   form: {
     width: '100%',
@@ -290,6 +415,7 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     backgroundColor: '#00805F',
+    opacity: 0.6,
   },
   buttonText: {
     color: '#093028',

@@ -15,11 +15,11 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import axios from 'axios';
 
-const API_URL = 'http://192.168.100.51:5000/api';
+const API_URL = 'https://moihub.onrender.com/api';
 
 const RoommateBrowse = () => {
   const navigation = useNavigation();
-  const { currentUser, token } = useAuth();
+  const { currentUser, token, isAuthenticated } = useAuth();
   const [roommates, setRoommates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -88,8 +88,26 @@ const RoommateBrowse = () => {
     Linking.openURL(`whatsapp://send?phone=${cleanNumber}&text=${encodeURIComponent(message)}`);
   };
 
+  // Enhanced ownership check function
+  const isOwnerOfListing = (listing) => {
+    if (!currentUser || !isAuthenticated) {
+      return false;
+    }
+
+    // Try multiple comparison methods to handle different ID formats
+    const currentUserId = currentUser.id || currentUser._id || currentUser.userId;
+    const listingUserId = listing.userId || listing.user_id || listing.user;
+
+   
+
+    // Convert both to strings for comparison to handle ObjectId vs string issues
+    return String(currentUserId) === String(listingUserId);
+  };
+
   const renderRoommateCard = ({ item }) => {
-    const isOwner = currentUser && item.userId === currentUser.id;
+    const isOwner = isOwnerOfListing(item);
+    
+   
     
     return (
       <View style={styles.card}>
@@ -102,6 +120,11 @@ const RoommateBrowse = () => {
             <Text style={[styles.badge, styles.genderBadge]}>
               {item.gender}
             </Text>
+            {isOwner && (
+              <Text style={[styles.badge, styles.ownerBadge]}>
+                Your Listing
+              </Text>
+            )}
           </View>
         </View>
 
@@ -114,12 +137,15 @@ const RoommateBrowse = () => {
 
         <View style={styles.cardActions}>
           {isOwner ? (
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.deleteButton]}
-              onPress={() => handleDelete(item._id)}
-            >
-              <Text style={styles.deleteButtonText}>Delete</Text>
-            </TouchableOpacity>
+            <View style={styles.ownerActions}>
+             
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.deleteButton]}
+                onPress={() => handleDelete(item._id)}
+              >
+                <Text style={styles.deleteButtonText}>🗑️ Delete</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <View style={styles.contactButtons}>
               <TouchableOpacity 
@@ -307,6 +333,7 @@ const styles = StyleSheet.create({
   badges: {
     flexDirection: 'row',
     gap: 5,
+    flexWrap: 'wrap',
   },
   badge: {
     paddingHorizontal: 8,
@@ -323,6 +350,10 @@ const styles = StyleSheet.create({
   genderBadge: {
     backgroundColor: '#fce4ec',
     color: '#c2185b',
+  },
+  ownerBadge: {
+    backgroundColor: '#fff3e0',
+    color: '#f57c00',
   },
   cardContent: {
     marginBottom: 15,
@@ -357,6 +388,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
   },
+  ownerActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
   actionButton: {
     flex: 1,
     paddingVertical: 10,
@@ -368,6 +403,9 @@ const styles = StyleSheet.create({
   },
   whatsappButton: {
     backgroundColor: '#25d366',
+  },
+  editButton: {
+    backgroundColor: '#ff9800',
   },
   deleteButton: {
     backgroundColor: '#f44336',

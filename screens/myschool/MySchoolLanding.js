@@ -6,13 +6,13 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  StatusBar,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const MySchoolLanding = ({ navigation }) => {
-  const [activeTab, setActiveTab] = useState('Portal');
   const [blogs, setBlogs] = useState([]);
 
   useEffect(() => {
@@ -20,139 +20,125 @@ const MySchoolLanding = ({ navigation }) => {
       {
         id: 1,
         title: 'Unit Registration Guide',
-        excerpt: 'Step-by-step registration process',
+        excerpt: 'Step-by-step registration process for the new semester',
         date: '2024-06-15',
-        category: 'Academic'
+        category: 'Academic',
+        readTime: '5 min read'
       },
       {
         id: 2,
         title: 'Academic Calendar 2024/2025',
-        excerpt: 'Important dates and deadlines',
+        excerpt: 'Important dates and deadlines you need to know',
         date: '2024-06-10',
-        category: 'Calendar'
+        category: 'Calendar',
+        readTime: '3 min read'
       },
       {
         id: 3,
         title: 'E-Learning Updates',
-        excerpt: 'New Musomi platform features',
+        excerpt: 'New Musomi platform features and improvements',
         date: '2024-06-08',
-        category: 'Platform'
+        category: 'Platform',
+        readTime: '4 min read'
       }
     ]);
   }, []);
 
-  const tabs = [
-    { name: 'Portal', icon: 'school', screen: 'Portal' },
-    { name: 'Musomi', icon: 'menu-book', screen: 'Musomi' },
-    { name: 'ChatGPT', icon: 'smart-toy', screen: 'ChatGPT' },
-    { name: 'MOI', icon: 'language', screen: 'MoiWebsite' },
-    { name: 'Organizations', icon: 'business', screen: 'Organizations' }
+  const mainServices = [
+    { 
+      name: 'Student Portal', 
+      description: 'Access your academic records, grades, and student services',
+      icon: 'school', 
+      screen: 'Portal',
+      color: '#2E7D32',
+      bgColor: '#E8F5E8',
+      featured: true,
+      available: true
+    },
+    { 
+      name: 'Musomi Learning', 
+      description: 'Interactive e-learning platform with courses and resources',
+      icon: 'menu-book', 
+      screen: 'Musomi',
+      color: '#1565C0',
+      bgColor: '#E3F2FD',
+      featured: true,
+      available: true
+    },
+    { 
+      name: 'AI Assistant', 
+      description: 'Get instant help with your academic questions',
+      icon: 'smart-toy', 
+      screen: 'ChatGPT',
+      color: '#7B1FA2',
+      bgColor: '#F3E5F5',
+      featured: false,
+      available: true
+    },
+    { 
+      name: 'MOI Resources', 
+      description: 'Official university website and announcements',
+      icon: 'language', 
+      screen: 'MoiWebsite',
+      color: '#F57C00',
+      bgColor: '#FFF3E0',
+      featured: false,
+      available: true
+    }
   ];
 
-  const services = [
-    { name: 'Past Papers', status: 'Soon', icon: 'description', available: false },
-    { name: 'Exam Schedule', status: 'soon', icon: 'event', available: false },
-    
+  const quickServices = [
+    { name: 'Past Papers', status: 'Coming Soon', icon: 'description', available: false, color: '#4CAF50' },
+    { name: 'Exam Schedule', status: 'Coming Soon', icon: 'event', available: false, color: '#FF9800' },
+    { name: 'Library', status: 'Coming Soon', icon: 'local-library', available: false, color: '#2196F3' },
+    { name: 'Organizations', icon: 'business', screen: 'Organizations', available: true, color: '#9C27B0' },
   ];
 
-  const handleTabPress = (tab) => {
-    setActiveTab(tab.name);
-    navigation.navigate(tab.screen);
+  const handleServicePress = (service) => {
+    if (service.available && service.screen) {
+      navigation.navigate(service.screen);
+    }
   };
 
-  const renderTabBar = () => (
-    <View style={styles.tabContainer}>
-      <View style={styles.tabWrapper}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabScrollContent}
-          decelerationRate="fast"
-          snapToInterval={90}
-          snapToAlignment="start"
-        >
-          {tabs.map((tab, index) => (
-            <TouchableOpacity
-              key={tab.name}
-              style={[
-                styles.tab,
-                activeTab === tab.name && styles.activeTab,
-                index === 0 && styles.firstTab,
-                index === tabs.length - 1 && styles.lastTab
-              ]}
-              onPress={() => handleTabPress(tab)}
-            >
-              <Icon 
-                name={tab.icon} 
-                size={20} 
-                color={activeTab === tab.name ? '#FFFFFF' : '#6B7280'} 
-              />
-              <Text style={[
-                styles.tabText,
-                activeTab === tab.name && styles.activeTabText
-              ]}>
-                {tab.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-        
-        {/* Swipe indicators */}
-        <View style={styles.swipeIndicators}>
-          <View style={styles.leftIndicator}>
-            <Icon name="chevron-left" size={16} color="#D1D5DB" />
-          </View>
-          <View style={styles.rightIndicator}>
-            <Icon name="chevron-right" size={16} color="#D1D5DB" />
-          </View>
+  const handleBlogPress = (blog) => {
+    // You can add navigation to a blog detail screen here if needed
+    console.log('Blog pressed:', blog.title);
+  };
+
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <View style={styles.headerContent}>
+        <View>
+          <Text style={styles.welcomeText}>Welcome back!</Text>
+          <Text style={styles.headerTitle}>MySchool Dashboard</Text>
         </View>
-      </View>
-      
-      {/* Breadcrumb dots */}
-      <View style={styles.breadcrumbContainer}>
-        {tabs.map((tab, index) => (
-          <View
-            key={tab.name}
-            style={[
-              styles.breadcrumbDot,
-              activeTab === tab.name && styles.activeBreadcrumbDot
-            ]}
-          />
-        ))}
+        <TouchableOpacity style={styles.profileIcon}>
+          <Icon name="account-circle" size={40} color="#2E7D32" />
+        </TouchableOpacity>
       </View>
     </View>
   );
 
-  const renderServices = () => (
-    <View style={styles.servicesSection}>
-      <View style={styles.servicesGrid}>
-        {services.map((service, index) => (
+  const renderFeaturedServices = () => (
+    <View style={styles.featuredSection}>
+      <Text style={styles.sectionTitle}>Quick Access</Text>
+      <View style={styles.featuredGrid}>
+        {mainServices.filter(service => service.featured).map((service, index) => (
           <TouchableOpacity
-            key={index}
-            style={[
-              styles.serviceCard,
-              !service.available && styles.serviceCardDisabled
-            ]}
-            disabled={!service.available}
+            key={service.name}
+            style={[styles.featuredCard, { backgroundColor: service.bgColor }]}
+            onPress={() => handleServicePress(service)}
+            activeOpacity={0.7}
           >
-            <View style={styles.serviceIconContainer}>
-              <Icon 
-                name={service.icon} 
-                size={28} 
-                color={service.available ? '#1B5E20' : '#9E9E9E'} 
-              />
+            <View style={styles.featuredCardHeader}>
+              <View style={[styles.featuredIcon, { backgroundColor: service.color }]}>
+                <Icon name={service.icon} size={28} color="#FFFFFF" />
+              </View>
+              <Icon name="arrow-forward" size={20} color={service.color} />
             </View>
-            <Text style={styles.serviceName}>{service.name}</Text>
-            <View style={[
-              styles.statusBadge,
-              service.available ? styles.statusLive : styles.statusSoon
-            ]}>
-              <Text style={[
-                styles.statusText,
-                service.available ? styles.statusTextLive : styles.statusTextSoon
-              ]}>
-                {service.status}
-              </Text>
+            <View style={styles.featuredCardContent}>
+              <Text style={styles.featuredCardTitle}>{service.name}</Text>
+              <Text style={styles.featuredCardDescription}>{service.description}</Text>
             </View>
           </TouchableOpacity>
         ))}
@@ -160,43 +146,114 @@ const MySchoolLanding = ({ navigation }) => {
     </View>
   );
 
-  const renderBlogs = () => (
-    <View style={styles.blogsSection}>
+  const renderAllServices = () => (
+    <View style={styles.servicesSection}>
+      <Text style={styles.sectionTitle}>All Services</Text>
+      <View style={styles.servicesGrid}>
+        {mainServices.map((service, index) => (
+          <TouchableOpacity
+            key={service.name}
+            style={styles.serviceCard}
+            onPress={() => handleServicePress(service)}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.serviceIcon, { backgroundColor: service.bgColor }]}>
+              <Icon name={service.icon} size={24} color={service.color} />
+            </View>
+            <Text style={styles.serviceName}>{service.name}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      
+      <Text style={styles.subsectionTitle}>Quick Tools</Text>
+      <View style={styles.quickToolsGrid}>
+        {quickServices.map((service, index) => (
+          <TouchableOpacity
+            key={service.name}
+            style={[
+              styles.quickToolCard,
+              !service.available && styles.disabledCard
+            ]}
+            onPress={() => handleServicePress(service)}
+            disabled={!service.available}
+            activeOpacity={service.available ? 0.7 : 1}
+          >
+            <View style={[styles.quickToolIcon, { backgroundColor: `${service.color}15` }]}>
+              <Icon 
+                name={service.icon} 
+                size={20} 
+                color={service.available ? service.color : '#9E9E9E'} 
+              />
+            </View>
+            <View style={styles.quickToolContent}>
+              <Text style={[styles.quickToolName, !service.available && styles.disabledText]}>
+                {service.name}
+              </Text>
+              {service.status && (
+                <Text style={styles.comingSoonText}>{service.status}</Text>
+              )}
+            </View>
+            {service.available && (
+              <Icon name="chevron-right" size={16} color="#C4C4C4" />
+            )}
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+
+  const renderUpdates = () => (
+    <View style={styles.updatesSection}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Updates</Text>
+        <Text style={styles.sectionTitle}>Latest Updates</Text>
         <TouchableOpacity style={styles.seeAllButton}>
           <Text style={styles.seeAllText}>View all</Text>
           <Icon name="arrow-forward" size={16} color="#2E7D32" />
         </TouchableOpacity>
       </View>
       
-      <View style={styles.blogsList}>
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.updatesScrollContent}
+      >
         {blogs.map((blog) => (
-          <TouchableOpacity key={blog.id} style={styles.blogItem}>
-            <View style={styles.blogIconContainer}>
-              <Icon name="article" size={20} color="#2E7D32" />
-            </View>
-            <View style={styles.blogContent}>
-              <View style={styles.blogHeader}>
-                <Text style={styles.blogCategory}>{blog.category}</Text>
-                <Text style={styles.blogDate}>{blog.date}</Text>
+          <TouchableOpacity 
+            key={blog.id} 
+            style={styles.updateCard}
+            onPress={() => handleBlogPress(blog)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.updateHeader}>
+              <View style={styles.updateCategory}>
+                <Text style={styles.updateCategoryText}>{blog.category}</Text>
               </View>
-              <Text style={styles.blogTitle}>{blog.title}</Text>
-              <Text style={styles.blogExcerpt}>{blog.excerpt}</Text>
+              <Text style={styles.updateDate}>{new Date(blog.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</Text>
             </View>
-            <Icon name="chevron-right" size={20} color="#C4C4C4" />
+            <Text style={styles.updateTitle}>{blog.title}</Text>
+            <Text style={styles.updateExcerpt}>{blog.excerpt}</Text>
+            <View style={styles.updateFooter}>
+              <Text style={styles.readTime}>{blog.readTime}</Text>
+              <Icon name="arrow-forward" size={16} color="#2E7D32" />
+            </View>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
     </View>
   );
 
   return (
     <View style={styles.container}>
-      {renderTabBar()}
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {renderServices()}
-        {renderBlogs()}
+      <StatusBar barStyle="dark-content" backgroundColor="#F8F9FA" />
+      {renderHeader()}
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {renderFeaturedServices()}
+        {renderAllServices()}
+        {renderUpdates()}
       </ScrollView>
     </View>
   );
@@ -208,126 +265,119 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
   },
   
-  // Tab Bar Styles
-  tabContainer: {
+  // Header Styles
+  header: {
     backgroundColor: '#FFFFFF',
-    paddingTop: 12,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    paddingTop: 20,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 5,
   },
-  tabWrapper: {
-    position: 'relative',
-  },
-  tabScrollContent: {
-    paddingHorizontal: 20,
-    alignItems: 'center',
-  },
-  tab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginRight: 12,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    minWidth: 80,
-    justifyContent: 'center',
-  },
-  firstTab: {
-    marginLeft: 0,
-  },
-  lastTab: {
-    marginRight: 20,
-  },
-  activeTab: {
-    backgroundColor: '#2E7D32',
-    shadowColor: '#2E7D32',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  tabText: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '600',
-    marginLeft: 6,
-  },
-  activeTabText: {
-    color: '#FFFFFF',
-  },
-  
-  // Swipe Indicators
-  swipeIndicators: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    pointerEvents: 'none',
   },
-  leftIndicator: {
-    marginLeft: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 12,
-    padding: 2,
+  welcomeText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
   },
-  rightIndicator: {
-    marginRight: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 12,
-    padding: 2,
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginTop: 4,
   },
-  
-  // Breadcrumb Dots
-  breadcrumbContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
-    gap: 6,
-  },
-  breadcrumbDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#D1D5DB',
-  },
-  activeBreadcrumbDot: {
-    backgroundColor: '#2E7D32',
-    width: 20,
+  profileIcon: {
+    backgroundColor: '#E8F5E8',
+    borderRadius: 20,
+    padding: 4,
   },
   
   // Content Styles
   content: {
     flex: 1,
   },
+  scrollContent: {
+    paddingBottom: 32,
+  },
+  
+  // Featured Services Section
+  featuredSection: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 16,
+  },
+  featuredGrid: {
+    gap: 16,
+  },
+  featuredCard: {
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  featuredCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  featuredIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  featuredCardContent: {
+    flex: 1,
+  },
+  featuredCardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  featuredCardDescription: {
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
+  },
   
   // Services Section
   servicesSection: {
     paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 16,
+    paddingBottom: 24,
   },
   servicesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    marginBottom: 32,
   },
   serviceCard: {
     width: (width - 52) / 2,
@@ -341,20 +391,14 @@ const styles = StyleSheet.create({
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
   },
-  serviceCardDisabled: {
-    opacity: 0.6,
-  },
-  serviceIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#E8F5E8',
+  serviceIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
@@ -364,60 +408,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1F2937',
     textAlign: 'center',
-    marginBottom: 8,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusLive: {
-    backgroundColor: '#E8F5E8',
-  },
-  statusSoon: {
-    backgroundColor: '#FFF3CD',
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  statusTextLive: {
-    color: '#1B5E20',
-  },
-  statusTextSoon: {
-    color: '#8A6914',
   },
   
-  // Blogs Section
-  blogsSection: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1F2937',
-  },
-  seeAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  seeAllText: {
-    fontSize: 14,
-    color: '#2E7D32',
+  // Quick Tools
+  subsectionTitle: {
+    fontSize: 16,
     fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 12,
   },
-  blogsList: {
-    gap: 12,
+  quickToolsGrid: {
+    gap: 8,
   },
-  blogItem: {
+  quickToolCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
@@ -431,51 +434,120 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
   },
-  blogIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#E8F5E8',
+  disabledCard: {
+    opacity: 0.6,
+  },
+  quickToolIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  blogContent: {
+  quickToolContent: {
     flex: 1,
   },
-  blogHeader: {
+  quickToolName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  disabledText: {
+    color: '#9E9E9E',
+  },
+  comingSoonText: {
+    fontSize: 12,
+    color: '#F57C00',
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  
+  // Updates Section
+  updatesSection: {
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    paddingHorizontal: 20,
+    marginBottom: 16,
   },
-  blogCategory: {
+  seeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  seeAllText: {
+    fontSize: 14,
+    color: '#2E7D32',
+    fontWeight: '600',
+  },
+  updatesScrollContent: {
+    paddingHorizontal: 20,
+    gap: 16,
+  },
+  updateCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    width: width * 0.8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  updateHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  updateCategory: {
+    backgroundColor: '#E8F5E8',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  updateCategoryText: {
     fontSize: 12,
     color: '#2E7D32',
     fontWeight: '600',
-    backgroundColor: '#E8F5E8',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
   },
-  blogDate: {
+  updateDate: {
     fontSize: 12,
     color: '#9CA3AF',
+    fontWeight: '500',
   },
-  blogTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+  updateTitle: {
+    fontSize: 16,
+    fontWeight: '700',
     color: '#1F2937',
-    marginBottom: 4,
-    lineHeight: 20,
+    marginBottom: 8,
+    lineHeight: 22,
   },
-  blogExcerpt: {
-    fontSize: 13,
+  updateExcerpt: {
+    fontSize: 14,
     color: '#6B7280',
-    lineHeight: 18,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  updateFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  readTime: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500',
   },
 });
 

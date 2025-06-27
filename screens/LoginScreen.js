@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import Icon from 'react-native-vector-icons/FontAwesome';
+
 import {
   View,
   Text,
@@ -26,7 +28,7 @@ const LoginScreen = ({ navigation }) => {
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
   const slideAnim = useState(new Animated.Value(50))[0];
-  
+
   useEffect(() => {
     // Entrance animation
     Animated.parallel([
@@ -65,6 +67,14 @@ const LoginScreen = ({ navigation }) => {
     }
   };
 
+  const handleGoogleSignIn = () => {
+    Alert.alert(
+      'Coming Soon!',
+      'Google Sign-In will be available in a future update. Please use email/username login for now.',
+      [{ text: 'OK' }]
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.glowCircle} />
@@ -88,6 +98,28 @@ const LoginScreen = ({ navigation }) => {
         <Text style={styles.title}>MoiHub</Text>
         <Text style={styles.subtitle}>Sign in to continue</Text>
 
+        {/* Social Sign-In Section */}
+        {/* <View style={styles.socialSection}>
+          <TouchableOpacity 
+            style={styles.googleButtonDisabled}
+            onPress={handleGoogleSignIn}
+          >
+            <Icon name="google" size={24} color="#666" style={styles.icon} />
+            <View style={styles.googleButtonContent}>
+              <Text style={styles.googleButtonTextDisabled}>Continue with Google</Text>
+              <Text style={styles.comingSoonText}>Coming Soon</Text>
+            </View>
+          </TouchableOpacity>
+        </View> */}
+
+        {/* Divider */}
+        {/* <View style={styles.dividerContainer}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>OR</Text>
+          <View style={styles.dividerLine} />
+        </View> */}
+
+        {/* Traditional Login Form */}
         <View style={styles.form}>
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Email or Username</Text>
@@ -194,8 +226,55 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#88A99B',
-    marginBottom: 40,
+    marginBottom: 30,
     textAlign: 'center',
+  },
+  socialSection: {
+    marginBottom: 20,
+  },
+  googleButtonDisabled: {
+    backgroundColor: '#f5f5f5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 10,
+    opacity: 0.6,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  icon: {
+    marginRight: 12,
+  },
+  googleButtonContent: {
+    alignItems: 'center',
+  },
+  googleButtonTextDisabled: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  comingSoonText: {
+    color: '#999',
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#0F5443',
+  },
+  dividerText: {
+    color: '#88A99B',
+    paddingHorizontal: 15,
+    fontSize: 14,
   },
   form: {
     width: '100%',
@@ -241,6 +320,7 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     backgroundColor: '#00805F',
+    opacity: 0.6,
   },
   buttonText: {
     color: '#093028',
