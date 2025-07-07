@@ -1,6 +1,7 @@
-import { createContext, useState, useEffect, useContext } from 'react';
+import { createContext, useState, useEffect, useContext, useRef } from 'react';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
 
 const AuthContext = createContext();
 
@@ -14,6 +15,161 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const tokenCheckInterval = useRef(null);
+  const logoutTimeout = useRef(null);
+
+  // Function to decode JWT token and get expiration time
+  const decodeToken = (token) => {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(jsonPayload);
+    } catch (error) {
+      console.error('Error decoding token:', error);
+      return null;
+    }
+  };
+
+  // Function to check if token is expired
+  const isTokenExpired = (token) => {
+    if (!token) return true;
+    
+    const decoded = decodeToken(token);
+    if (!decoded || !decoded.exp) return true;
+    
+    const currentTime = Date.now() / 1000;
+    return decoded.exp < currentTime;
+  };
+
+  // Function to get time until token expires (in milliseconds)
+  const getTimeUntilExpiry = (token) => {
+    if (!token) return 0;
+    
+    const decoded = decodeToken(token);
+    if (!decoded || !decoded.exp) return 0;
+    
+    const currentTime = Date.now() / 1000;
+    const timeUntilExpiry = (decoded.exp - currentTime) * 1000;
+    return Math.max(0, timeUntilExpiry);
+  };
+
+  // Function to handle session expiry
+  const handleSessionExpiry = async () => {
+    console.log('Session expired - logging out user');
+    
+    // Clear intervals and timeouts
+    if (tokenCheckInterval.current) {
+      clearInterval(tokenCheckInterval.current);
+      tokenCheckInterval.current = null;
+    }
+    if (logoutTimeout.current) {
+      clearTimeout(logoutTimeout.current);
+      logoutTimeout.current = null;
+    }
+
+    // Show alert to user
+    Alert.alert(
+      'Session Expired',
+      'Your login session has expired. Please log in again.',
+      [
+        {
+          text: 'OK',
+          onPress: () => {
+            // Perform logout
+            performLogout();
+          }
+        }
+      ],
+      { cancelable: false }
+    );
+  };
+
+  // Function to perform logout without showing alert
+  const performLogout = async () => {
+    setLoading(true);
+    try {
+      await AsyncStorage.removeItem('authToken');
+      await AsyncStorage.removeItem('user');
+
+      setToken(null);
+      setCurrentUser(null);
+      setIsAuthenticated(false);
+      setError('');
+
+      delete axios.defaults.headers.common['Authorization'];
+
+      // Clear intervals and timeouts
+      if (tokenCheckInterval.current) {
+        clearInterval(tokenCheckInterval.current);
+        tokenCheckInterval.current = null;
+      }
+      if (logoutTimeout.current) {
+        clearTimeout(logoutTimeout.current);
+        logoutTimeout.current = null;
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Function to setup token expiry monitoring
+  const setupTokenMonitoring = (token) => {
+    if (!token) return;
+
+    // Clear existing intervals/timeouts
+    if (tokenCheckInterval.current) {
+      clearInterval(tokenCheckInterval.current);
+    }
+    if (logoutTimeout.current) {
+      clearTimeout(logoutTimeout.current);
+    }
+
+    // Check if token is already expired
+    if (isTokenExpired(token)) {
+      handleSessionExpiry();
+      return;
+    }
+
+    // Get time until expiry
+    const timeUntilExpiry = getTimeUntilExpiry(token);
+    
+    // Set timeout to logout user when token expires
+    logoutTimeout.current = setTimeout(() => {
+      handleSessionExpiry();
+    }, timeUntilExpiry);
+
+    // Set interval to check token validity every 30 seconds
+    tokenCheckInterval.current = setInterval(() => {
+      if (isTokenExpired(token)) {
+        handleSessionExpiry();
+      }
+    }, 30000); // Check every 30 seconds
+
+    console.log(`Token monitoring setup. Token expires in: ${Math.round(timeUntilExpiry / 1000)} seconds`);
+  };
+
+  // Setup axios interceptor to handle 401 responses
+  useEffect(() => {
+    const interceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401) {
+          console.log('401 error detected - session expired');
+          handleSessionExpiry();
+        }
+        return Promise.reject(error);
+      }
+    );
+
+    return () => {
+      axios.interceptors.response.eject(interceptor);
+    };
+  }, []);
 
   useEffect(() => {
     const loadStoredUser = async () => {
@@ -22,11 +178,23 @@ export const AuthProvider = ({ children }) => {
         const storedUser = await AsyncStorage.getItem('user');
 
         if (storedToken && storedUser) {
+          // Check if stored token is expired
+          if (isTokenExpired(storedToken)) {
+            console.log('Stored token is expired, clearing storage');
+            await AsyncStorage.removeItem('authToken');
+            await AsyncStorage.removeItem('user');
+            setLoading(false);
+            return;
+          }
+
           setToken(storedToken);
           setCurrentUser(JSON.parse(storedUser));
           setIsAuthenticated(true);
 
           axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+          
+          // Setup token monitoring
+          setupTokenMonitoring(storedToken);
         }
       } catch (error) {
         console.error('Error loading auth data from storage:', error);
@@ -36,6 +204,18 @@ export const AuthProvider = ({ children }) => {
     };
 
     loadStoredUser();
+  }, []);
+
+  // Cleanup intervals on unmount
+  useEffect(() => {
+    return () => {
+      if (tokenCheckInterval.current) {
+        clearInterval(tokenCheckInterval.current);
+      }
+      if (logoutTimeout.current) {
+        clearTimeout(logoutTimeout.current);
+      }
+    };
   }, []);
 
   const register = async (userData) => {
@@ -106,6 +286,11 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Invalid user data format received from server');
       }
 
+      // Check if token is expired before storing
+      if (isTokenExpired(token)) {
+        throw new Error('Received expired token from server');
+      }
+
       // Store with proper validation
       console.log('Storing token:', token);
       console.log('Storing user:', JSON.stringify(user, null, 2));
@@ -118,6 +303,9 @@ export const AuthProvider = ({ children }) => {
       setIsAuthenticated(true);
 
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+      // Setup token monitoring
+      setupTokenMonitoring(token);
 
       console.log('Login successful - currentUser set to:', user);
       return user;
@@ -155,6 +343,11 @@ export const AuthProvider = ({ children }) => {
         throw new Error('No user data received from server');
       }
 
+      // Check if token is expired before storing
+      if (isTokenExpired(token)) {
+        throw new Error('Received expired token from server');
+      }
+
       await AsyncStorage.setItem('authToken', token);
       await AsyncStorage.setItem('user', JSON.stringify(user));
 
@@ -163,6 +356,9 @@ export const AuthProvider = ({ children }) => {
       setIsAuthenticated(true);
 
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+      // Setup token monitoring
+      setupTokenMonitoring(token);
 
       return user;
     } catch (err) {
@@ -175,21 +371,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
-    setLoading(true);
-    try {
-      await AsyncStorage.removeItem('authToken');
-      await AsyncStorage.removeItem('user');
-
-      setToken(null);
-      setCurrentUser(null);
-      setIsAuthenticated(false);
-
-      delete axios.defaults.headers.common['Authorization'];
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      setLoading(false);
-    }
+    await performLogout();
   };
 
   const value = {
@@ -204,6 +386,8 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated,
     setIsAuthenticated,
     setError,
+    isTokenExpired: () => isTokenExpired(token),
+    getTimeUntilExpiry: () => getTimeUntilExpiry(token),
   };
 
   return (

@@ -51,7 +51,7 @@ const getDashboardInfo = (role) => {
         title: 'ADMIN CONTROL',
         subtitle: 'Access Admin Dashboard',
         icon: '⚡',
-        route: 'Admin' // Changed from 'AdminDashboard' to 'Admin'
+        route: 'Admin' 
       };
     case 'writer':
       return {
@@ -68,12 +68,13 @@ const getDashboardInfo = (role) => {
         route: 'VendorDashboard'
       };
     case 'shopowner':
-      return {
-        title: 'SHOP MANAGER',
-        subtitle: 'Access Shop Dashboard',
-        icon: '🏪',
-        route: 'ShopDashboard'
-      };
+  return {
+    title: 'SHOP MANAGER',
+    subtitle: 'Access Shop Dashboard',
+    icon: '🏪',
+    route: 'Eshop'
+  };
+
     default:
       return null;
   }
@@ -149,30 +150,6 @@ const getDashboardInfo = (role) => {
           </View>
         </View>
 
-        {/* Stats Grid */}
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <LinearGradient
-              colors={['rgba(108, 124, 231, 0.1)', 'rgba(108, 124, 231, 0.05)']}
-              style={styles.statGradient}
-            >
-              <Text style={styles.statValue}>24</Text>
-              <Text style={styles.statLabel}>Days Active</Text>
-            </LinearGradient>
-          </View>
-          
-          <View style={styles.statCard}>
-            <LinearGradient
-              colors={['rgba(255, 51, 102, 0.1)', 'rgba(255, 51, 102, 0.05)']}
-              style={styles.statGradient}
-            >
-              <Text style={styles.statValue}>142</Text>
-              <Text style={styles.statLabel}>Actions</Text>
-            </LinearGradient>
-          </View>
-        </View>
-
-        {/* Account Information */}
         <View style={styles.infoSection}>
           <Text style={styles.sectionTitle}>ACCOUNT MATRIX</Text>
           

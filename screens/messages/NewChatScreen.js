@@ -14,7 +14,7 @@ const NewChatScreen = ({ navigation }) => {
   const [searchPerformed, setSearchPerformed] = useState(false);
 
   const { currentUser, token, logout, isAuthenticated } = useAuth();
-  const BASE_URL = 'http://192.168.100.51:5000/api';
+  const BASE_URL = 'https://moihub.onrender.com/api';
 
   useEffect(() => {
     if (!isAuthenticated || !token) {

@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 
-const API_URL = 'http://192.168.100.51:5000/api';
+const API_URL = 'https://moihub.onrender.com/api';
 
 const INTEREST_OPTIONS = [
   'music', 'gym', 'books', 'movies', 'travel', 'cooking',

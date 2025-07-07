@@ -7,7 +7,7 @@ import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import io from 'socket.io-client';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import SplashScreen from './screens/SplashScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
@@ -20,6 +20,7 @@ import AuthStackNavigator from './navigation/AuthStackNavigator';
 import SecondHandStack from './navigation/SecondHandStack';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { FoodProvider } from './context/FoodContext';
+import { SocketProvider } from './context/SocketContext';
 import MessageStackNavigator from './navigation/MessageStackNavigator';
 import EshopNavigator from './navigation/EshopNavigator';
 import LinkMeNavigator from './navigation/LinkMeNavigator';
@@ -27,8 +28,10 @@ import MySchoolNavigator from './navigation/MySchoolNavigator';
 import BlogsNavigator from './navigation/BlogsNavigator';
 import AdminNavigator from './navigation/AdminNavigator';
 import OAuthDebug from './screens/OAuthDebug';
-
-
+import EshopOwnerNavigator from './navigation/EshopOwnerNavigator';
+import EditProductScreen from './screens/eshop/dashboards/EditProductScreen';
+import FoodVendorNavigator from './navigation/FoodVendorNavigator';
+import EchemNavigator from './navigation/EchemNavigator';
 
 
 const Stack = createNativeStackNavigator();
@@ -37,7 +40,7 @@ const MyTheme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
-    background: 'ivory',
+    background: '#093028', // Changed from 'ivory' to match your app background
     card: '#093028',
     text: '#E0FFF5',
     border: 'transparent',
@@ -64,61 +67,9 @@ const MyTheme = {
 };
 
 function AppNavigator() {
-  const { isAuthenticated, loading, token, currentUser } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const [appState, setAppState] = useState('splash');
   const [firstLaunch, setFirstLaunch] = useState(null);
-  const socketRef = useRef(null);
-
-  const SOCKET_URL = 'https://moihub.onrender.com'; // Adjust as needed
-
-  // Fix status bar configuration
-  useFocusEffect(
-    useCallback(() => {
-      if (Platform.OS === 'ios') {
-        StatusBar.setBarStyle('light-content', true);
-      } else {
-        StatusBar.setBarStyle('light-content');
-        StatusBar.setBackgroundColor('#093028', true);
-        StatusBar.setTranslucent(false);
-      }
-    }, [])
-  );
-
-  // Global socket initialization
-  useEffect(() => {
-    if (!isAuthenticated || !token || !currentUser) return;
-    if (socketRef.current) return;
-
-    const socket = io(SOCKET_URL, {
-      auth: {
-        token,
-        userId: currentUser._id
-      },
-      transports: ['websocket'],
-      forceNew: true
-    });
-
-    socket.on('connect', () => {
-      console.log('Socket connected globally:', socket.id);
-      socket.emit('join_user_room', { userId: currentUser._id });
-    });
-
-    socket.on('disconnect', () => {
-      console.log('Socket disconnected');
-    });
-
-    socket.on('connect_error', (err) => {
-      console.warn('Socket connection error:', err.message);
-    });
-
-    socketRef.current = socket;
-
-    return () => {
-      console.log('Cleaning up global socket');
-      socket.disconnect();
-      socketRef.current = null;
-    };
-  }, [isAuthenticated, token, currentUser]);
 
   useEffect(() => {
     const checkFirstLaunch = async () => {
@@ -158,43 +109,47 @@ function AppNavigator() {
 
   return (
     <CartProvider>
-      <View style={{
-        flex: 1,
-        backgroundColor: '#093028',
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0
-      }}>
-        <Stack.Navigator
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: '#093028' },
-            animation: 'fade',
-            presentation: 'card',
-            gestureEnabled: false,
-          }}
-        >
-          {isAuthenticated ? (
-            <>
-              <Stack.Screen name="Main" component={MainTabNavigator} />
-              <Stack.Screen name="SecondHandStack" component={SecondHandStack} />
-              <Stack.Screen name="MessageStackNavigator" component={MessageStackNavigator} />
-              <Stack.Screen name="FoodStack" component={FoodNavigator} />
-              <Stack.Screen name="AccomStack" component={AccomStack} />
-              <Stack.Screen name="RoommateStack" component={RoommateStack} />
-              <Stack.Screen name='EshopNavigator' component={EshopNavigator} />
-              <Stack.Screen name="LinkMe" component={LinkMeNavigator} />
-              <Stack.Screen name="MySchoolNavigator" component={MySchoolNavigator} />
-              <Stack.Screen name="BlogsNavigator" component={BlogsNavigator} />
-              <Stack.Screen name="Admin" component={AdminNavigator} />
-            </>
-          ) : (
-            <Stack.Screen name="Auth" component={AuthStackNavigator} />
-           
-             )}
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: '#093028' },
+          animation: 'fade',
+          presentation: 'card',
+          gestureEnabled: false,
+        }}
+      >
+        {isAuthenticated ? (
+          <>
+            <Stack.Screen name="Main" component={MainTabNavigator} />
+            <Stack.Screen name="SecondHandStack" component={SecondHandStack} />
+            <Stack.Screen name="MessageStackNavigator" component={MessageStackNavigator} />
+            <Stack.Screen name="FoodStack" component={FoodNavigator} />
+            <Stack.Screen name="AccomStack" component={AccomStack} />
+            <Stack.Screen name="RoommateStack" component={RoommateStack} />
+            <Stack.Screen name='EshopNavigator' component={EshopNavigator} />
+            <Stack.Screen name="LinkMe" component={LinkMeNavigator} />
+            <Stack.Screen name="MySchoolNavigator" component={MySchoolNavigator} />
+            <Stack.Screen name="BlogsNavigator" component={BlogsNavigator} />
+            <Stack.Screen name="Admin" component={AdminNavigator} />
+            <Stack.Screen name="Eshop" component={EshopOwnerNavigator} />
+            <Stack.Screen
+              name="EditProduct"
+              component={EditProductScreen}
+              options={{ title: 'Edit Product' }}
+            />
+            <Stack.Screen
+    name="Echem"
+    component={EchemNavigator}
+    options={{ headerShown: false }} // or true, your choice
+  />
 
-
-  <Stack.Screen name="OAuthDebug" component={OAuthDebug} />
-</Stack.Navigator>
-      </View>
+            <Stack.Screen name="VendorDashboard" component={FoodVendorNavigator} />
+          </>
+        ) : (
+          <Stack.Screen name="Auth" component={AuthStackNavigator} />
+        )}
+        <Stack.Screen name="OAuthDebug" component={OAuthDebug} />
+      </Stack.Navigator>
     </CartProvider>
   );
 }
@@ -206,19 +161,34 @@ export default function App() {
 
   axios.defaults.baseURL = baseURL;
 
+  // Set status bar configuration once at app level
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      StatusBar.setBarStyle('light-content');
+      StatusBar.setBackgroundColor('#093028', true);
+      StatusBar.setTranslucent(false);
+    }
+  }, []);
+
   return (
-    <NavigationContainer theme={MyTheme}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="#093028"
-        translucent={false}
-        hidden={false}
-      />
-      <AuthProvider>
-        <FoodProvider>
-          <AppNavigator />
-        </FoodProvider>
-      </AuthProvider>
-    </NavigationContainer>
+    <SafeAreaProvider>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#093028' }}>
+        <NavigationContainer theme={MyTheme}>
+          <StatusBar
+            barStyle="light-content"
+            backgroundColor="#093028"
+            translucent={false}
+            hidden={false}
+          />
+          <AuthProvider>
+            <SocketProvider>
+              <FoodProvider>
+                <AppNavigator />
+              </FoodProvider>
+            </SocketProvider>
+          </AuthProvider>
+        </NavigationContainer>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }

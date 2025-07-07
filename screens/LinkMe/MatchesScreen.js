@@ -20,7 +20,7 @@ import { useAuth } from '../../context/AuthContext';
 import Icon from 'react-native-vector-icons/Ionicons';
 
 const { width } = Dimensions.get('window');
-const API_URL = 'http://192.168.100.51:5000/api';
+const API_URL = 'https://moihub.onrender.com/api';
 
 const MatchesScreen = ({ navigation }) => {
   const [matches, setMatches] = useState([]);

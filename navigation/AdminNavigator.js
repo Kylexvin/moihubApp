@@ -15,6 +15,11 @@ import LocalServicesManagement from '../screens/admin/LocalServicesManagement';
 import RoommateFinderManagement from '../screens/admin/RoommateFinderManagement';
 import BlogManagement from '../screens/admin/BlogManagement';
 import NewsManagement from '../screens/admin/NewsManagement';
+import RentalDashboard from '../screens/admin/RentalDashboard';
+import RentalCreation from '../screens/admin/RentalCreation';
+import RentalEdit from '../screens/admin/RentalEdit';
+
+
 
 const Stack = createStackNavigator();
 
@@ -83,8 +88,18 @@ const AdminNavigator = () => {
         <Stack.Screen
           name="RentalsManagement"
           component={RentalsManagement}
-          options={{ title: 'Rentals Management' }}
+          options={{ headerShown: false, }}
         />
+        <Stack.Screen
+          name="RentalDashboard"
+          component={RentalDashboard}
+          options={{ title: 'Rentals Management',headerShown: false, }}
+        />
+        <Stack.Screen name="RentalCreation" component={RentalCreation} options={{ headerShown: false, }} />
+        <Stack.Screen name="RentalEdit" component={RentalEdit} options={{ headerShown: false, }}/>
+
+
+
         <Stack.Screen
           name="EshopsManagement"
           component={EshopsManagement}

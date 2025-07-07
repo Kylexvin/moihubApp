@@ -43,6 +43,14 @@ const services = [
     color: "#50c878" 
   },
 
+  // Pharmacy (added here)
+  {
+    title: "Pharmacy",
+    icon: "medkit", // or "medication" if your icon set supports it
+    category: "pharma",
+    color: "#8e44ad"
+  },
+
   // Food Services
   { 
     title: "Food Delivery", 
@@ -50,7 +58,6 @@ const services = [
     category: "food", 
     color: "#ff7f50" 
   },
- 
 
   // Eshop
   {
@@ -60,31 +67,33 @@ const services = [
     color: "#ffb347"
   },
 
-  // Local Service
+  // Local Services
   { 
     title: "LinkMe", 
     icon: "heart", 
     category: "local", 
     color: "red" 
   },
-{
-  title: "Blogs",
-  icon: "book",
-  category: "local",
-  color: "#3498db"
-}
-
+  {
+    title: "Blogs",
+    icon: "book",
+    category: "local",
+    color: "#3498db"
+  }
 ];
 
+// Navigate to specific service screens
+const navigateToServiceScreen = (serviceType) => {
+  if (serviceType === 'local') {
+    navigation.navigate('LocalServices');
+  } else if (serviceType === 'emergency') {
+    navigation.navigate('EmergencyServices');
+  } else if (serviceType === 'pharma') {
+    navigation.navigate('Echem'); 
+  }
+};
 
-  // Navigate to specific service screens
-  const navigateToServiceScreen = (serviceType) => {
-    if (serviceType === 'local') {
-      navigation.navigate('LocalServices');
-    } else if (serviceType === 'emergency') {
-      navigation.navigate('EmergencyServices');
-    }
-  };
+
 
 const handleServicePress = (service) => {
   switch (service.title) {
@@ -108,6 +117,10 @@ const handleServicePress = (service) => {
       navigation.navigate('SecondHandStack', { screen: 'SecondHandHome' });
       break;
 
+    case 'Pharmacy': // ✅ New case added
+      navigation.navigate('Echem'); // Top-level navigator name
+      break;
+
     case 'My University':
       navigation.navigate('MySchoolNavigator', { screen: 'MySchoolHome' });
       break;
@@ -128,6 +141,7 @@ const handleServicePress = (service) => {
       }
   }
 };
+
 
 
 

@@ -67,13 +67,13 @@ const StatsScreen = ({ navigation }) => {
       
       // Fetch dashboard stats
       const dashboardResponse = await axios.get(
-        'http://192.168.100.51:5000/api/stats/dashboard',
+        'https://moihub.onrender.com/api/stats/dashboard',
         config
       );
       
       // Fetch detailed stats
       const detailResponse = await axios.get(
-        'http://192.168.100.51:5000/api/stats/app',
+        'https://moihub.onrender.com/api/stats/app',
         config
       );
       

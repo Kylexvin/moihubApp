@@ -36,7 +36,7 @@ const AwaitingApproval = ({ navigation }) => {
           />
           <Text style={styles.title}>Awaiting Approval</Text>
           <Text style={styles.message}>
-            Your profile has been submitted and is now under review. This process usually takes 24–48 hours. You’ll be notified once it’s complete.
+            Your profile has been submitted and is now under review. This process usually takes 24 hours. You’ll be notified once it’s complete. Keep checking this page,contact admin if otherwise.
           </Text>
 
           <TouchableOpacity

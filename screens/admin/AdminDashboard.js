@@ -26,7 +26,7 @@ const AdminDashboard = ({ navigation }) => {
       subtitle: 'Manage rental listings and bookings',
       icon: 'home',
       color: '#3b82f6',
-      route: 'RentalsManagement',
+      route: 'RentalDashboard',
     },
     {
       title: 'E-shops Management',

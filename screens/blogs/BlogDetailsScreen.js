@@ -29,9 +29,18 @@ const BlogDetailsScreen = ({ route, navigation }) => {
   const [likesCount, setLikesCount] = useState(0);
   const { currentUser, token } = useAuth();
 
+  // Create axios instance with auth header
+  const apiClient = axios.create({
+    baseURL: 'https://moihub.onrender.com/api',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
   const fetchBlog = async () => {
     try {
-      const res = await axios.get(`http://192.168.100.51:5000/api/posts/${id}`);
+      const res = await apiClient.get(`/posts/${id}`);
       setBlog(res.data.post);
       setLikesCount(res.data.post.likes?.length || 0);
       setLiked(res.data.post.likes?.includes(currentUser?._id));
@@ -48,14 +57,31 @@ const BlogDetailsScreen = ({ route, navigation }) => {
   }, []);
 
   const handleLike = async () => {
+    if (!currentUser) {
+      Alert.alert('Authentication Required', 'Please log in to like posts.');
+      return;
+    }
+
+    const newLikedState = !liked;
+    
+    // Optimistic update
+    setLiked(newLikedState);
+    setLikesCount(prev => newLikedState ? prev + 1 : prev - 1);
+
     try {
-      await axios.post(`http://192.168.100.51:5000/api/posts/${id}/like`, {
-        userId: currentUser._id
+      const response = await apiClient.post(`/posts/${id}/like`, {
+        liked: newLikedState
       });
-      setLiked(!liked);
-      setLikesCount(prev => liked ? prev - 1 : prev + 1);
+
+      // Update with actual server response
+      setLikesCount(response.data.likeCount);
+      setLiked(response.data.liked);
     } catch (error) {
       console.error('Failed to like post:', error);
+      // Revert optimistic update on error
+      setLiked(!newLikedState);
+      setLikesCount(prev => newLikedState ? prev - 1 : prev + 1);
+      Alert.alert('Error', 'Failed to update like. Please try again.');
     }
   };
 
@@ -71,6 +97,11 @@ const BlogDetailsScreen = ({ route, navigation }) => {
   };
 
   const handleComment = async () => {
+    if (!currentUser) {
+      Alert.alert('Authentication Required', 'Please log in to comment.');
+      return;
+    }
+
     if (!comment.trim()) {
       Alert.alert('Empty Comment', 'Please write something before posting.');
       return;
@@ -78,12 +109,17 @@ const BlogDetailsScreen = ({ route, navigation }) => {
 
     setCommentLoading(true);
     try {
-      await axios.post(`http://192.168.100.51:5000/api/posts/${id}/comment`, {
-        text: comment,
-        user: currentUser._id
+      const response = await apiClient.post(`/posts/${id}/comment`, {
+        text: comment.trim()
       });
+
+      // Update the blog state with new comments
+      setBlog(prevBlog => ({
+        ...prevBlog,
+        comments: response.data // Backend returns populated comments
+      }));
+
       setComment('');
-      fetchBlog(); // refresh comments
       Alert.alert('Success', 'Your comment has been posted!');
     } catch (error) {
       console.error('Failed to comment:', error);
@@ -231,12 +267,13 @@ const BlogDetailsScreen = ({ route, navigation }) => {
                     style={styles.commentInput}
                     multiline
                     maxLength={500}
+                    editable={!commentLoading}
                   />
                 </View>
                 <View style={styles.commentActions}>
                   <Text style={styles.characterCount}>{comment.length}/500</Text>
                   <TouchableOpacity 
-                    style={[styles.postButton, !comment.trim() && styles.disabledButton]} 
+                    style={[styles.postButton, (!comment.trim() || commentLoading) && styles.disabledButton]} 
                     onPress={handleComment}
                     disabled={!comment.trim() || commentLoading}
                   >
@@ -247,6 +284,21 @@ const BlogDetailsScreen = ({ route, navigation }) => {
                     )}
                   </TouchableOpacity>
                 </View>
+              </View>
+            )}
+
+            {/* Login prompt for non-authenticated users */}
+            {!currentUser && (
+              <View style={styles.loginPrompt}>
+                <Text style={styles.loginPromptText}>
+                  Please log in to like posts and leave comments.
+                </Text>
+                <TouchableOpacity 
+                  style={styles.loginButton}
+                  onPress={() => navigation.navigate('Login')}
+                >
+                  <Text style={styles.loginButtonText}>Login</Text>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -535,6 +587,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#ccc',
   },
   postButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  loginPrompt: {
+    backgroundColor: '#f0f8ff',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  loginPromptText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  loginButton: {
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  loginButtonText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',

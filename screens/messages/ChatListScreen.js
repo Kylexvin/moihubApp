@@ -32,8 +32,8 @@ const ChatListScreen = ({ navigation }) => {
 
   const { currentUser, token, logout, isAuthenticated } = useAuth();
   
-  const BASE_URL = 'http://192.168.100.51:5000/api';
-  const SOCKET_URL = 'http://192.168.100.51:5000'; // Adjust if different
+  const BASE_URL = 'https://moihub.onrender.com/api';
+  const SOCKET_URL = 'https://moihub.onrender.com'; 
 
   // Initialize socket connection
   useEffect(() => {

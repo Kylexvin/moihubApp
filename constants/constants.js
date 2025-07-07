@@ -1,6 +1,6 @@
 // constants/constants.js
 export const API_CONFIG = {
-  BASE_URL: 'http://192.168.100.51:5000/api',
+  BASE_URL: 'https://moihub.onrender.com/api',
   TIMEOUT: 10000,
   RETRY_ATTEMPTS: 3,
 };

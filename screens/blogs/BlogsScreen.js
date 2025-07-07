@@ -28,7 +28,7 @@ const BlogsScreen = ({ navigation }) => {
     setError(null);
     
     try {
-      const res = await axios.get('http://192.168.100.51:5000/api/posts/');
+      const res = await axios.get('https://moihub.onrender.com/api/posts/');
       setBlogs(res.data.posts || []);
     } catch (error) {
       console.error('Failed to load blogs:', error);

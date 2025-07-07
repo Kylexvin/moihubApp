@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
  */
 const useOrderApi = () => {
   const { token } = useAuth();
-  const API_URL = 'http://192.168.100.51:5000/api'; // Same base as AuthContext http://192.168.100.51:5000
+  const API_URL = 'https://moihub.onrender.com/api'; // Same base as AuthContext http://192.168.100.51:5000
 
   /**
    * Creates a new food order

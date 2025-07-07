@@ -9,12 +9,13 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Platform
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFoodContext } from '../../context/FoodContext';
-import useOrderApi from '../../hooks/useOrderApi'; // Import your order API hook
+import axios from 'axios';
 
 const OrderScreen = () => {
   const navigation = useNavigation();
@@ -28,8 +29,30 @@ const OrderScreen = () => {
   const [deliveryInstructions, setDeliveryInstructions] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // Use your order API hook
-  const orderApi = useOrderApi();
+  // Base URL configuration
+  const baseURL = Platform.OS === 'ios'
+    ? 'http://localhost:5000'
+    : 'https://moihub.onrender.com';
+
+  // Create order function
+  const createOrder = async (orderData) => {
+    try {
+      // Use axios.post directly since authorization is already configured in app.js
+      const response = await axios.post(`${baseURL}/api/food/orders`, orderData);
+
+      return {
+        success: true,
+        order: response.data.order,
+      };
+    } catch (error) {
+      console.error('Order API error:', error);
+      console.error('Error details:', error.response?.data);
+      return {
+        success: false,
+        message: error.response?.data?.message || error.message || 'An unexpected error occurred',
+      };
+    }
+  };
 
   // Calculate the total price
   const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -102,8 +125,8 @@ const OrderScreen = () => {
 
         console.log('Sending order data:', JSON.stringify(orderData));
         
-        // Use the orderApi.createOrder from your hook instead of importing separately
-        const response = await orderApi.createOrder(orderData);
+        // Use the integrated createOrder function
+        const response = await createOrder(orderData);
         console.log('Order API response:', JSON.stringify(response));
         
         if (!response.success) {
@@ -185,8 +208,6 @@ const OrderScreen = () => {
 
   return (
     <View style={styles.container}>
-
-      
       {cart.length === 0 ? (
         <View style={styles.emptyCart}>
           <Ionicons name="cart-outline" size={80} color="#b0bec5" />
@@ -249,7 +270,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'ivory',
   },
-
   emptyCart: {
     flex: 1,
     justifyContent: 'center',

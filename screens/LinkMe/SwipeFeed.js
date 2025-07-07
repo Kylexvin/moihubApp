@@ -22,7 +22,7 @@ import { Audio } from 'expo-av'; // ✅ This one works
 
 
 const { width, height } = Dimensions.get('window');
-const API_URL = 'http://192.168.100.51:5000/api';
+const API_URL = 'https://moihub.onrender.com/api';
 
 const SwipeFeed = ({ navigation }) => {
   const [candidates, setCandidates] = useState([]);

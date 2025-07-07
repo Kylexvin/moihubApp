@@ -10,7 +10,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 
-const API_URL = 'http://192.168.100.51:5000/api';
+const API_URL = 'https://moihub.onrender.com/api';
 
 const LinkMeEntry = ({ navigation }) => {
   const [loading, setLoading] = useState(true);

@@ -71,6 +71,16 @@ const RentalDetail = ({ route, navigation }) => {
       return;
     }
 
+    // Check if voting is disabled due to admin override
+    if (rental.adminOverride?.isActive) {
+      Alert.alert(
+        'Voting Disabled',
+        'An admin has verified the status of this rental. Voting is currently disabled.',
+        [{ text: 'OK', style: 'default' }]
+      );
+      return;
+    }
+
     try {
       setVotingLoading(true);
       const response = await axios.post(`${API_URL}/rentals/${rentalId}/vote`, {
@@ -154,19 +164,28 @@ const RentalDetail = ({ route, navigation }) => {
     });
   };
 
-  const getVacancyStatusColor = (status) => {
-    switch (status) {
+  // Improved functions to handle admin override status
+  const getVacancyStatusColor = (rental) => {
+    if (rental.adminOverride?.isActive) {
+      return rental.hasVacant ? '#059669' : '#DC2626';
+    }
+    
+    switch (rental.vacancyStatus) {
       case 'verified_vacant':
-        return '#059669'; // Deep emerald green
+        return '#059669';
       case 'verified_occupied':
-        return '#DC2626'; // Deep red
+        return '#DC2626';
       default:
-        return '#D97706'; // Deep orange
+        return '#D97706';
     }
   };
 
-  const getVacancyStatusText = (status) => {
-    switch (status) {
+  const getVacancyStatusText = (rental) => {
+    if (rental.adminOverride?.isActive) {
+      return rental.hasVacant ? 'Available' : 'Occupied';
+    }
+    
+    switch (rental.vacancyStatus) {
       case 'verified_vacant':
         return 'Available';
       case 'verified_occupied':
@@ -174,6 +193,31 @@ const RentalDetail = ({ route, navigation }) => {
       default:
         return 'Status Unknown';
     }
+  };
+
+  const getStatusBadgeIcon = (rental) => {
+    if (rental.adminOverride?.isActive) {
+      return 'shield-checkmark';
+    }
+    
+    switch (rental.vacancyStatus) {
+      case 'verified_vacant':
+      case 'verified_occupied':
+        return 'checkmark-circle';
+      default:
+        return 'help-circle';
+    }
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   const renderImage = () => {
@@ -231,21 +275,29 @@ const RentalDetail = ({ route, navigation }) => {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Image Section */}
-      {renderImage()}
-
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.rentalName}>{rental.name}</Text>
         <View style={[
           styles.statusBadge,
-          { backgroundColor: getVacancyStatusColor(rental.vacancyStatus) }
+          { backgroundColor: getVacancyStatusColor(rental) }
         ]}>
+          <Ionicons 
+            name={getStatusBadgeIcon(rental)} 
+            size={16} 
+            color="#fff" 
+            style={styles.statusIcon}
+          />
           <Text style={styles.statusText}>
-            {getVacancyStatusText(rental.vacancyStatus)}
+            {getVacancyStatusText(rental)}
           </Text>
         </View>
       </View>
+
+
+
+      {/* Image Section */}
+      {renderImage()}
 
       {/* Main Info */}
       <View style={styles.infoSection}>
@@ -277,26 +329,10 @@ const RentalDetail = ({ route, navigation }) => {
             <Text style={styles.priceValue}>KSh {rental.amount.toLocaleString()}</Text>
           </View>
         </View>
-
-        {/* <View style={styles.infoRow}>
-          <Ionicons name="call" size={24} color="#D97706" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Caretaker</Text>
-            <Text style={styles.infoValue}>{rental.caretakerNumber}</Text>
-          </View>
-          <View style={styles.contactButtons}>
-            <TouchableOpacity onPress={callCaretaker} style={[styles.actionButton, styles.callButton]}>
-              <Ionicons name="call" size={16} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={whatsappCaretaker} style={[styles.actionButton, styles.whatsappButton]}>
-              <Ionicons name="logo-whatsapp" size={16} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        </View> */}
       </View>
 
-      {/* Community Votes - Subtle */}
-      {rental.voteStats && rental.voteStats.totalVotes > 0 && (
+      {/* Community Votes - Only show if not admin overridden */}
+      {!rental.adminOverride?.isActive && rental.voteStats && rental.voteStats.totalVotes > 0 && (
         <View style={styles.subtleVoteSection}>
           <Text style={styles.subtleVoteText}>
             {rental.voteStats.totalVotes} community vote{rental.voteStats.totalVotes !== 1 ? 's' : ''}
@@ -304,42 +340,56 @@ const RentalDetail = ({ route, navigation }) => {
         </View>
       )}
 
-      {/* Voting Buttons - Prominent */}
-      <View style={styles.votingSection}>
-        <Text style={styles.votingSectionTitle}>Help Others - Vote on Availability</Text>
-        <Text style={styles.votingSubtitle}>Share what you know about this rental</Text>
-        <View style={styles.votingButtons}>
-          <TouchableOpacity
-            style={[styles.voteButton, styles.vacantButton]}
-            onPress={() => handleVote(true)}
-            disabled={votingLoading}
-          >
-            {votingLoading ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="checkmark-circle" size={24} color="#fff" />
-                <Text style={styles.voteButtonText}>It's Available</Text>
-              </>
-            )}
-          </TouchableOpacity>
+      {/* Voting Buttons - Hide if admin override is active */}
+      {!rental.adminOverride?.isActive && (
+        <View style={styles.votingSection}>
+          <Text style={styles.votingSectionTitle}>Help Others - Vote on Availability</Text>
+          <Text style={styles.votingSubtitle}>Share what you know about this rental</Text>
+          <View style={styles.votingButtons}>
+            <TouchableOpacity
+              style={[styles.voteButton, styles.vacantButton]}
+              onPress={() => handleVote(true)}
+              disabled={votingLoading}
+            >
+              {votingLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                  <Text style={styles.voteButtonText}>It's Available</Text>
+                </>
+              )}
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.voteButton, styles.occupiedButton]}
-            onPress={() => handleVote(false)}
-            disabled={votingLoading}
-          >
-            {votingLoading ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="close-circle" size={24} color="#fff" />
-                <Text style={styles.voteButtonText}>It's Occupied</Text>
-              </>
-            )}
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.voteButton, styles.occupiedButton]}
+              onPress={() => handleVote(false)}
+              disabled={votingLoading}
+            >
+              {votingLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="close-circle" size={24} color="#fff" />
+                  <Text style={styles.voteButtonText}>It's Occupied</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      )}
+
+      {/* Voting disabled notice for admin override */}
+      {rental.adminOverride?.isActive && (
+        <View style={styles.votingDisabledSection}>
+          <View style={styles.votingDisabledContent}>
+            <Ionicons name="lock-closed" size={20} color="#6B7280" />
+            <Text style={styles.votingDisabledText}>
+              Community voting is disabled for admin-verified rentals
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* Inquiry Button */}
       <TouchableOpacity
@@ -425,189 +475,194 @@ const RentalDetail = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: 'ivory',
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f8fafc',
   },
   loadingText: {
     marginTop: 10,
-    color: '#6b7280',
     fontSize: 16,
+    color: '#6B7280',
   },
-  // Image Styles
-  imageContainer: {
-    width: screenWidth,
-    aspectRatio: 3.6,
-    position: 'relative',
-  },
- rentalImage: {
-  width: '100%',
-  height: '100%',
-  resizeMode: 'contain',
-},
-  imageLoadingContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f3f4f6',
-    zIndex: 1,
-  },
-  imageErrorContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f3f4f6',
-  },
-  imageErrorText: {
-    marginTop: 8,
-    color: '#6b7280',
-    fontSize: 14,
-  },
-  placeholderImage: {
-    width: screenWidth,
-    height: 250,
-    backgroundColor: '#f3f4f6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  placeholderText: {
-    marginTop: 12,
-    color: '#6b7280',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  // Header Styles
   header: {
     backgroundColor: '#fff',
     padding: 20,
+    paddingTop: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    alignItems: 'flex-start',
+    borderBottomWidth: 1,
+    marginBottom: 12,
+    borderBottomColor: '#e5e7eb',
   },
   rentalName: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#1f2937',
     flex: 1,
+    marginRight: 15,
   },
   statusBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 20,
+    minWidth: 100,
+    justifyContent: 'center',
+  },
+  statusIcon: {
+    marginRight: 4,
   },
   statusText: {
     color: '#fff',
-    fontSize: 13,
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '600',
   },
-  // Info Section Styles
+  
+ imageContainer: {
+  width: '100%',
+  aspectRatio: 3.75, // match exact 750:200 ratio
+  backgroundColor: '#f3f4f6',
+  borderRadius: 12,
+  overflow: 'hidden',
+  marginBottom: 12,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.1,
+  shadowRadius: 4,
+  elevation: 2,
+},
+
+
+rentalImage: {
+  width: '100%',
+  height: '100%',
+  resizeMode: 'cover',
+},
+
+imageLoadingContainer: {
+  ...StyleSheet.absoluteFillObject,
+  justifyContent: 'center',
+  alignItems: 'center',
+  backgroundColor: '#f3f4f6',
+  zIndex: 1,
+},
+
+imageErrorContainer: {
+  ...StyleSheet.absoluteFillObject,
+  justifyContent: 'center',
+  alignItems: 'center',
+  backgroundColor: '#f3f4f6',
+},
+
+imageErrorText: {
+  fontSize: 14,
+  color: '#6B7280',
+  marginTop: 8,
+},
+
+placeholderImage: {
+  width: '100%',
+  aspectRatio: 3.75, // match full image shape to avoid size jump
+  backgroundColor: '#f3f4f6',
+  justifyContent: 'center',
+  alignItems: 'center',
+  borderRadius: 12,
+  marginBottom: 12,
+},
+
+
+placeholderText: {
+  fontSize: 14,
+  color: '#6B7280',
+  marginTop: 8,
+},
+
   infoSection: {
     backgroundColor: '#fff',
-    marginTop: 12,
-    padding: 20,
+    margin: 16,
+    borderRadius: 12,
+    padding: 16,
+    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
   },
   infoContent: {
     flex: 1,
-    marginLeft: 15,
+    marginLeft: 12,
   },
   infoLabel: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 4,
-    fontWeight: '500',
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 2,
   },
   infoValue: {
     fontSize: 16,
     color: '#1f2937',
-    fontWeight: '600',
+    fontWeight: '500',
   },
   priceValue: {
-    fontSize: 22,
+    fontSize: 18,
     color: '#059669',
     fontWeight: 'bold',
   },
   actionButton: {
-    padding: 10,
-    borderRadius: 24,
-    backgroundColor: '#f0fdf4',
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#f0f9ff',
   },
-  contactButtons: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  callButton: {
-    backgroundColor: '#059669',
-  },
-  whatsappButton: {
-    backgroundColor: '#25D366',
-  },
-  // Subtle Vote Section
   subtleVoteSection: {
-    backgroundColor: '#f9fafb',
-    marginTop: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: '#d1d5db',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginBottom: 8,
   },
   subtleVoteText: {
-    fontSize: 13,
-    color: '#6b7280',
+    fontSize: 12,
+    color: '#6B7280',
     fontStyle: 'italic',
   },
-  // Voting Section Styles
   votingSection: {
     backgroundColor: '#fff',
-    marginTop: 12,
-    padding: 24,
+    margin: 16,
+    borderRadius: 12,
+    padding: 20,
+    elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 3,
   },
   votingSectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#1f2937',
-    marginBottom: 6,
     textAlign: 'center',
+    marginBottom: 4,
   },
   votingSubtitle: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#6B7280',
     textAlign: 'center',
     marginBottom: 20,
   },
   votingButtons: {
     flexDirection: 'row',
-    gap: 16,
+    justifyContent: 'space-between',
+    gap: 12,
   },
   voteButton: {
     flex: 1,
@@ -616,12 +671,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 16,
     borderRadius: 12,
-    gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
+    gap: 8,
   },
   vacantButton: {
     backgroundColor: '#059669',
@@ -631,40 +681,52 @@ const styles = StyleSheet.create({
   },
   voteButtonText: {
     color: '#fff',
-    fontWeight: 'bold',
     fontSize: 16,
+    fontWeight: '600',
   },
-  // Inquiry Button
-  inquiryButton: {
-    backgroundColor: '#059669',
-    margin: 20,
-    padding: 18,
+  votingDisabledSection: {
+    backgroundColor: '#f9fafb',
+    margin: 16,
     borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  votingDisabledContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 5,
+    gap: 8,
+  },
+  votingDisabledText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  inquiryButton: {
+    backgroundColor: '#2563eb',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: 16,
+    padding: 16,
+    borderRadius: 12,
+    gap: 8,
   },
   inquiryButtonText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '600',
   },
-  // Modal Styles
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     maxHeight: '80%',
   },
   modalHeader: {
@@ -676,32 +738,32 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e5e7eb',
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#1f2937',
   },
   closeButton: {
-    padding: 6,
+    padding: 4,
   },
   formContainer: {
     padding: 20,
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   inputLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1f2937',
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
     marginBottom: 8,
   },
   textInput: {
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#d1d5db',
-    borderRadius: 10,
-    padding: 14,
+    borderRadius: 8,
+    padding: 12,
     fontSize: 16,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#fff',
   },
   messageInput: {
     height: 100,
@@ -712,17 +774,12 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
-    marginTop: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
+    marginTop: 8,
   },
   submitButtonText: {
     color: '#fff',
-    fontSize: 17,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 
