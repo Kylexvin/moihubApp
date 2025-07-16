@@ -1,48 +1,618 @@
-import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  Alert,
+  Modal,
+  ActivityIndicator,
+  RefreshControl,
+  Switch,
+  Picker,
+  FlatList,
+  Dimensions,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
-const NotificationManagement = ({ navigation }) => {
-  return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Push Notification Management</Text>
-          <Text style={styles.description}>Send and manage push notifications to users</Text>
-        </View>
+const { width, height } = Dimensions.get('window');
 
-        <View style={styles.comingSoonCard}>
-          <Icon name="build" size={48} color="#6b7280" />
-          <Text style={styles.comingSoonTitle}>Coming Soon</Text>
-          <Text style={styles.comingSoonText}>
-            This feature is currently under development. Check back soon for updates!
+const NotificationManagement = () => {
+  // State Management
+  const [activeTab, setActiveTab] = useState('users');
+  const [users, setUsers] = useState([]);
+  const [stats, setStats] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedRole, setSelectedRole] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  
+  // Modal States
+  const [showPushModal, setShowPushModal] = useState(false);
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  
+  // Push Notification States
+  const [pushTitle, setPushTitle] = useState('');
+  const [pushBody, setPushBody] = useState('');
+  const [pushData, setPushData] = useState('');
+  const [pushTarget, setPushTarget] = useState('all');
+  const [pushRole, setPushRole] = useState('user');
+  const [pushUserIds, setPushUserIds] = useState('');
+  const [pushHoursAgo, setPushHoursAgo] = useState('24');
+
+  const API_BASE = 'http://your-api-url.com/api/admin';
+
+  // Load initial data
+  useEffect(() => {
+    loadUsers();
+    loadStats();
+  }, [currentPage, selectedRole, searchQuery]);
+
+  // API Calls
+  const apiCall = async (endpoint, options = {}) => {
+    try {
+      const response = await fetch(`${API_BASE}${endpoint}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          // Add your auth headers here
+        },
+        ...options,
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('API call error:', error);
+      Alert.alert('Error', error.message);
+      return null;
+    }
+  };
+
+  const loadUsers = async () => {
+    setLoading(true);
+    const params = new URLSearchParams({
+      page: currentPage.toString(),
+      limit: '20',
+      ...(selectedRole && { role: selectedRole }),
+      ...(searchQuery && { search: searchQuery }),
+    });
+    
+    const data = await apiCall(`/users?${params}`);
+    if (data) {
+      setUsers(data.users);
+      setTotalPages(data.pagination.totalPages);
+    }
+    setLoading(false);
+  };
+
+  const loadStats = async () => {
+    const data = await apiCall('/stats');
+    if (data) {
+      setStats(data);
+    }
+  };
+
+  const loadUserDetails = async (userId) => {
+    const data = await apiCall(`/users/${userId}`);
+    if (data) {
+      setSelectedUser(data);
+      setShowUserModal(true);
+    }
+  };
+
+  // User Actions
+  const deactivateUser = async (userId) => {
+    Alert.alert(
+      'Confirm Deactivation',
+      'Are you sure you want to deactivate this user?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Deactivate',
+          style: 'destructive',
+          onPress: async () => {
+            const data = await apiCall(`/users/${userId}/deactivate`, {
+              method: 'PATCH',
+              body: JSON.stringify({ reason: 'Admin action' }),
+            });
+            if (data) {
+              Alert.alert('Success', 'User deactivated successfully');
+              loadUsers();
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const deleteUser = async (userId) => {
+    Alert.alert(
+      'Confirm Deletion',
+      'This action cannot be undone. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const data = await apiCall(`/users/${userId}`, {
+              method: 'DELETE',
+              body: JSON.stringify({ confirmDelete: true }),
+            });
+            if (data) {
+              Alert.alert('Success', 'User deleted successfully');
+              loadUsers();
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const resetPushToken = async (userId) => {
+    const data = await apiCall(`/users/${userId}/reset-push-token`, {
+      method: 'PATCH',
+    });
+    if (data) {
+      Alert.alert('Success', 'Push token reset successfully');
+      loadUsers();
+    }
+  };
+
+  const forcePasswordReset = async (userId) => {
+    const data = await apiCall(`/users/${userId}/force-password-reset`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: 'Admin forced reset' }),
+    });
+    if (data) {
+      Alert.alert('Success', 'Password reset forced successfully');
+    }
+  };
+
+  // Push Notification Functions
+  const sendPushNotification = async () => {
+    if (!pushTitle || !pushBody) {
+      Alert.alert('Error', 'Title and body are required');
+      return;
+    }
+
+    const pushDataObj = pushData ? JSON.parse(pushData) : {};
+    let endpoint = '';
+    let body = { title: pushTitle, body: pushBody, data: pushDataObj };
+
+    switch (pushTarget) {
+      case 'all':
+        endpoint = '/push/all';
+        break;
+      case 'role':
+        endpoint = '/push/role';
+        body.role = pushRole;
+        break;
+      case 'users':
+        endpoint = '/push/users';
+        body.userIds = pushUserIds.split(',').map(id => id.trim());
+        break;
+      case 'active':
+        endpoint = '/push/active';
+        body.hoursAgo = parseInt(pushHoursAgo);
+        break;
+      default:
+        Alert.alert('Error', 'Invalid push target');
+        return;
+    }
+
+    const data = await apiCall(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+
+    if (data) {
+      Alert.alert('Success', `Push notification sent: ${data.result.message}`);
+      setShowPushModal(false);
+      // Reset form
+      setPushTitle('');
+      setPushBody('');
+      setPushData('');
+      setPushUserIds('');
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadUsers();
+    await loadStats();
+    setRefreshing(false);
+  };
+
+  // Render Functions
+  const renderUserItem = ({ item }) => (
+    <View style={styles.userCard}>
+      <View style={styles.userInfo}>
+        <Text style={styles.userName}>{item.username}</Text>
+        <Text style={styles.userEmail}>{item.email}</Text>
+        <View style={styles.userMeta}>
+          <Text style={[styles.userRole, { color: getRoleColor(item.role) }]}>
+            {item.role.toUpperCase()}
+          </Text>
+          <Text style={styles.userStatus}>
+            {item.isOnline ? '🟢 Online' : '🔴 Offline'}
+          </Text>
+          <Text style={styles.userVerified}>
+            {item.emailVerified ? '✅ Verified' : '❌ Unverified'}
           </Text>
         </View>
-
-        <View style={styles.featuresContainer}>
-          <Text style={styles.featuresTitle}>Planned Features:</Text>
-          {[
-            'Send targeted push notifications',
-            'Schedule notification campaigns',
-            'Track notification delivery and engagement',
-            'Manage notification templates',
-            'Configure notification preferences',
-            'Segment users for targeted messaging',
-            'A/B test notification content',
-            'Monitor notification performance metrics',
-          ].map((feature, index) => (
-            <View key={index} style={styles.featureItem}>
-              <Icon name="check-circle-outline" size={20} color="#10b981" />
-              <Text style={styles.featureText}>{feature}</Text>
-            </View>
-          ))}
-        </View>
-
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Icon name="arrow-back" size={20} color="#fff" />
-          <Text style={styles.backButtonText}>Back to Dashboard</Text>
+      </View>
+      <View style={styles.userActions}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => loadUserDetails(item._id)}
+        >
+          <Ionicons name="eye" size={20} color="#007AFF" />
         </TouchableOpacity>
-      </ScrollView>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => deactivateUser(item._id)}
+        >
+          <Ionicons name="pause" size={20} color="#FF9500" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => deleteUser(item._id)}
+        >
+          <Ionicons name="trash" size={20} color="#FF3B30" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderStatsCard = (title, value, icon, color) => (
+    <View style={[styles.statsCard, { borderLeftColor: color }]}>
+      <View style={styles.statsContent}>
+        <Text style={styles.statsTitle}>{title}</Text>
+        <Text style={[styles.statsValue, { color }]}>{value}</Text>
+      </View>
+      <Ionicons name={icon} size={24} color={color} />
+    </View>
+  );
+
+  const getRoleColor = (role) => {
+    const colors = {
+      admin: '#FF3B30',
+      writer: '#007AFF',
+      vendor: '#34C759',
+      shopowner: '#FF9500',
+      user: '#8E8E93',
+    };
+    return colors[role] || '#8E8E93';
+  };
+
+  const renderPushModal = () => (
+    <Modal visible={showPushModal} animationType="slide" transparent>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Send Push Notification</Text>
+            <TouchableOpacity onPress={() => setShowPushModal(false)}>
+              <Ionicons name="close" size={24} color="#000" />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView style={styles.modalBody}>
+            <Text style={styles.inputLabel}>Target</Text>
+            <Picker
+              selectedValue={pushTarget}
+              onValueChange={setPushTarget}
+              style={styles.picker}
+            >
+              <Picker.Item label="All Users" value="all" />
+              <Picker.Item label="By Role" value="role" />
+              <Picker.Item label="Specific Users" value="users" />
+              <Picker.Item label="Active Users" value="active" />
+            </Picker>
+
+            {pushTarget === 'role' && (
+              <>
+                <Text style={styles.inputLabel}>Role</Text>
+                <Picker
+                  selectedValue={pushRole}
+                  onValueChange={setPushRole}
+                  style={styles.picker}
+                >
+                  <Picker.Item label="User" value="user" />
+                  <Picker.Item label="Admin" value="admin" />
+                  <Picker.Item label="Writer" value="writer" />
+                  <Picker.Item label="Vendor" value="vendor" />
+                  <Picker.Item label="Shop Owner" value="shopowner" />
+                </Picker>
+              </>
+            )}
+
+            {pushTarget === 'users' && (
+              <>
+                <Text style={styles.inputLabel}>User IDs (comma-separated)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={pushUserIds}
+                  onChangeText={setPushUserIds}
+                  placeholder="user1,user2,user3"
+                />
+              </>
+            )}
+
+            {pushTarget === 'active' && (
+              <>
+                <Text style={styles.inputLabel}>Hours Ago</Text>
+                <TextInput
+                  style={styles.input}
+                  value={pushHoursAgo}
+                  onChangeText={setPushHoursAgo}
+                  placeholder="24"
+                  keyboardType="numeric"
+                />
+              </>
+            )}
+
+            <Text style={styles.inputLabel}>Title *</Text>
+            <TextInput
+              style={styles.input}
+              value={pushTitle}
+              onChangeText={setPushTitle}
+              placeholder="Notification title"
+            />
+
+            <Text style={styles.inputLabel}>Body *</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={pushBody}
+              onChangeText={setPushBody}
+              placeholder="Notification body"
+              multiline
+            />
+
+            <Text style={styles.inputLabel}>Data (JSON)</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={pushData}
+              onChangeText={setPushData}
+              placeholder='{"key": "value"}'
+              multiline
+            />
+          </ScrollView>
+
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              style={[styles.button, styles.cancelButton]}
+              onPress={() => setShowPushModal(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, styles.sendButton]}
+              onPress={sendPushNotification}
+            >
+              <Text style={styles.sendButtonText}>Send</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderUserModal = () => (
+    <Modal visible={showUserModal} animationType="slide" transparent>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>User Details</Text>
+            <TouchableOpacity onPress={() => setShowUserModal(false)}>
+              <Ionicons name="close" size={24} color="#000" />
+            </TouchableOpacity>
+          </View>
+          
+          {selectedUser && (
+            <ScrollView style={styles.modalBody}>
+              <View style={styles.userDetailRow}>
+                <Text style={styles.detailLabel}>Username:</Text>
+                <Text style={styles.detailValue}>{selectedUser.username}</Text>
+              </View>
+              <View style={styles.userDetailRow}>
+                <Text style={styles.detailLabel}>Email:</Text>
+                <Text style={styles.detailValue}>{selectedUser.email}</Text>
+              </View>
+              <View style={styles.userDetailRow}>
+                <Text style={styles.detailLabel}>Role:</Text>
+                <Text style={[styles.detailValue, { color: getRoleColor(selectedUser.role) }]}>
+                  {selectedUser.role.toUpperCase()}
+                </Text>
+              </View>
+              <View style={styles.userDetailRow}>
+                <Text style={styles.detailLabel}>Status:</Text>
+                <Text style={styles.detailValue}>
+                  {selectedUser.isOnline ? 'Online' : 'Offline'}
+                </Text>
+              </View>
+              <View style={styles.userDetailRow}>
+                <Text style={styles.detailLabel}>Verified:</Text>
+                <Text style={styles.detailValue}>
+                  {selectedUser.emailVerified ? 'Yes' : 'No'}
+                </Text>
+              </View>
+              <View style={styles.userDetailRow}>
+                <Text style={styles.detailLabel}>Push Token:</Text>
+                <Text style={styles.detailValue}>
+                  {selectedUser.expoPushToken ? 'Available' : 'Not Available'}
+                </Text>
+              </View>
+              <View style={styles.userDetailRow}>
+                <Text style={styles.detailLabel}>Created:</Text>
+                <Text style={styles.detailValue}>
+                  {new Date(selectedUser.createdAt).toLocaleDateString()}
+                </Text>
+              </View>
+              <View style={styles.userDetailRow}>
+                <Text style={styles.detailLabel}>Last Active:</Text>
+                <Text style={styles.detailValue}>
+                  {selectedUser.lastActiveAt ? 
+                    new Date(selectedUser.lastActiveAt).toLocaleDateString() : 
+                    'Never'
+                  }
+                </Text>
+              </View>
+
+              <View style={styles.actionButtons}>
+                <TouchableOpacity
+                  style={[styles.button, styles.warningButton]}
+                  onPress={() => resetPushToken(selectedUser._id)}
+                >
+                  <Text style={styles.buttonText}>Reset Push Token</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.button, styles.warningButton]}
+                  onPress={() => forcePasswordReset(selectedUser._id)}
+                >
+                  <Text style={styles.buttonText}>Force Password Reset</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Admin Panel</Text>
+        <TouchableOpacity onPress={() => setShowPushModal(true)}>
+          <Ionicons name="notifications" size={24} color="#007AFF" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Tabs */}
+      <View style={styles.tabs}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'users' && styles.activeTab]}
+          onPress={() => setActiveTab('users')}
+        >
+          <Text style={[styles.tabText, activeTab === 'users' && styles.activeTabText]}>
+            Users
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'stats' && styles.activeTab]}
+          onPress={() => setActiveTab('stats')}
+        >
+          <Text style={[styles.tabText, activeTab === 'stats' && styles.activeTabText]}>
+            Statistics
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Content */}
+      {activeTab === 'users' ? (
+        <View style={styles.content}>
+          {/* Search and Filter */}
+          <View style={styles.searchContainer}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search users..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            <Picker
+              selectedValue={selectedRole}
+              onValueChange={setSelectedRole}
+              style={styles.roleFilter}
+            >
+              <Picker.Item label="All Roles" value="" />
+              <Picker.Item label="Users" value="user" />
+              <Picker.Item label="Admins" value="admin" />
+              <Picker.Item label="Writers" value="writer" />
+              <Picker.Item label="Vendors" value="vendor" />
+              <Picker.Item label="Shop Owners" value="shopowner" />
+            </Picker>
+          </View>
+
+          {/* Users List */}
+          <FlatList
+            data={users}
+            renderItem={renderUserItem}
+            keyExtractor={(item) => item._id}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            ListEmptyComponent={
+              <Text style={styles.emptyText}>No users found</Text>
+            }
+          />
+
+          {/* Pagination */}
+          <View style={styles.pagination}>
+            <TouchableOpacity
+              style={[styles.paginationButton, currentPage === 1 && styles.disabledButton]}
+              onPress={() => setCurrentPage(currentPage - 1)}
+              disabled={currentPage === 1}
+            >
+              <Text style={styles.paginationButtonText}>Previous</Text>
+            </TouchableOpacity>
+            <Text style={styles.paginationText}>{currentPage} of {totalPages}</Text>
+            <TouchableOpacity
+              style={[styles.paginationButton, currentPage === totalPages && styles.disabledButton]}
+              onPress={() => setCurrentPage(currentPage + 1)}
+              disabled={currentPage === totalPages}
+            >
+              <Text style={styles.paginationButtonText}>Next</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <ScrollView 
+          style={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          {/* Stats Cards */}
+          <View style={styles.statsContainer}>
+            {renderStatsCard('Total Users', stats.totalUsers, 'people', '#007AFF')}
+            {renderStatsCard('Verified Users', stats.verifiedUsers, 'checkmark-circle', '#34C759')}
+            {renderStatsCard('Online Users', stats.onlineUsers, 'radio-button-on', '#30D158')}
+            {renderStatsCard('Push Enabled', stats.usersWithPushTokens, 'notifications', '#FF9500')}
+            {renderStatsCard('New This Week', stats.recentRegistrations, 'trending-up', '#FF3B30')}
+          </View>
+
+          {/* Users by Role */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Users by Role</Text>
+            {stats.usersByRole && stats.usersByRole.map((role, index) => (
+              <View key={index} style={styles.roleRow}>
+                <Text style={styles.roleLabel}>{role._id.toUpperCase()}</Text>
+                <Text style={[styles.roleCount, { color: getRoleColor(role._id) }]}>
+                  {role.count}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+      )}
+
+      {/* Modals */}
+      {renderPushModal()}
+      {renderUserModal()}
+
+      {/* Loading Overlay */}
+      {loading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#007AFF" />
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -50,96 +620,316 @@ const NotificationManagement = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  scrollView: {
-    flex: 1,
+    backgroundColor: '#f5f5f5',
   },
   header: {
-    padding: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: '#e0e0e0',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 8,
-  },
-  description: {
-    fontSize: 16,
-    color: '#6b7280',
-    lineHeight: 24,
-  },
-  comingSoonCard: {
-    backgroundColor: '#fff',
-    margin: 20,
-    padding: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-  },
-  comingSoonTitle: {
+  headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1f2937',
-    marginTop: 16,
-    marginBottom: 8,
   },
-  comingSoonText: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  featuresContainer: {
+  tabs: {
+    flexDirection: 'row',
     backgroundColor: '#fff',
-    margin: 20,
-    marginTop: 0,
-    padding: 20,
-    borderRadius: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  activeTab: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#007AFF',
+  },
+  tabText: {
+    fontSize: 16,
+    color: '#8E8E93',
+  },
+  activeTabText: {
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 2,
+    padding: 12,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  roleFilter: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+  },
+  userCard: {
+    backgroundColor: '#fff',
+    padding: 16,
+    marginBottom: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 3.84,
+    shadowRadius: 4,
   },
-  featuresTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 16,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  featureText: {
-    fontSize: 14,
-    color: '#374151',
-    marginLeft: 12,
+  userInfo: {
     flex: 1,
   },
-  backButton: {
-    backgroundColor: '#2563eb',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    margin: 20,
-    padding: 16,
-    borderRadius: 12,
-  },
-  backButtonText: {
-    color: '#fff',
+  userName: {
     fontSize: 16,
     fontWeight: '600',
-    marginLeft: 8,
+    marginBottom: 4,
+  },
+  userEmail: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  userMeta: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  userRole: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  userStatus: {
+    fontSize: 12,
+  },
+  userVerified: {
+    fontSize: 12,
+  },
+  userActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    padding: 8,
+    borderRadius: 4,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 24,
+  },
+  statsCard: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: (width - 40) / 2,
+    borderLeftWidth: 4,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  statsContent: {
+    flex: 1,
+  },
+  statsTitle: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+  },
+  statsValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  section: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  roleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  roleLabel: {
+    fontSize: 14,
+  },
+  roleCount: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  pagination: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  paginationButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#007AFF',
+    borderRadius: 4,
+  },
+  disabledButton: {
+    backgroundColor: '#ccc',
+  },
+  paginationButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  paginationText: {
+    fontSize: 16,
+  },
+  emptyText: {
+    textAlign: 'center',
+    marginTop: 50,
+    fontSize: 16,
+    color: '#666',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: width * 0.9,
+    maxHeight: height * 0.8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    gap: 12,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+  },
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
+  picker: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+  },
+  button: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#f0f0f0',
+  },
+  cancelButtonText: {
+    color: '#666',
+    fontWeight: '600',
+  },
+  sendButton: {
+    backgroundColor: '#007AFF',
+  },
+  sendButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  warningButton: {
+    backgroundColor: '#FF9500',
+    marginBottom: 12,
+  },
+  buttonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  userDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: '#666',
+    flex: 1,
+  },
+  detailValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 2,
+    textAlign: 'right',
+  },
+  actionButtons: {
+    marginTop: 20,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

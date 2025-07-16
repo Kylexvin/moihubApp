@@ -42,13 +42,7 @@ const AdminDashboard = ({ navigation }) => {
       color: '#8b5cf6',
       route: 'LinkmeManagement',
     },
-    {
-      title: 'Second Hands Management',
-      subtitle: 'Manage used items marketplace',
-      icon: 'refresh',
-      color: '#f59e0b',
-      route: 'SecondhandsManagement',
-    },
+    
     {
       title: 'Push Notifications',
       subtitle: 'Send and manage notifications',
@@ -57,18 +51,18 @@ const AdminDashboard = ({ navigation }) => {
       route: 'NotificationManagement',
     },
     {
-      title: 'Local Services',
-      subtitle: 'Manage local service providers',
+      title: 'Local Services and Organizations',
+      subtitle: 'Manage local service providers and Organizations',
       icon: 'business',
       color: '#06b6d4',
       route: 'LocalServicesManagement',
     },
     {
-      title: 'Roommate Finder',
-      subtitle: 'Manage roommate matching',
-      icon: 'people',
+      title: 'Food Vendor',
+      subtitle: 'Manage food vendors',
+      icon: 'restaurant',
       color: '#ec4899',
-      route: 'RoommateFinderManagement',
+      route: 'FoodVendor',
     },
     {
       title: 'Blog Management',
@@ -78,11 +72,11 @@ const AdminDashboard = ({ navigation }) => {
       route: 'BlogManagement',
     },
     {
-      title: 'News Management',
-      subtitle: 'Manage news articles',
-      icon: 'newspaper',
+      title: 'Home Screen',
+      subtitle: 'Manage home screen content',
+      icon: 'home',
       color: '#6366f1',
-      route: 'NewsManagement',
+      route: 'HomescreenManagement',
     },
   ];
 
@@ -95,13 +89,37 @@ const AdminDashboard = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionTitle}>Management Dashboard</Text>
-        {/* <TouchableOpacity
-      style={styles.button}
-      onPress={() => navigation.navigate('OAuthDebug')}
-    >
-      <Text style={styles.text}>Go to OAuth Debug</Text>
-    </TouchableOpacity> */}
+       <View style={styles.headerContainer}>
+  <Text style={styles.sectionTitle}>📊 Management Dashboard</Text>
+</View>
+{/* <View style={styles.cardsGrid}>
+  <View style={styles.dashboardCard}>
+    <Icon name="people-outline" size={28} color="#10B981" />
+    <Text style={styles.cardTitle}>Users</Text>
+    <Text style={styles.cardValue}>158</Text>
+  </View>
+
+  <View style={styles.dashboardCard}>
+    <Icon name="work-outline" size={28} color="#3B82F6" />
+    <Text style={styles.cardTitle}>Businesses</Text>
+    <Text style={styles.cardValue}>7</Text>
+  </View>
+
+  <View style={styles.dashboardCard}>
+    <Icon name="format-list-bulleted" size={28} color="#F59E0B" />
+    <Text style={styles.cardTitle}>Listings</Text>
+    <Text style={styles.cardValue}>1</Text>
+  </View>
+
+  <View style={styles.dashboardCard}>
+    <Icon name="show-chart" size={28} color="#EF4444" />
+    <Text style={styles.cardTitle}>Activity</Text>
+    <Text style={styles.cardValue}>6</Text>
+  </View>
+</View> */}
+
+
+
         <View style={styles.cardsContainer}>
           {adminCards.map((card, index) => (
             <TouchableOpacity
@@ -124,36 +142,7 @@ const AdminDashboard = ({ navigation }) => {
           ))}
         </View>
 
-        <View style={styles.statsContainer}>
-          <View style={styles.statsHeader}>
-            <Text style={styles.statsTitle}>Quick Overview</Text>
-            <TouchableOpacity 
-              style={styles.viewAllButton}
-              onPress={() => handleCardPress('StatsScreen')}
-            >
-              <Text style={styles.viewAllText}>View All Stats</Text>
-              <Icon name="arrow-forward" size={16} color="#3b82f6" />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>158</Text>
-              <Text style={styles.statLabel}>Total Users</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>7</Text>
-              <Text style={styles.statLabel}>Total Businesses</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>1</Text>
-              <Text style={styles.statLabel}>Active Listings</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>6</Text>
-              <Text style={styles.statLabel}>Recent Activity</Text>
-            </View>
-          </View>
-        </View>
+
 
       </ScrollView>
     </SafeAreaView>
@@ -185,28 +174,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
-  welcomeText: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  adminName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1f2937',
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#dc2626',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  logoutText: {
-    color: '#fff',
-    marginLeft: 4,
-    fontWeight: '600',
-  },
+
   scrollView: {
     flex: 1,
   },
@@ -216,6 +184,7 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     marginHorizontal: 20,
     marginTop: 20,
+    textAlign: 'center',
     marginBottom: 16,
   },
   cardsContainer: {
@@ -342,6 +311,36 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     textAlign: 'center',
   },
+  cardsGrid: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  justifyContent: 'space-between',
+  paddingHorizontal: 20,
+  marginBottom: 20,
+},
+
+dashboardCard: {
+  width: '47%',
+  backgroundColor: '#ffffff',
+  borderRadius: 12,
+  paddingVertical: 20,
+  paddingHorizontal: 12,
+  marginBottom: 16,
+  alignItems: 'center',
+  elevation: 2,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.1,
+  shadowRadius: 2,
+},
+
+cardValue: {
+  fontSize: 24,
+  fontWeight: 'bold',
+  color: '#1f2937',
+  marginTop: 6,
+},
+
 });
 
 export default AdminDashboard;

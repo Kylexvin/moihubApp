@@ -93,11 +93,7 @@ const MainTabNavigator = () => {
         component={MatchesScreen}
         options={{ tabBarLabel: 'Matches' }}
       />
-      <Tab.Screen 
-        name="Messages" 
-        component={MessageStackNavigator}
-        options={{ tabBarLabel: 'Messages' }}
-      />
+     
       <Tab.Screen 
         name="Profile" 
         component={ProfileScreen}

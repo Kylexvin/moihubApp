@@ -119,15 +119,14 @@ const MatchesScreen = ({ navigation }) => {
     ]);
   };
 
-  // Integrated startConversation logic from NewChatScreen
-// Update the startConversation function in your MatchesScreen
+
 const startConversation = async (user) => {
   if (!token) {
     handleAuthError();
     return;
   }
 
-  setStartingChat(user._id); // Keep this for UI state tracking
+  setStartingChat(user._id);
 
   try {
     const res = await fetch(`${API_URL}/messages/conversations`, {
@@ -136,20 +135,18 @@ const startConversation = async (user) => {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      // Use userId instead of _id for the messaging system
       body: JSON.stringify({ participantId: user.userId, chatType: 'linkme' }),
-
     });
 
     if (res.ok) {
       const convo = await res.json();
-      navigation.navigate('Messages', {
+      navigation.navigate('MessageStackNavigator', {
         screen: 'ChatScreen',
         params: {
           conversationId: convo._id,
           conversation: convo,
-          otherUser: user
-        }
+          otherUser: user,
+        },
       });
     } else if (res.status === 401) {
       handleAuthError();

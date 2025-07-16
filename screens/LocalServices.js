@@ -1,173 +1,134 @@
-// screens/LocalServices.js
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
   FlatList,
-  Alert,
+  TouchableOpacity,
+  StyleSheet,
   ActivityIndicator,
-  RefreshControl,
+  Alert,
+  TextInput,
+  ScrollView,
   Dimensions,
-  Linking,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 
-const API_URL = 'http://192.168.100.51:5000/api';
 const { width } = Dimensions.get('window');
 
 const LocalServices = ({ navigation }) => {
-  const [searchQuery, setSearchQuery] = useState('');
   const [categories, setCategories] = useState([]);
-  const [searchResults, setSearchResults] = useState([]);
+  const [filteredCategories, setFilteredCategories] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searching, setSearching] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [searchTimeout, setSearchTimeout] = useState(null);
+  const [error, setError] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Popular categories for quick access
+  const popularCategories = ['Mamafua', 'Plumbing', 'Electrical', 'Cleaning'];
+
+  // Category icons mapping
+  const categoryIcons = {
+    'Mamafua': '👕',
+    'Plumbing': '🔧',
+    'Electrical': '⚡',
+    'Cleaning': '🧹',
+    'Gardening': '🌱',
+    'Carpentry': '🔨',
+    'Painting': '🎨',
+    'Catering': '🍽️',
+    'Security': '🛡️',
+    'Transport': '🚗',
+    'default': '🔧'
+  };
 
   useEffect(() => {
     fetchCategories();
   }, []);
 
+  useEffect(() => {
+    filterCategories();
+  }, [searchQuery, categories]);
+
   const fetchCategories = async () => {
     try {
-      const response = await axios.get(`${API_URL}/services/categories`);
+      setLoading(true);
+      setError(null);
+      const response = await axios.get('api/services/categories');
       setCategories(response.data);
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-      Alert.alert('Error', 'Failed to load categories');
+    } catch (err) {
+      setError('Failed to fetch categories');
+      Alert.alert('Error', 'Failed to load service categories. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSearch = useCallback(async (query) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      setSearching(false);
-      return;
+  const filterCategories = () => {
+    if (searchQuery.trim() === '') {
+      setFilteredCategories(categories);
+    } else {
+      const filtered = categories.filter(category =>
+        category.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        category.description.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredCategories(filtered);
     }
-    
-    setSearching(true);
-    try {
-      const response = await axios.get(`${API_URL}/services/search?q=${encodeURIComponent(query)}`);
-      setSearchResults(response.data);
-    } catch (error) {
-      console.error('Search error:', error);
-      Alert.alert('Search Error', 'Unable to search services. Please try again.');
-    } finally {
-      setSearching(false);
-    }
-  }, []);
-
-  const debouncedSearch = useCallback((query) => {
-    if (searchTimeout) {
-      clearTimeout(searchTimeout);
-    }
-    
-    const timeout = setTimeout(() => {
-      handleSearch(query);
-    }, 500); // 500ms debounce
-    
-    setSearchTimeout(timeout);
-  }, [handleSearch, searchTimeout]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await fetchCategories();
-    setRefreshing(false);
-  }, []);
-
-  const navigateToCategory = (category) => {
-    navigation.navigate('CategoryProviders', { category });
   };
 
-  const handleCall = (phoneNumber, providerName) => {
-    Alert.alert(
-      'Call Service Provider',
-      `Call ${providerName}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Call', 
-          onPress: () => Linking.openURL(`tel:${phoneNumber}`)
-        }
-      ]
+  const handleCategoryPress = (category) => {
+    navigation.navigate('CategoryProviders', {
+      categoryId: category._id,
+      categoryName: category.name,
+    });
+  };
+
+  const getRandomColor = () => {
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', '#FF9FF3', '#54A0FF', '#5F27CD'];
+    return colors[Math.floor(Math.random() * colors.length)];
+  };
+
+  const renderQuickAccessItem = (categoryName) => {
+    const category = categories.find(cat => cat.name === categoryName);
+    if (!category) return null;
+
+    return (
+      <TouchableOpacity
+        key={categoryName}
+        style={[styles.quickAccessItem, { backgroundColor: getRandomColor() }]}
+        onPress={() => handleCategoryPress(category)}
+      >
+        <Text style={styles.quickAccessIcon}>
+          {categoryIcons[categoryName] || categoryIcons.default}
+        </Text>
+        <Text style={styles.quickAccessText}>{categoryName}</Text>
+      </TouchableOpacity>
     );
   };
 
-  const renderCategory = ({ item }) => (
+  const renderCategoryItem = ({ item }) => (
     <TouchableOpacity
       style={styles.categoryCard}
-      onPress={() => navigateToCategory(item)}
-      activeOpacity={0.7}
+      onPress={() => handleCategoryPress(item)}
+      activeOpacity={0.8}
     >
-      <View style={styles.categoryIcon}>
-        <Ionicons name="construct" size={24} color="#2E8B57" />
-      </View>
-      <View style={styles.categoryContent}>
-        <Text style={styles.categoryName}>{item.name}</Text>
-        <Text style={styles.categoryDescription}>
-          Browse {item.name.toLowerCase()} providers
-        </Text>
-      </View>
-      <View style={styles.categoryArrow}>
-        <Ionicons name="chevron-forward" size={20} color="#8FBC8F" />
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderSearchResult = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.searchResultCard}
-      activeOpacity={0.7}
-      onPress={() => navigation.navigate('ServiceDetails', { service: item })}
-    >
-      <View style={styles.serviceHeader}>
-        <View style={styles.serviceIcon}>
-          <Ionicons name="person-circle" size={32} color="#2E8B57" />
+      <View style={styles.categoryHeader}>
+        <View style={styles.categoryIconContainer}>
+          <Text style={styles.categoryIcon}>
+            {categoryIcons[item.name] || categoryIcons.default}
+          </Text>
         </View>
-        <View style={styles.serviceMainInfo}>
-          <Text style={styles.serviceTitle}>{item.title}</Text>
-          <Text style={styles.serviceProvider}>by {item.provider.username}</Text>
-          <Text style={styles.serviceCategory}>{item.serviceType.name}</Text>
+        <View style={styles.categoryContent}>
+          <Text style={styles.categoryName}>{item.name}</Text>
+          <Text style={styles.categoryDescription}>{item.description}</Text>
         </View>
-        <View style={styles.serviceActions}>
-          <TouchableOpacity
-            style={styles.callButton}
-            onPress={() => handleCall(item.phoneNumber, item.provider.username)}
-          >
-            <Ionicons name="call" size={16} color="white" />
-          </TouchableOpacity>
+        <View style={styles.arrowContainer}>
+          <Text style={styles.arrow}>›</Text>
         </View>
       </View>
-      
-      <View style={styles.serviceFooter}>
+      <View style={styles.categoryFooter}>
+        <Text style={styles.availableText}>Available 24/7</Text>
         <View style={styles.ratingContainer}>
-          <Ionicons name="star" size={16} color="#FFD700" />
-          <Text style={styles.rating}>
-            {item.provider.averageRating ? 
-              `${item.provider.averageRating.toFixed(1)} (${item.ratings?.length || 0} reviews)` : 
-              'No ratings yet'
-            }
-          </Text>
-        </View>
-        <View style={styles.verificationBadge}>
-          <Ionicons 
-            name={item.provider.verificationStatus === 'verified' ? "checkmark-circle" : "time"} 
-            size={14} 
-            color={item.provider.verificationStatus === 'verified' ? "#2E8B57" : "#FFA500"} 
-          />
-          <Text style={[
-            styles.verificationText,
-            { color: item.provider.verificationStatus === 'verified' ? "#2E8B57" : "#FFA500" }
-          ]}>
-            {item.provider.verificationStatus === 'verified' ? 'Verified' : 'Pending'}
-          </Text>
+          <Text style={styles.ratingStars}>⭐⭐⭐⭐⭐</Text>
+          <Text style={styles.ratingText}>4.8</Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -175,215 +136,223 @@ const LocalServices = ({ navigation }) => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2E8B57" />
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
         <Text style={styles.loadingText}>Loading services...</Text>
       </View>
     );
   }
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Local Services</Text>
-        <Text style={styles.subtitle}>Find trusted services in your area</Text>
+  if (error) {
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchCategories}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
       </View>
+    );
+  }
 
+  return (
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+
+
+      {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color="#8FBC8F" />
+          <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search services, categories, or providers..."
-            placeholderTextColor="#A0A0A0"
+            placeholder="Search for services..."
+            placeholderTextColor="#999"
             value={searchQuery}
-            onChangeText={(text) => {
-              setSearchQuery(text);
-              debouncedSearch(text);
-            }}
+            onChangeText={setSearchQuery}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity
-              onPress={() => {
-                setSearchQuery('');
-                setSearchResults([]);
-                if (searchTimeout) clearTimeout(searchTimeout);
-              }}
+              style={styles.clearButton}
+              onPress={() => setSearchQuery('')}
             >
-              <Ionicons name="close-circle" size={20} color="#8FBC8F" />
+              <Text style={styles.clearButtonText}>✕</Text>
             </TouchableOpacity>
           )}
         </View>
       </View>
 
-      <ScrollView 
-        style={styles.content}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#2E8B57']}
-            tintColor="#2E8B57"
-          />
-        }
-      >
-        {searching && (
-          <View style={styles.searchingContainer}>
-            <ActivityIndicator size="small" color="#2E8B57" />
-            <Text style={styles.searchingText}>Searching...</Text>
-          </View>
-        )}
+      {/* Quick Access */}
+      {searchQuery === '' && (
+        <View style={styles.quickAccessContainer}>
+          <Text style={styles.sectionTitle}>Popular Services</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.quickAccessRow}>
+              {popularCategories.map(renderQuickAccessItem)}
+            </View>
+          </ScrollView>
+        </View>
+      )}
 
-        {searchQuery.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              Search Results {searchResults.length > 0 && `(${searchResults.length})`}
-            </Text>
-            {searchResults.length > 0 ? (
-              <FlatList
-                data={searchResults}
-                renderItem={renderSearchResult}
-                keyExtractor={(item) => item._id}
-                scrollEnabled={false}
-                showsVerticalScrollIndicator={false}
-              />
-            ) : !searching && (
-              <View style={styles.emptyState}>
-                <Ionicons name="search" size={48} color="#C0C0C0" />
-                <Text style={styles.emptyStateText}>No services found</Text>
-                <Text style={styles.emptyStateSubtext}>
-                  Try searching with different keywords
-                </Text>
-              </View>
-            )}
+      {/* Categories List */}
+      <View style={styles.categoriesContainer}>
+        <Text style={styles.sectionTitle}>
+          {searchQuery ? `Search Results (${filteredCategories.length})` : 'All Services'}
+        </Text>
+        
+        {filteredCategories.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyIcon}>🔍</Text>
+            <Text style={styles.emptyText}>No services found</Text>
+            <Text style={styles.emptySubtext}>Try searching with different keywords</Text>
           </View>
         ) : (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Browse Categories</Text>
-            <FlatList
-              data={categories}
-              renderItem={renderCategory}
-              keyExtractor={(item) => item._id}
-              scrollEnabled={false}
-              showsVerticalScrollIndicator={false}
-            />
-          </View>
+          <FlatList
+            data={filteredCategories}
+            renderItem={renderCategoryItem}
+            keyExtractor={(item) => item._id}
+            scrollEnabled={false}
+            contentContainerStyle={styles.listContainer}
+          />
         )}
-      </ScrollView>
-    </View>
+      </View>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F8F0',
+    backgroundColor: '#f8f9fa',
   },
-  loadingContainer: {
+  centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F0F8F0',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#666',
-    fontWeight: '500',
+    backgroundColor: '#f8f9fa',
   },
   header: {
-    paddingHorizontal: 20,
+    backgroundColor: '#007AFF',
     paddingTop: 60,
-    paddingBottom: 20,
-    backgroundColor: '#2E8B57',
+    paddingBottom: 30,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 25,
+    borderBottomRightRadius: 25,
   },
-  title: {
-    fontSize: 32,
+  headerTitle: {
+    fontSize: 28,
     fontWeight: 'bold',
-    color: 'white',
-    marginBottom: 4,
+    color: '#fff',
+    marginBottom: 5,
   },
-  subtitle: {
+  headerSubtitle: {
     fontSize: 16,
-    color: '#E6F3E6',
+    color: '#E3F2FD',
     opacity: 0.9,
   },
   searchContainer: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#2E8B57',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    paddingTop: 20,
+    paddingBottom: 10,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    paddingHorizontal: 15,
     paddingVertical: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 8,
     elevation: 3,
+  },
+  searchIcon: {
+    fontSize: 18,
+    marginRight: 10,
   },
   searchInput: {
     flex: 1,
-    marginLeft: 12,
     fontSize: 16,
     color: '#333',
-    fontWeight: '400',
   },
-  content: {
-    flex: 1,
+  clearButton: {
+    padding: 5,
   },
-  searchingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 20,
-    backgroundColor: 'white',
-    marginHorizontal: 20,
-    marginTop: 20,
-    borderRadius: 12,
-  },
-  searchingText: {
-    marginLeft: 12,
+  clearButtonText: {
     fontSize: 16,
-    color: '#666',
-    fontWeight: '500',
+    color: '#999',
   },
-  section: {
-    padding: 20,
+  quickAccessContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 20,
   },
   sectionTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#2E8B57',
-    marginBottom: 16,
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 15,
+  },
+  quickAccessRow: {
+    flexDirection: 'row',
+    paddingRight: 20,
+  },
+  quickAccessItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 80,
+    height: 80,
+    borderRadius: 20,
+    marginRight: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  quickAccessIcon: {
+    fontSize: 24,
+    marginBottom: 5,
+  },
+  quickAccessText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
+    textAlign: 'center',
+  },
+  categoriesContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 30,
+  },
+  listContainer: {
+    paddingBottom: 20,
   },
   categoryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    padding: 16,
-    marginBottom: 12,
+    backgroundColor: '#fff',
     borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowRadius: 12,
+    elevation: 5,
   },
-  categoryIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#E6F3E6',
+  categoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  categoryIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#f0f8ff',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 15,
+  },
+  categoryIcon: {
+    fontSize: 24,
   },
   categoryContent: {
     flex: 1,
@@ -391,115 +360,94 @@ const styles = StyleSheet.create({
   categoryName: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#2E8B57',
-    marginBottom: 2,
+    color: '#333',
+    marginBottom: 4,
   },
   categoryDescription: {
     fontSize: 14,
     color: '#666',
-    fontWeight: '400',
+    lineHeight: 20,
   },
-  categoryArrow: {
-    padding: 4,
-  },
-  searchResultCard: {
-    backgroundColor: 'white',
-    padding: 16,
-    marginBottom: 12,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  serviceHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  serviceIcon: {
-    marginRight: 12,
-  },
-  serviceMainInfo: {
-    flex: 1,
-  },
-  serviceTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#2E8B57',
-    marginBottom: 4,
-  },
-  serviceProvider: {
-    fontSize: 15,
-    color: '#4169E1',
-    fontWeight: '500',
-    marginBottom: 2,
-  },
-  serviceCategory: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '400',
-  },
-  serviceActions: {
+  arrowContainer: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#f0f8ff',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  callButton: {
-    backgroundColor: '#2E8B57',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+  arrow: {
+    fontSize: 20,
+    color: '#007AFF',
+    fontWeight: 'bold',
   },
-  serviceFooter: {
+  categoryFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 12,
+    paddingTop: 15,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    borderTopColor: '#f0f0f0',
+  },
+  availableText: {
+    fontSize: 12,
+    color: '#28a745',
+    fontWeight: '600',
   },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  rating: {
-    marginLeft: 6,
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-  },
-  verificationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  verificationText: {
-    marginLeft: 4,
+  ratingStars: {
     fontSize: 12,
+    marginRight: 5,
+  },
+  ratingText: {
+    fontSize: 12,
+    color: '#666',
     fontWeight: '600',
   },
-  emptyState: {
+  emptyContainer: {
     alignItems: 'center',
     paddingVertical: 40,
-    backgroundColor: 'white',
-    borderRadius: 16,
-    marginTop: 20,
   },
-  emptyStateText: {
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 15,
+  },
+  emptyText: {
     fontSize: 18,
-    fontWeight: '600',
     color: '#666',
-    marginTop: 16,
-    marginBottom: 8,
+    fontWeight: '600',
+    marginBottom: 5,
   },
-  emptyStateSubtext: {
+  emptySubtext: {
     fontSize: 14,
     color: '#999',
     textAlign: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#e74c3c',
+    textAlign: 'center',
+    marginHorizontal: 20,
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

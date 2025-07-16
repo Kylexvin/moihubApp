@@ -56,6 +56,17 @@ const MySchoolLanding = ({ navigation }) => {
       available: true
     },
     { 
+      name: 'Admissions', 
+      description: 'Student admissions and enrollment information. Download admission letters.',
+      icon: 'assignment-ind', 
+      screen: 'Admissions',
+      color: '#7B1FA2',
+      bgColor: '#F3E5F5',
+      featured: true,
+      available: true
+    },
+
+    { 
       name: 'Musomi Learning', 
       description: 'Interactive e-learning platform with courses and resources',
       icon: 'menu-book', 
@@ -65,18 +76,9 @@ const MySchoolLanding = ({ navigation }) => {
       featured: true,
       available: true
     },
+
     { 
-      name: 'AI Assistant', 
-      description: 'Get instant help with your academic questions',
-      icon: 'smart-toy', 
-      screen: 'ChatGPT',
-      color: '#7B1FA2',
-      bgColor: '#F3E5F5',
-      featured: false,
-      available: true
-    },
-    { 
-      name: 'MOI Resources', 
+      name: 'Moi University Website', 
       description: 'Official university website and announcements',
       icon: 'language', 
       screen: 'MoiWebsite',
@@ -88,10 +90,11 @@ const MySchoolLanding = ({ navigation }) => {
   ];
 
   const quickServices = [
+    { name: 'Organizations and Societies', icon: 'business', screen: 'Organizations', available: true, color: '#9C27B0' },
     { name: 'Past Papers', status: 'Coming Soon', icon: 'description', available: false, color: '#4CAF50' },
     { name: 'Exam Schedule', status: 'Coming Soon', icon: 'event', available: false, color: '#FF9800' },
     { name: 'Library', status: 'Coming Soon', icon: 'local-library', available: false, color: '#2196F3' },
-    { name: 'Organizations', icon: 'business', screen: 'Organizations', available: true, color: '#9C27B0' },
+    
   ];
 
   const handleServicePress = (service) => {
@@ -202,45 +205,7 @@ const MySchoolLanding = ({ navigation }) => {
     </View>
   );
 
-  const renderUpdates = () => (
-    <View style={styles.updatesSection}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Latest Updates</Text>
-        <TouchableOpacity style={styles.seeAllButton}>
-          <Text style={styles.seeAllText}>View all</Text>
-          <Icon name="arrow-forward" size={16} color="#2E7D32" />
-        </TouchableOpacity>
-      </View>
-      
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.updatesScrollContent}
-      >
-        {blogs.map((blog) => (
-          <TouchableOpacity 
-            key={blog.id} 
-            style={styles.updateCard}
-            onPress={() => handleBlogPress(blog)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.updateHeader}>
-              <View style={styles.updateCategory}>
-                <Text style={styles.updateCategoryText}>{blog.category}</Text>
-              </View>
-              <Text style={styles.updateDate}>{new Date(blog.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</Text>
-            </View>
-            <Text style={styles.updateTitle}>{blog.title}</Text>
-            <Text style={styles.updateExcerpt}>{blog.excerpt}</Text>
-            <View style={styles.updateFooter}>
-              <Text style={styles.readTime}>{blog.readTime}</Text>
-              <Icon name="arrow-forward" size={16} color="#2E7D32" />
-            </View>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </View>
-  );
+
 
   return (
     <View style={styles.container}>
@@ -253,7 +218,7 @@ const MySchoolLanding = ({ navigation }) => {
       >
         {renderFeaturedServices()}
         {renderAllServices()}
-        {renderUpdates()}
+        
       </ScrollView>
     </View>
   );

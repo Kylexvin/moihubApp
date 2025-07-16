@@ -3,7 +3,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import MySchoolLanding from '../screens/myschool/MySchoolLanding';
 import PortalScreen from '../screens/myschool/PortalScreen';
 import MusomiScreen from '../screens/myschool/MusomiScreen';
-import ChatGPTScreen from '../screens/myschool/ChatGPTScreen';
+import AdmissionsScreen from '../screens/myschool/AdmissionsScreen';
 import MoiWebsiteScreen from '../screens/myschool/MoiWebsiteScreen';
 import OrganizationScreen from '../screens/myschool/OrganizationScreen';
 
@@ -29,8 +29,8 @@ const MySchoolNavigator = () => {
         component={MusomiScreen}
       />
       <Stack.Screen 
-        name="ChatGPT" 
-        component={ChatGPTScreen}
+        name="Admissions" 
+        component={AdmissionsScreen}
       />
       <Stack.Screen 
         name="MoiWebsite" 

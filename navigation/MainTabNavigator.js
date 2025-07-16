@@ -1,8 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { StatusBar, Platform, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context'; // Add this import
+import { StatusBar, View } from 'react-native';
 
 import HomeScreen from '../screens/HomeScreen';
 import ServicesStackNavigator from './ServicesStackNavigator';
@@ -12,21 +11,16 @@ import ProfileScreen from '../screens/ProfileScreen';
 const Tab = createBottomTabNavigator();
 
 const MainTabNavigator = () => {
-  const insets = useSafeAreaInsets(); // Use safe area insets instead
-
   return (
-    <View style={{ 
-      flex: 1, 
-      backgroundColor: '#093028',
-      // Use safe area insets instead of StatusBar.currentHeight
-      paddingTop: Platform.OS === 'android' ? insets.top : 0 
-    }}>
+    <View style={{ flex: 1, backgroundColor: '#093028' }}>
       <StatusBar barStyle="light-content" backgroundColor="#093028" translucent={false} />
+
       <Tab.Navigator
         screenOptions={({ route }) => ({
           headerShown: false,
           tabBarIcon: ({ focused, color, size }) => {
             let iconName;
+
             if (route.name === 'Home') {
               iconName = focused ? 'home' : 'home-outline';
             } else if (route.name === 'Services') {
@@ -36,6 +30,7 @@ const MainTabNavigator = () => {
             } else if (route.name === 'Profile') {
               iconName = focused ? 'person' : 'person-outline';
             }
+
             return <Ionicons name={iconName} size={size} color={focused ? '#fff' : '#bbb'} />;
           },
           tabBarActiveTintColor: '#fff',
@@ -48,7 +43,18 @@ const MainTabNavigator = () => {
         })}
       >
         <Tab.Screen name="Home" component={HomeScreen} />
-        <Tab.Screen name="Services" component={ServicesStackNavigator} />
+
+        <Tab.Screen
+          name="Services"
+          component={ServicesStackNavigator}
+          listeners={({ navigation }) => ({
+            tabPress: e => {
+              e.preventDefault();
+              navigation.navigate('Services', { screen: 'ServicesList' });
+            },
+          })}
+        />
+
         <Tab.Screen name="Messages" component={MessageStackNavigator} />
         <Tab.Screen name="Profile" component={ProfileScreen} />
       </Tab.Navigator>

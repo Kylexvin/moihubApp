@@ -12,14 +12,14 @@ import {
   RefreshControl,
   Animated,
   PanResponder,
+  Modal,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Audio } from 'expo-av'; // ✅ This one works
-
+import { Audio } from 'expo-av';
 
 const { width, height } = Dimensions.get('window');
 const API_URL = 'https://moihub.onrender.com/api';
@@ -32,50 +32,50 @@ const SwipeFeed = ({ navigation }) => {
   const [hasMore, setHasMore] = useState(false);
   const [offset, setOffset] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [showBioCard, setShowBioCard] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
   const { token, isAuthenticated } = useAuth();
 
   // Animation values
   const pan = useRef(new Animated.ValueXY()).current;
   const scale = useRef(new Animated.Value(0.95)).current;
   const opacity = useRef(new Animated.Value(0)).current;
-  const bioCardTranslateY = useRef(new Animated.Value(height)).current;
   const likeScale = useRef(new Animated.Value(0)).current;
   const passScale = useRef(new Animated.Value(0)).current;
   const matchSoundRef = useRef(null);
 
-useEffect(() => {
-  // Preload sound
-  const loadSound = async () => {
+  useEffect(() => {
+    // Preload sound
+    const loadSound = async () => {
+      try {
+        const { sound } = await Audio.Sound.createAsync(
+          require('../../assets/sounds/moihub_sound.mp3')
+        );
+        matchSoundRef.current = sound;
+      } catch (err) {
+        console.error('Failed to load match sound:', err);
+      }
+    };
+
+    loadSound();
+
+    return () => {
+      // Cleanup
+      if (matchSoundRef.current) {
+        matchSoundRef.current.unloadAsync();
+      }
+    };
+  }, []);
+
+  const playMatchSound = async () => {
     try {
-      const { sound } = await Audio.Sound.createAsync(
-        require('../../assets/sounds/moihub_sound.mp3')
-      );
-      matchSoundRef.current = sound;
+      if (matchSoundRef.current) {
+        await matchSoundRef.current.replayAsync();
+      }
     } catch (err) {
-      console.error('Failed to load match sound:', err);
+      console.error('Error playing match sound:', err);
     }
   };
-
-  loadSound();
-
-  return () => {
-    // Cleanup
-    if (matchSoundRef.current) {
-      matchSoundRef.current.unloadAsync();
-    }
-  };
-}, []);
-
-const playMatchSound = async () => {
-  try {
-    if (matchSoundRef.current) {
-      await matchSoundRef.current.replayAsync(); // replay avoids delay
-    }
-  } catch (err) {
-    console.error('Error playing match sound:', err);
-  }
-};
 
   const fetchFeed = async (refresh = false) => {
     try {
@@ -156,87 +156,109 @@ const playMatchSound = async () => {
     fetchFeed(true);
   };
 
+  const handleSwipe = async (candidateUserId, direction) => {
+    try {
+      const response = await axios.post(`${API_URL}/linkme/swipe`, 
+        { 
+          swipedUserId: candidateUserId,
+          direction: direction
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-const handleSwipe = async (candidateUserId, direction) => {
-  try {
-    const response = await axios.post(`${API_URL}/linkme/swipe`, 
-      { 
-        swipedUserId: candidateUserId,
-        direction: direction
-      },
-      {
+      const { isMatch, match } = response.data.data;
+      
+      // Move to next candidate
+      const nextIndex = currentIndex + 1;
+      setCurrentIndex(nextIndex);
+      
+      // Check if we need to load more candidates
+      if (nextIndex >= candidates.length - 2 && hasMore) {
+        fetchFeed(false);
+      }
+      
+      // Reset animations with proper timing
+      pan.setValue({ x: 0, y: 0 });
+      
+      // Only animate if there are more candidates
+      if (nextIndex < candidates.length) {
+        scale.setValue(0.95);
+        opacity.setValue(0);
+        likeScale.setValue(0);
+        passScale.setValue(0);
+        
+        // Animate next card entrance
+        setTimeout(() => {
+          Animated.parallel([
+            Animated.timing(scale, {
+              toValue: 1,
+              duration: 300,
+              useNativeDriver: true,
+            }),
+            Animated.timing(opacity, {
+              toValue: 1,
+              duration: 300,
+              useNativeDriver: true,
+            }),
+          ]).start();
+        }, 100);
+      }
+
+      // Handle match notification
+      if (isMatch && match) {
+        playMatchSound();
+        Alert.alert(
+          '💖 It\'s a Match!', 
+          `You and ${match.user.displayName} liked each other!`,
+          [
+            { text: 'Keep Swiping', style: 'default' },
+            { text: 'Send Message', style: 'default', onPress: () => {
+              navigation.navigate('Messages');
+            }}
+          ]
+        );
+      }
+      
+    } catch (err) {
+      console.error('Error swiping:', err);
+      setCurrentIndex(prev => Math.max(0, prev - 1));
+      Alert.alert('Oops!', 'Failed to process swipe. Please try again.');
+    }
+  };
+
+  const handleReportUser = async (reason, details = '') => {
+    if (!candidates[currentIndex]) return;
+
+    setReportLoading(true);
+    try {
+      const response = await axios.post(`${API_URL}/linkme/report`, {
+        reportedUserId: candidates[currentIndex].userId,
+        reason,
+        details
+      }, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+      });
+
+      if (response.data.success) {
+        Alert.alert('Report Submitted', 'Thank you for helping keep our community safe.');
+        setShowReportModal(false);
+        // Move to next candidate after reporting
+        const nextIndex = currentIndex + 1;
+        setCurrentIndex(nextIndex);
       }
-    );
-
-    const { isMatch, match } = response.data.data;
-    
-    // Move to next candidate
-    const nextIndex = currentIndex + 1;
-    setCurrentIndex(nextIndex);
-    setShowBioCard(false);
-    
-    // Check if we need to load more candidates
-    if (nextIndex >= candidates.length - 2 && hasMore) {
-      fetchFeed(false); // Load more candidates
+    } catch (err) {
+      console.error('Error reporting user:', err);
+      Alert.alert('Error', err.response?.data?.message || 'Failed to submit report');
+    } finally {
+      setReportLoading(false);
     }
-    
-    // Reset animations with proper timing
-    pan.setValue({ x: 0, y: 0 });
-    bioCardTranslateY.setValue(height);
-    
-    // Only animate if there are more candidates
-    if (nextIndex < candidates.length) {
-      scale.setValue(0.95);
-      opacity.setValue(0);
-      likeScale.setValue(0);
-      passScale.setValue(0);
-      
-      // Animate next card entrance
-      setTimeout(() => {
-        Animated.parallel([
-          Animated.timing(scale, {
-            toValue: 1,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-          Animated.timing(opacity, {
-            toValue: 1,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      }, 100);
-    }
-
-    // Handle match notification
-    if (isMatch && match) {
-  playMatchSound(); // Add this
-
-  Alert.alert(
-    '💖 It\'s a Match!', 
-    `You and ${match.user.displayName} liked each other!`,
-    [
-      { text: 'Keep Swiping', style: 'default' },
-      { text: 'Send Message', style: 'default', onPress: () => {
-        navigation.navigate('Messages');
-      }}
-    ]
-  );
-}
-
-    
-  } catch (err) {
-    console.error('Error swiping:', err);
-    
-    // Reset the index if swipe failed
-    setCurrentIndex(prev => Math.max(0, prev - 1));
-    
-    Alert.alert('Oops!', 'Failed to process swipe. Please try again.');
-  }
-};
+  };
 
   const animateSwipe = (direction) => {
     const toValue = direction === 'right' ? width + 100 : -width - 100;
@@ -266,18 +288,6 @@ const handleSwipe = async (candidateUserId, direction) => {
 
   const handlePass = () => {
     animateSwipe('left');
-  };
-
-  const toggleBioCard = () => {
-    const toValue = showBioCard ? height : height * 0.4;
-    setShowBioCard(!showBioCard);
-    
-    Animated.spring(bioCardTranslateY, {
-      toValue,
-      useNativeDriver: true,
-      tension: 100,
-      friction: 8,
-    }).start();
   };
 
   // Pan responder for swipe gestures
@@ -384,7 +394,6 @@ const handleSwipe = async (candidateUserId, direction) => {
         ]}
         {...(isTopCard ? panResponder.panHandlers : {})}
       >
-        {/* Main card content */}
         <View style={styles.cardInner}>
           <Image 
             source={{ uri: candidate.profilePhotoUrl }} 
@@ -420,16 +429,37 @@ const handleSwipe = async (candidateUserId, direction) => {
               <Text style={styles.displayName}>{candidate.displayName}</Text>
               <Text style={styles.age}>{candidate.age}</Text>
             </View>
-            
-            <TouchableOpacity 
-              style={styles.infoButton}
-              onPress={toggleBioCard}
-            >
-              <Icon name="information-circle" size={24} color="#C44569" />
-            </TouchableOpacity>
           </LinearGradient>
         </View>
       </Animated.View>
+    );
+  };
+
+  const renderUserDetails = () => {
+    const candidate = candidates[currentIndex];
+    if (!candidate) return null;
+
+    return (
+      <View style={styles.userDetailsContainer}>
+        <View style={styles.userDetailsHeader}>
+          <Text style={styles.userDetailsTitle}>About {candidate.displayName}</Text>
+        </View>
+        
+        <View style={styles.bioSection}>
+          <Text style={styles.bioText}>{candidate.bio}</Text>
+        </View>
+        
+        <View style={styles.interestsSection}>
+          <Text style={styles.interestsTitle}>Interests</Text>
+          <View style={styles.interestsGrid}>
+            {candidate.interests.map((interest, idx) => (
+              <View key={`${candidate._id}-interest-${idx}`} style={styles.interestTag}>
+                <Text style={styles.interestText}>{interest}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
     );
   };
 
@@ -473,43 +503,75 @@ const handleSwipe = async (candidateUserId, direction) => {
     </View>
   );
 
-  const renderBioCard = () => {
-    const candidate = candidates[currentIndex];
-    if (!candidate) return null;
-
-    return (
-      <Animated.View 
-        style={[
-          styles.bioCard,
-          {
-            transform: [{ translateY: bioCardTranslateY }]
-          }
-        ]}
+  const renderFooterActions = () => (
+    <View style={styles.footerActions}>
+      <TouchableOpacity 
+        style={styles.footerActionButton}
+        onPress={() => setShowReportModal(true)}
       >
-        <View style={styles.bioCardHandle} />
-        
-        <ScrollView 
-  style={styles.bioContent}
-  contentContainerStyle={{ paddingBottom: 40 }}
-  showsVerticalScrollIndicator={false}
->
+        <Icon name="flag" size={20} color="#FF6B9D" />
+        <Text style={styles.footerActionText}>Report User</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity 
+        style={styles.footerActionButton}
+        onPress={() => {/* Implement block user */}}
+      >
+        <Icon name="ban" size={20} color="#FF6B9D" />
+        <Text style={styles.footerActionText}>Block User</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
-          <Text style={styles.bioTitle}>About {candidate.displayName}</Text>
+  const renderReportModal = () => (
+    <Modal
+      visible={showReportModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowReportModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Report User</Text>
+            <TouchableOpacity onPress={() => setShowReportModal(false)}>
+              <Icon name="close" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
           
-          <Text style={styles.bioText}>{candidate.bio}</Text>
+          <Text style={styles.modalSubtitle}>Why are you reporting this user?</Text>
           
-          <Text style={styles.interestsTitle}>Interests</Text>
-          <View style={styles.interestsGrid}>
-            {candidate.interests.map((interest, idx) => (
-              <View key={`${candidate._id}-interest-${idx}`} style={styles.interestTag}>
-                <Text style={styles.interestText}>{interest}</Text>
-              </View>
+          <View style={styles.reportOptions}>
+            {[
+              { key: 'inappropriate_content', label: 'Inappropriate Content' },
+              { key: 'harassment', label: 'Harassment' },
+              { key: 'spam', label: 'Spam' },
+              { key: 'fake_profile', label: 'Fake Profile' },
+              { key: 'underage', label: 'Underage User' },
+              { key: 'other', label: 'Other' }
+            ].map((option) => (
+              <TouchableOpacity
+                key={option.key}
+                style={styles.reportOption}
+                onPress={() => handleReportUser(option.key)}
+                disabled={reportLoading}
+              >
+                <Text style={styles.reportOptionText}>{option.label}</Text>
+                <Icon name="chevron-forward" size={20} color="#C44569" />
+              </TouchableOpacity>
             ))}
           </View>
-        </ScrollView>
-      </Animated.View>
-    );
-  };
+          
+          {reportLoading && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator color="#C44569" />
+              <Text style={styles.loadingText}>Submitting report...</Text>
+            </View>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
 
   if (loading && candidates.length === 0) {
     return (
@@ -564,37 +626,61 @@ const handleSwipe = async (candidateUserId, direction) => {
     );
   }
 
-return (
-  <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.container}>
-    <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-      {/* Cards container */}
-      <View style={styles.cardsContainer}>
-        {candidates.slice(currentIndex, currentIndex + 3).map((candidate, index) =>
-          renderCard(candidate, currentIndex + index)
-        )}
-      </View>
+  return (
+    <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.container}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#C44569']}
+            tintColor="#C44569"
+          />
+        }
+      >
+        {/* Cards container */}
+        <View style={styles.cardsContainer}>
+          {candidates.slice(currentIndex, currentIndex + 3).map((candidate, index) =>
+            renderCard(candidate, currentIndex + index)
+          )}
+        </View>
 
-      {/* Action buttons */}
-      {renderActionButtons()}
+        {/* Action buttons */}
+        {renderActionButtons()}
 
-      {/* Bio card */}
-      {renderBioCard()}
-    </ScrollView>
-  </LinearGradient>
-);
+        {/* User details section */}
+        {renderUserDetails()}
+
+        {/* Footer actions */}
+        {renderFooterActions()}
+      </ScrollView>
+
+      {/* Report modal */}
+      {renderReportModal()}
+    </LinearGradient>
+  );
 };
+
+
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingBottom: 85, // Account for bottom tab navigator
   },
+  scrollContainer: {
+    flexGrow: 1,
+    paddingBottom: 20,
+  },
   cardsContainer: {
-    flex: 1,
+    minHeight: height * 0.6, // Use minHeight instead of flex: 1
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 20,
+    marginBottom: 20,
   },
   card: {
     width: width - 40,
@@ -749,11 +835,10 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   bioContent: {
-  flex: 1, // Add this
-  paddingHorizontal: 16,
-  paddingTop: 12,
-},
-
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
   bioTitle: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -880,6 +965,106 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  // Fixed scrollable content styles
+  scrollContent: {
+    flexGrow: 1,
+  },
+  userDetailsContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    marginHorizontal: 20,
+    marginTop: 20,
+    borderRadius: 16,
+    padding: 20,
+  },
+  userDetailsHeader: {
+    marginBottom: 15,
+  },
+  userDetailsTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  bioSection: {
+    marginBottom: 20,
+  },
+  interestsSection: {
+    marginBottom: 10,
+  },
+  footerActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 30,
+    marginBottom: 40,
+    paddingHorizontal: 20,
+  },
+  footerActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 157, 0.3)',
+  },
+  footerActionText: {
+    color: '#FF6B9D',
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#1a1a2e',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+    maxHeight: height * 0.8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: '#E8E8E8',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  reportOptions: {
+    gap: 12,
+  },
+  reportOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(196, 69, 105, 0.3)',
+  },
+  reportOptionText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
 

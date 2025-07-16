@@ -12,12 +12,17 @@ import LinkmeManagement from '../screens/admin/LinkmeManagement';
 import SecondhandsManagement from '../screens/admin/SecondhandsManagement';
 import NotificationManagement from '../screens/admin/NotificationManagement';
 import LocalServicesManagement from '../screens/admin/LocalServicesManagement';
-import RoommateFinderManagement from '../screens/admin/RoommateFinderManagement';
+import FoodVendor from '../screens/admin/FoodVendor';
 import BlogManagement from '../screens/admin/BlogManagement';
-import NewsManagement from '../screens/admin/NewsManagement';
+import HomescreenManagement from '../screens/admin/HomescreenManagement';
 import RentalDashboard from '../screens/admin/RentalDashboard';
 import RentalCreation from '../screens/admin/RentalCreation';
 import RentalEdit from '../screens/admin/RentalEdit';
+import MissionScreen from '../screens/admin/homescreen/MissionScreen';
+import HighlightScreen from '../screens/admin/homescreen/HighlightScreen';
+import VendorScreen from '../screens/admin/homescreen/VendorScreen';
+import AdsScreen from '../screens/admin/homescreen/AdsScreen';
+
 
 
 
@@ -74,7 +79,7 @@ const AdminNavigator = () => {
           component={AdminDashboard}
           options={{
             title: 'Admin Dashboard',
-            headerLeft: null, // Disable back button on main dashboard
+            headerShown: false,
           }}
         />
         <Stack.Screen
@@ -108,7 +113,7 @@ const AdminNavigator = () => {
         <Stack.Screen
           name="LinkmeManagement"
           component={LinkmeManagement}
-          options={{ title: 'LinkMe Management' }}
+          options={{ title: 'LinkMe Management',headerShown: false }}
         />
         <Stack.Screen
           name="SecondhandsManagement"
@@ -123,12 +128,12 @@ const AdminNavigator = () => {
         <Stack.Screen
           name="LocalServicesManagement"
           component={LocalServicesManagement}
-          options={{ title: 'Local Services Management' }}
+          options={{ title: 'Local Services Management', headerShown: false }}
         />
         <Stack.Screen
-          name="RoommateFinderManagement"
-          component={RoommateFinderManagement}
-          options={{ title: 'Roommate Finder Management' }}
+          name="FoodVendor"
+          component={FoodVendor}
+          options={{ title: 'Food Vendor Management', headerShown: false }}
         />
         <Stack.Screen
           name="BlogManagement"
@@ -136,10 +141,31 @@ const AdminNavigator = () => {
           options={{ title: 'Blog Management' }}
         />
         <Stack.Screen
-          name="NewsManagement"
-          component={NewsManagement}
-          options={{ title: 'News Management' }}
+          name="HomescreenManagement"
+          component={HomescreenManagement}
+          options={{ title: 'Home Screen Management', headerShown: false }}
         />
+        <Stack.Screen
+  name="MissionScreen"
+  component={MissionScreen}
+  options={{ title: 'Mission Management ', headerShown: false }}
+/>
+<Stack.Screen
+  name="HighlightScreen"
+  component={HighlightScreen}
+  options={{ title: 'Highlight Management ', headerShown: false }}
+/>
+<Stack.Screen
+  name="VendorScreen"
+  component={VendorScreen}
+  options={{ title: 'Vendor Call Management ', headerShown: false }}
+/>
+<Stack.Screen
+  name="AdsScreen"
+  component={AdsScreen}
+  options={{ title: 'Ads Management' , headerShown: false }}
+/>
+
       </Stack.Navigator>
     </AdminAccessControl>
   );

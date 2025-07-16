@@ -528,7 +528,7 @@ const styles = StyleSheet.create({
   width: '100%',
   aspectRatio: 3.75, // match exact 750:200 ratio
   backgroundColor: '#f3f4f6',
-  borderRadius: 12,
+  borderRadius: 0,
   overflow: 'hidden',
   marginBottom: 12,
   shadowColor: '#000',
@@ -572,7 +572,7 @@ placeholderImage: {
   backgroundColor: '#f3f4f6',
   justifyContent: 'center',
   alignItems: 'center',
-  borderRadius: 12,
+  borderRadius: 0,
   marginBottom: 12,
 },
 

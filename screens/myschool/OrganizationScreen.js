@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,69 +6,81 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  Linking,
+  Alert,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
+import axios from 'axios';
 
 const { width } = Dimensions.get('window');
 
 const OrganizationScreen = ({ navigation }) => {
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [organizations, setOrganizations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
-  const categories = ['All', 'Health', 'Religious', 'Tech', 'Academic'];
+  // Extract unique categories from organizations data
+  const getCategories = () => {
+    const uniqueCategories = [...new Set(organizations.map(org => org.category))];
+    return ['All', ...uniqueCategories];
+  };
 
-  const organizations = [
-    {
-      name: 'Red Cross Kenya',
-      category: 'Health',
-      description: 'Humanitarian services and health programs',
-      icon: '🏥',
-      color: '#FEE2E2',
-      services: ['Blood Donation', 'First Aid Training', 'Emergency Response']
-    },
-    {
-      name: 'Muslim Organizations',
-      category: 'Religious',
-      description: 'Islamic community services and support',
-      icon: '🕌',
-      color: '#E0F2FE',
-      services: ['Prayer Times', 'Community Events', 'Religious Education']
-    },
-    {
-      name: 'TSA (Technical Students Association)',
-      category: 'Academic',
-      description: 'Technical student support and networking',
-      icon: '⚙️',
-      color: '#F0FDF4',
-      services: ['Workshops', 'Career Guidance', 'Technical Support']
-    },
-    {
-      name: 'GDG (Google Developer Groups)',
-      category: 'Tech',
-      description: 'Developer community and tech events',
-      icon: '💻',
-      color: '#FEF3C7',
-      services: ['Tech Talks', 'Coding Bootcamps', 'Networking Events']
-    },
-    {
-      name: 'Kenya Medical Students Association',
-      category: 'Health',
-      description: 'Medical student support and advocacy',
-      icon: '🩺',
-      color: '#F3E8FF',
-      services: ['Study Groups', 'Medical Research', 'Health Campaigns']
-    },
-    {
-      name: 'Engineering Students Society',
-      category: 'Academic',
-      description: 'Engineering student activities and support',
-      icon: '🔧',
-      color: '#E0E7FF',
-      services: ['Project Competitions', 'Industry Visits', 'Mentorship']
+  const categories = getCategories();
+
+  // Fetch organizations from API
+  const fetchOrganizations = async () => {
+    try {
+      setError(null);
+      const response = await axios.get('/api/organizations');
+      
+      if (response.data.success) {
+        setOrganizations(response.data.data);
+      } else {
+        throw new Error(response.data.message || 'Failed to fetch organizations');
+      }
+    } catch (err) {
+      console.error('Error fetching organizations:', err);
+      setError(err.response?.data?.message || err.message || 'Failed to load organizations');
+      
+      // Show error alert
+      Alert.alert(
+        'Error',
+        'Failed to load organizations. Please check your internet connection and try again.',
+        [
+          {
+            text: 'Retry',
+            onPress: () => fetchOrganizations(),
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+        ]
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-  ];
+  };
 
+  // Initial load
+  useEffect(() => {
+    fetchOrganizations();
+  }, []);
+
+  // Pull to refresh
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchOrganizations();
+  };
+
+  // Filter organizations based on selected category
   const filteredOrganizations = selectedCategory === 'All' 
-    ? organizations 
-    : organizations.filter(org => org.category === selectedCategory);
+    ? organizations.filter(org => org.isActive !== false) // Only show active organizations
+    : organizations.filter(org => org.category === selectedCategory && org.isActive !== false);
 
   const renderCategoryTabs = () => (
     <View style={styles.categoryContainer}>
@@ -98,55 +110,134 @@ const OrganizationScreen = ({ navigation }) => {
     </View>
   );
 
+  const handleWhatsAppMessage = (organization) => {
+    // Use the phone number from the API data
+    const phoneNumber = organization.phoneNumber?.replace('+', '') || '254768610613';
+    const message = encodeURIComponent(organization.whatsappMessage || `Hello! I'm interested in learning more about ${organization.name}.`);
+    const whatsappUrl = `whatsapp://send?phone=${phoneNumber}&text=${message}`;
+    
+    Linking.canOpenURL(whatsappUrl)
+      .then((supported) => {
+        if (supported) {
+          return Linking.openURL(whatsappUrl);
+        } else {
+          // If WhatsApp is not installed, try to open in web browser
+          const webUrl = `https://web.whatsapp.com/send?phone=${phoneNumber}&text=${message}`;
+          return Linking.openURL(webUrl);
+        }
+      })
+      .catch((err) => {
+        Alert.alert('Error', 'Unable to open WhatsApp. Please make sure WhatsApp is installed on your device.');
+        console.error('WhatsApp error:', err);
+      });
+  };
+
   const handleOrganizationPress = (organization) => {
     // Navigate to specific organization detail screen
-    // navigation.navigate('OrganizationDetail', { organization });
-    console.log('Navigate to:', organization.name);
+    navigation.navigate('OrganizationDetail', { 
+      organization,
+      organizationId: organization._id 
+    });
   };
+
+  const renderMeetingInfo = (organization) => {
+    const { weeklyMeetingDay, meetingTime, meetingLocation } = organization;
+    
+    if (!weeklyMeetingDay || weeklyMeetingDay === 'N/A' || weeklyMeetingDay === 'Undisclosed') {
+      return null;
+    }
+
+    return (
+      <View style={styles.meetingInfoContainer}>
+        <Text style={styles.meetingInfoTitle}>Meeting Info:</Text>
+        <Text style={styles.meetingInfoText}>
+          {weeklyMeetingDay} at {meetingTime} • {meetingLocation}
+        </Text>
+      </View>
+    );
+  };
+
+  // Loading state
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#0066CC" />
+        <Text style={styles.loadingText}>Loading organizations...</Text>
+      </View>
+    );
+  }
+
+  // Error state with retry option
+  if (error && organizations.length === 0) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Text style={styles.errorText}>Unable to load organizations</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchOrganizations}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Organizations</Text>
-        <Text style={styles.headerSubtitle}>Connect with campus organizations</Text>
-      </View>
-
       {renderCategoryTabs()}
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         <View style={styles.organizationsContainer}>
-          {filteredOrganizations.map((org, index) => (
-            <TouchableOpacity
-              key={index}
-              style={[styles.organizationCard, { backgroundColor: org.color }]}
-              onPress={() => handleOrganizationPress(org)}
-            >
-              <View style={styles.orgHeader}>
-                <Text style={styles.orgIcon}>{org.icon}</Text>
-                <View style={styles.categoryBadge}>
-                  <Text style={styles.categoryBadgeText}>{org.category}</Text>
+          {filteredOrganizations.length === 0 ? (
+            <View style={styles.emptyStateContainer}>
+              <Text style={styles.emptyStateText}>
+                No organizations found in this category
+              </Text>
+            </View>
+          ) : (
+            filteredOrganizations.map((org) => (
+              <TouchableOpacity
+                key={org._id}
+                style={[styles.organizationCard, { backgroundColor: org.color }]}
+                onPress={() => handleOrganizationPress(org)}
+              >
+                <View style={styles.orgHeader}>
+                  <Text style={styles.orgIcon}>{org.icon}</Text>
+                  <View style={styles.categoryBadge}>
+                    <Text style={styles.categoryBadgeText}>{org.category}</Text>
+                  </View>
                 </View>
-              </View>
-              
-              <Text style={styles.orgName}>{org.name}</Text>
-              <Text style={styles.orgDescription}>{org.description}</Text>
-              
-              <View style={styles.servicesContainer}>
-                <Text style={styles.servicesTitle}>Services:</Text>
-                <View style={styles.servicesList}>
-                  {org.services.map((service, serviceIndex) => (
-                    <View key={serviceIndex} style={styles.serviceTag}>
-                      <Text style={styles.serviceText}>{service}</Text>
-                    </View>
-                  ))}
+                
+                <Text style={styles.orgName}>{org.name}</Text>
+                <Text style={styles.orgDescription}>{org.description}</Text>
+                
+                <View style={styles.servicesContainer}>
+                  <Text style={styles.servicesTitle}>Services:</Text>
+                  <View style={styles.servicesList}>
+                    {org.services?.map((service, serviceIndex) => (
+                      <View key={serviceIndex} style={styles.serviceTag}>
+                        <Text style={styles.serviceText}>{service}</Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
-              </View>
-              
-              <View style={styles.actionButton}>
-                <Text style={styles.actionButtonText}>Learn More →</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+                
+                {renderMeetingInfo(org)}
+                
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity 
+                    style={styles.whatsappButton}
+                    onPress={() => handleWhatsAppMessage(org)}
+                  >
+                    <Text style={styles.whatsappButtonText}>💬 WhatsApp</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
         </View>
 
         <View style={styles.joinSection}>
@@ -154,7 +245,14 @@ const OrganizationScreen = ({ navigation }) => {
           <Text style={styles.joinText}>
             Contact the admin to get your organization featured here
           </Text>
-          <TouchableOpacity style={styles.joinButton}>
+          <TouchableOpacity 
+            style={styles.joinButton}
+            onPress={() => {
+              // Navigate to contact admin screen or open contact method
+              // navigation.navigate('ContactAdmin');
+              console.log('Contact admin pressed');
+            }}
+          >
             <Text style={styles.joinButtonText}>Contact Admin</Text>
           </TouchableOpacity>
         </View>
@@ -163,15 +261,16 @@ const OrganizationScreen = ({ navigation }) => {
   );
 };
 
+// Additional styles for new components
 const styles = StyleSheet.create({
-  container: {
+container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
   header: {
     backgroundColor: '#4F46E5',
     padding: 20,
-    paddingTop: 40,
+    paddingTop: 0,
   },
   headerTitle: {
     fontSize: 28,
@@ -286,13 +385,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#475569',
   },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   actionButton: {
-    alignSelf: 'flex-end',
+    flex: 1,
   },
   actionButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#4F46E5',
+  },
+  whatsappButton: {
+    backgroundColor: '#25D366',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginLeft: 12,
+  },
+  whatsappButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   joinSection: {
     backgroundColor: '#FFFFFF',
@@ -331,6 +447,58 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
+  
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#e74c3c',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#0066CC',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  emptyStateContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
+  meetingInfoContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  meetingInfoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 4,
+  },
+  meetingInfoText: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
 });
 
-export default OrganizationScreen;
+export default OrganizationScreen;  

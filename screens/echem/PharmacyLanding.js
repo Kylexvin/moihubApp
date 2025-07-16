@@ -30,7 +30,7 @@ const PharmacyLanding = ({ navigation }) => {
         // const response = await axios.get('api/eshop/vendor/categories/pharmacy/shops');
         
         // Currently using boutique endpoint as mentioned
-        const response = await axios.get('api/eshop/vendor/categories/boutique/shops');
+        const response = await axios.get('api/eshop/vendor/categories/pharmacy/shops');
 
         const data = response.data;
 
@@ -99,10 +99,7 @@ const PharmacyLanding = ({ navigation }) => {
       </View>
       
       <View style={styles.cardFooter}>
-        <View style={styles.ratingContainer}>
-          <Icon name="star" size={16} color="#FFD700" />
-          <Text style={styles.ratingText}>4.5</Text>
-        </View>
+
         <View style={styles.deliveryContainer}>
           <Icon name="delivery-dining" size={16} color="#2E7D32" />
           <Text style={styles.deliveryText}>20-30 min</Text>
@@ -352,7 +349,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#2E7D32',
     marginLeft: 4,
-    fontWeight: '600',
+    fontWeight: '600', 
   },
   emptyContainer: {
     flex: 1,

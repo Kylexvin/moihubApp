@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import * as Clipboard from 'expo-clipboard';
 
 const EmergencyServices = () => {
   const navigation = useNavigation();
@@ -23,7 +24,7 @@ const EmergencyServices = () => {
       icon: "shield-checkmark", 
       color: "#e74c3c",
       description: "Contact campus security for immediate assistance with security-related concerns.",
-      phoneNumber: "0712345678"
+      phoneNumber: "0116907378"
     },
     { 
       id: 'medical',
@@ -31,88 +32,139 @@ const EmergencyServices = () => {
       icon: "medical", 
       color: "#e74c3c",
       description: "Contact the university health center for medical emergencies.",
-      phoneNumber: "0723456789"
+      phoneNumber: "0710761679"
     },
-    { 
-      id: 'fire',
-      title: "Fire Emergency", 
-      icon: "flame", 
-      color: "#e74c3c",
-      description: "Report fire incidents and get immediate emergency response.",
-      phoneNumber: "0734567890"
-    },
+    
     { 
       id: 'report',
       title: "Report Incident", 
       icon: "warning", 
       color: "#e74c3c",
       description: "Report any suspicious activities or incidents that require attention.",
-      phoneNumber: "0745678901"
+      phoneNumber: "0116907378"
     },
-    { 
-      id: 'police',
-      title: "Police Station", 
-      icon: "shield", 
-      color: "#e74c3c",
-      description: "Contact the nearest police station for law enforcement assistance.",
-      phoneNumber: "0756789012"
-    },
+   
     { 
       id: 'ambulance',
       title: "Ambulance Services", 
       icon: "fitness", 
       color: "#e74c3c",
       description: "Request an ambulance for medical transportation emergencies.",
-      phoneNumber: "0767890123"
+      phoneNumber: "0710761679"
     }
   ];
 
-  // Handle call button press
-  const handleCallPress = (phoneNumber, title) => {
+  // Handle call button press with better error handling
+  const handleCallPress = async (phoneNumber, title) => {
+    try {
+      const phoneUrl = `tel:${phoneNumber}`;
+      const supported = await Linking.canOpenURL(phoneUrl);
+      
+      if (supported) {
+        Alert.alert(
+          `Call ${title}`,
+          `Are you sure you want to call ${phoneNumber}?`,
+          [
+            {
+              text: "Cancel",
+              style: "cancel"
+            },
+            { 
+              text: "Call", 
+              onPress: async () => {
+                try {
+                  await Linking.openURL(phoneUrl);
+                } catch (error) {
+                  console.error('Failed to open dialer:', error);
+                  Alert.alert(
+                    'Error',
+                    'Unable to open phone dialer. Please dial manually or copy the number.',
+                    [
+                      {
+                        text: "Copy Number",
+                        onPress: () => copyToClipboard(phoneNumber)
+                      },
+                      {
+                        text: "OK",
+                        style: "cancel"
+                      }
+                    ]
+                  );
+                }
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Phone Not Available',
+          `Cannot open phone dialer. Would you like to copy the number ${phoneNumber} instead?`,
+          [
+            {
+              text: "Copy Number",
+              onPress: () => copyToClipboard(phoneNumber)
+            },
+            {
+              text: "Cancel",
+              style: "cancel"
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error checking phone availability:', error);
+      Alert.alert(
+        'Error',
+        'Unable to access phone functionality. Would you like to copy the number instead?',
+        [
+          {
+            text: "Copy Number",
+            onPress: () => copyToClipboard(phoneNumber)
+          },
+          {
+            text: "Cancel",
+            style: "cancel"
+          }
+        ]
+      );
+    }
+  };
+
+  // Copy number to clipboard
+  const copyToClipboard = async (phoneNumber) => {
+    try {
+      await Clipboard.setStringAsync(phoneNumber);
+      Alert.alert('Copied!', `Phone number ${phoneNumber} has been copied to clipboard.`);
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error);
+      Alert.alert('Error', 'Failed to copy number to clipboard.');
+    }
+  };
+
+  // Handle long press to copy number
+  const handleLongPress = (phoneNumber, title) => {
     Alert.alert(
-      `Call ${title}`,
-      `Are you sure you want to call ${phoneNumber}?`,
+      `Copy ${title} Number`,
+      `Copy ${phoneNumber} to clipboard?`,
       [
         {
           text: "Cancel",
           style: "cancel"
         },
-        { 
-          text: "Call", 
-          onPress: () => {
-            const phoneUrl = `tel:${phoneNumber}`;
-            Linking.canOpenURL(phoneUrl)
-              .then(supported => {
-                if (supported) {
-                  return Linking.openURL(phoneUrl);
-                }
-              })
-              .catch(error => console.error('An error occurred', error));
-          }
+        {
+          text: "Copy",
+          onPress: () => copyToClipboard(phoneNumber)
         }
       ]
     );
   };
 
-  // Handle report incident button press
-  const handleReportIncident = () => {
-    navigation.navigate('ReportIncident');
+  const handleBackPress = () => {
+    navigation.goBack();
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Emergency Services</Text>
-        <View style={styles.placeholder} />
-      </View>
-
       {/* Emergency Banner */}
       <View style={styles.emergencyBanner}>
         <View style={styles.iconContainerLarge}>
@@ -123,17 +175,11 @@ const EmergencyServices = () => {
           <Text style={styles.bannerDescription}>
             Contact these emergency services for immediate assistance in case of emergencies.
           </Text>
+          <Text style={styles.bannerSubtext}>
+            Tap to call • Long press to copy number
+          </Text>
         </View>
       </View>
-
-      {/* Report Incident Button */}
-      <TouchableOpacity 
-        style={styles.reportButton}
-        onPress={handleReportIncident}
-      >
-        <Ionicons name="create" size={24} color="#fff" />
-        <Text style={styles.reportButtonText}>Report an Incident</Text>
-      </TouchableOpacity>
 
       {/* Emergency Services List */}
       <ScrollView 
@@ -141,9 +187,12 @@ const EmergencyServices = () => {
         showsVerticalScrollIndicator={false}
       >
         {emergencyServices.map((service) => (
-          <View
+          <TouchableOpacity
             key={service.id}
             style={styles.serviceCard}
+            onPress={() => handleCallPress(service.phoneNumber, service.title)}
+            onLongPress={() => handleLongPress(service.phoneNumber, service.title)}
+            activeOpacity={0.7}
           >
             <View style={[styles.serviceIconContainer, { backgroundColor: service.color + '20' }]}>
               <Ionicons name={service.icon} size={28} color={service.color} />
@@ -153,13 +202,21 @@ const EmergencyServices = () => {
               <Text style={styles.serviceDescription}>{service.description}</Text>
               <Text style={styles.servicePhone}>{service.phoneNumber}</Text>
             </View>
-            <TouchableOpacity 
-              style={styles.callButton}
-              onPress={() => handleCallPress(service.phoneNumber, service.title)}
-            >
-              <Ionicons name="call" size={20} color="#fff" />
-            </TouchableOpacity>
-          </View>
+            <View style={styles.actionButtons}>
+              <TouchableOpacity 
+                style={styles.copyButton}
+                onPress={() => copyToClipboard(service.phoneNumber)}
+              >
+                <Ionicons name="copy" size={18} color="#666" />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.callButton}
+                onPress={() => handleCallPress(service.phoneNumber, service.title)}
+              >
+                <Ionicons name="call" size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
         ))}
         <View style={styles.bottomPadding} />
       </ScrollView>
@@ -173,23 +230,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
     paddingTop: 50,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-  },
+
+
   placeholder: {
     width: 40,
   },
@@ -199,7 +241,7 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: '#e74c3c',
     marginHorizontal: 16,
-    marginTop: 16,
+    marginTop: 0,
     borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -225,32 +267,18 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 4,
   },
-  bannerDescription: {
+bannerDescription: {
     fontSize: 14,
     color: '#fff',
     opacity: 0.9,
     lineHeight: 20,
   },
-  reportButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#005f4b',
-    marginHorizontal: 16,
-    marginTop: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  reportButtonText: {
+  bannerSubtext: {
+    fontSize: 12,
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+    opacity: 0.8,
+    marginTop: 5,
+    fontStyle: 'italic',
   },
   scrollContainer: {
     flex: 1,
@@ -298,11 +326,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#e74c3c',
   },
-  callButton: {
+    copyButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#e74c3c',
+    backgroundColor: '#ecf0f1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+callButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#27ae60',
     justifyContent: 'center',
     alignItems: 'center',
   },

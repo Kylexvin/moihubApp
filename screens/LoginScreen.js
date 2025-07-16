@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import Icon from 'react-native-vector-icons/FontAwesome';
-
 import {
   View,
   Text,
@@ -14,6 +12,9 @@ import {
   Image
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { Linking } from 'react-native';
+import { registerForPushNotificationsAsync } from '../utils/registerPushToken';
+import axios from 'axios'; // Add this import
 
 const { width } = Dimensions.get('window');
 
@@ -23,7 +24,7 @@ const LoginScreen = ({ navigation }) => {
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [feedback, setFeedback] = useState('');
   
-  const { login, loading, error } = useAuth();
+  const { login, loading, error, currentUser } = useAuth(); // Get currentUser from useAuth
   
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -50,20 +51,45 @@ const LoginScreen = ({ navigation }) => {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
-    
+
     try {
       setIsRedirecting(true);
       setFeedback('Logging in...');
-      
-      await login(emailOrUsername, password);
-      
+
+      // Login first
+      const user = await login(emailOrUsername, password);
+
+      setFeedback('Login successful! Setting up notifications...');
+
+      // Register for push notifications after successful login
+      try {
+        const token = await registerForPushNotificationsAsync();
+        
+        if (token && user?._id) {
+          await axios.post('/api/auth/update-push-token', {
+            userId: user._id,
+            expoPushToken: token,
+          });
+          console.log('Push token updated successfully');
+        }
+      } catch (pushError) {
+        console.warn('Push notification setup failed:', pushError);
+        // Don't fail the login process if push notifications fail
+      }
+
       setFeedback('Login successful! Redirecting...');
-      // Navigation is handled by the AppNavigator based on auth state
+      
+      // The navigation will be handled by your AuthContext or App.js
+      // based on the authentication state change
+
     } catch (err) {
       console.error('Login error:', err);
       setIsRedirecting(false);
       setFeedback('');
-      Alert.alert('Login Failed', error || 'Please check your credentials and try again');
+      
+      // Clear any previous error state
+      const errorMessage = err.response?.data?.message || err.message || 'Please check your credentials and try again';
+      Alert.alert('Login Failed', errorMessage);
     }
   };
 
@@ -145,7 +171,10 @@ const LoginScreen = ({ navigation }) => {
             />
           </View>
 
-          <TouchableOpacity style={styles.forgotPasswordContainer}>
+          <TouchableOpacity 
+            style={styles.forgotPasswordContainer}
+            onPress={() => Linking.openURL('https://moihub-silk.vercel.app/forgot-password')}
+          >
             <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
           </TouchableOpacity>
 
@@ -176,6 +205,7 @@ const LoginScreen = ({ navigation }) => {
     </View>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {

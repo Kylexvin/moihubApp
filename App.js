@@ -8,7 +8,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-
+import { Audio } from 'expo-av';
 import SplashScreen from './screens/SplashScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import { CartProvider } from './context/CartContext';
@@ -32,6 +32,16 @@ import EshopOwnerNavigator from './navigation/EshopOwnerNavigator';
 import EditProductScreen from './screens/eshop/dashboards/EditProductScreen';
 import FoodVendorNavigator from './navigation/FoodVendorNavigator';
 import EchemNavigator from './navigation/EchemNavigator';
+import ServicesStackNavigator from './navigation/ServicesStackNavigator';
+import * as Notifications from 'expo-notifications';
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 
 const Stack = createNativeStackNavigator();
@@ -85,6 +95,24 @@ function AppNavigator() {
     checkFirstLaunch();
   }, []);
 
+ useEffect(() => {
+    const subscription = Notifications.addNotificationReceivedListener(async notification => {
+      console.log('Foreground notification received:', notification);
+
+      try {
+        const { sound } = await Audio.Sound.createAsync(
+  require('./assets/sounds/moihub_sound.mp3')
+);
+
+        await sound.playAsync();
+      } catch (error) {
+        console.error('Error playing notification sound:', error);
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
+
   const handleSplashComplete = () => {
     if (firstLaunch === null) return;
     setAppState(firstLaunch ? 'onboarding' : 'main');
@@ -132,6 +160,8 @@ function AppNavigator() {
             <Stack.Screen name="BlogsNavigator" component={BlogsNavigator} />
             <Stack.Screen name="Admin" component={AdminNavigator} />
             <Stack.Screen name="Eshop" component={EshopOwnerNavigator} />
+            <Stack.Screen name="ServicesStack" component={ServicesStackNavigator} />
+
             <Stack.Screen
               name="EditProduct"
               component={EditProductScreen}
@@ -140,7 +170,7 @@ function AppNavigator() {
             <Stack.Screen
     name="Echem"
     component={EchemNavigator}
-    options={{ headerShown: false }} // or true, your choice
+    options={{ headerShown: false }}
   />
 
             <Stack.Screen name="VendorDashboard" component={FoodVendorNavigator} />

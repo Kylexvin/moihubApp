@@ -32,7 +32,7 @@ const IdentityStep = ({ navigation }) => {
   const preferenceOptions = [
     { value: 'male', label: 'Men' },
     { value: 'female', label: 'Women' },
-    { value: 'both', label: 'Both' },
+
   ];
 
   const isFormValid = () => {
@@ -126,6 +126,15 @@ const IdentityStep = ({ navigation }) => {
           </TouchableOpacity>
         ))}
       </View>
+      
+      {/* Matching explanation */}
+      {title === '💕 Interested in' && (
+        <View style={styles.matchingNote}>
+          <Text style={styles.matchingNoteText}>
+            💡 You'll be matched with people who share mutual interest
+          </Text>
+        </View>
+      )}
     </View>
   );
 
@@ -255,6 +264,7 @@ const IdentityStep = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0a0a0f',
   },
   gradient: {
     flex: 1,
@@ -269,55 +279,51 @@ const styles = StyleSheet.create({
   },
   floatingHeart: {
     position: 'absolute',
-    fontSize: 16,
-    opacity: 0.2,
+    fontSize: 24,
+    opacity: 0.3,
   },
   heart1: {
     top: '15%',
-    left: '15%',
-    transform: [{ rotate: '15deg' }],
+    left: '10%',
   },
   heart2: {
-    top: '30%',
-    right: '10%',
-    transform: [{ rotate: '-10deg' }],
+    top: '35%',
+    right: '15%',
   },
   heart3: {
-    top: '70%',
-    left: '10%',
-    transform: [{ rotate: '25deg' }],
+    top: '55%',
+    left: '20%',
   },
   heart4: {
-    top: '85%',
-    right: '20%',
-    transform: [{ rotate: '-15deg' }],
+    top: '75%',
+    right: '25%',
   },
   glowOrb: {
     position: 'absolute',
     borderRadius: 100,
-    opacity: 0.08,
+    opacity: 0.1,
   },
   orb1: {
-    width: 100,
-    height: 100,
+    width: 200,
+    height: 200,
     backgroundColor: '#7b20a1',
     top: '10%',
-    right: '-15%',
+    right: '-50%',
     shadowColor: '#7b20a1',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 15,
+    shadowOpacity: 0.5,
+    shadowRadius: 50,
   },
   orb2: {
-    width: 80,
-    height: 80,
-    backgroundColor: '#c77dff',
+    width: 150,
+    height: 150,
+    backgroundColor: '#9d4edd',
     bottom: '20%',
-    left: '-10%',
-    shadowColor: '#c77dff',
+    left: '-30%',
+    shadowColor: '#9d4edd',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
+    shadowOpacity: 0.5,
+    shadowRadius: 40,
   },
   scrollView: {
     flex: 1,
@@ -340,16 +346,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   stepContainer: {
-    alignItems: 'flex-end',
+    alignItems: 'center',
+    flex: 1,
   },
   step: {
-    color: '#b19cd9',
+    color: '#888',
     fontSize: 14,
-    fontWeight: '500',
     marginBottom: 8,
   },
   progressBar: {
-    width: 80,
+    width: 120,
     height: 4,
     backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 2,
@@ -358,74 +364,56 @@ const styles = StyleSheet.create({
   progressFill: {
     width: '25%',
     height: '100%',
-    backgroundColor: '#7b20a1',
+    backgroundColor: '#c77dff',
     borderRadius: 2,
-    shadowColor: '#7b20a1',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
   },
   content: {
-    padding: 20,
-    paddingTop: 10,
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
   title: {
     fontSize: 32,
-    fontWeight: '800',
-    color: '#ffffff',
+    fontWeight: 'bold',
+    color: '#fff',
     textAlign: 'center',
     marginBottom: 12,
-    textShadowColor: 'rgba(123, 32, 161, 0.5)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
+    lineHeight: 40,
   },
   highlightText: {
-    color: '#ff69b4',
-    fontWeight: '900',
-    textShadowColor: 'rgba(255, 105, 180, 0.5)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
+    color: '#c77dff',
   },
   subtitle: {
     fontSize: 16,
-    color: '#e0e0e0',
+    color: '#bbb',
     textAlign: 'center',
-    marginBottom: 30,
-    lineHeight: 22,
-    paddingHorizontal: 10,
+    marginBottom: 40,
+    lineHeight: 24,
   },
   brandText: {
-    color: '#c77dff',
-    fontWeight: '700',
+    color: '#7b20a1',
+    fontWeight: '600',
   },
   section: {
-    marginBottom: 25,
+    marginBottom: 30,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: 12,
-    textShadowColor: 'rgba(123, 32, 161, 0.3)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 4,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 15,
   },
   inputContainer: {
     position: 'relative',
   },
   textInput: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 15,
     paddingHorizontal: 20,
     paddingVertical: 16,
     fontSize: 16,
-    color: '#ffffff',
+    color: '#fff',
     borderWidth: 1,
-    borderColor: 'rgba(123, 32, 161, 0.3)',
-    shadowColor: '#7b20a1',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   inputGlow: {
     position: 'absolute',
@@ -433,9 +421,11 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(123, 32, 161, 0.1)',
     borderRadius: 15,
-    zIndex: -1,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'rgba(199, 125, 255, 0.3)',
+    opacity: 0,
   },
   optionsGrid: {
     flexDirection: 'row',
@@ -443,17 +433,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   optionChip: {
-    borderRadius: 20,
+    borderRadius: 25,
     overflow: 'hidden',
-    minWidth: 80,
-    shadowColor: '#7b20a1',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  optionChipSelected: {
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
+    minWidth: 100,
   },
   optionGradient: {
     paddingHorizontal: 20,
@@ -461,37 +443,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   optionText: {
+    color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
-    color: '#e0e0e0',
+    fontWeight: '500',
   },
   optionTextSelected: {
-    color: '#ffffff',
-    fontWeight: '700',
+    color: '#fff',
+    fontWeight: '600',
+  },
+  matchingNote: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: 'rgba(123, 32, 161, 0.1)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(123, 32, 161, 0.3)',
+  },
+  matchingNoteText: {
+    color: '#c77dff',
+    fontSize: 14,
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
   footer: {
     padding: 20,
-    paddingBottom: 40,
     zIndex: 2,
   },
   continueButton: {
     borderRadius: 25,
     overflow: 'hidden',
-    shadowColor: '#7b20a1',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 15,
-    elevation: 8,
+    position: 'relative',
   },
   continueButtonDisabled: {
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
+    opacity: 0.6,
   },
   buttonGradient: {
-    paddingVertical: 18,
-    paddingHorizontal: 30,
+    paddingVertical: 16,
     alignItems: 'center',
+    justifyContent: 'center',
     position: 'relative',
+  },
+  continueButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
   },
   buttonGlow: {
     position: 'absolute',
@@ -499,18 +494,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 25,
-  },
-  continueButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-    zIndex: 1,
   },
 });
 

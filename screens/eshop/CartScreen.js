@@ -21,7 +21,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 
 const { width } = Dimensions.get('window');
-
+ 
 const CartScreen = ({ navigation }) => {
   const { token, currentUser, isAuthenticated } = useAuth();
   const { 
