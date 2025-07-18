@@ -77,20 +77,22 @@ const getCurrentUserId = () => {
   return currentUser?.userId || currentUser?._id || currentUser?.id || currentUserIdRef.current;
 };
 
-  // Update current user ID ref when currentUser changes
-// Add this in your ChatScreen component
+
 useEffect(() => {
-  console.log('Auth Context User:', currentUser);
-  console.log('User ID from context:', currentUser?._id);
-  console.log('Token exists:', !!token);
+  // Cleaned up — no console
 }, [currentUser, token]);
 
-  useEffect(() => {
-    console.log('Chat type:', chatType);
-    console.log('Current user:', currentUser);
-    console.log('Current user ID:', getCurrentUserId());
-  }, [currentUser]);
+useEffect(() => {
+  // Cleaned up — no console
+}, [currentUser]);
 
+useEffect(() => {
+  if (!conversationId) {
+    Alert.alert('Error', 'Invalid conversation', [
+      { text: 'OK', onPress: () => navigation.goBack() }
+    ]);
+  }
+}, [conversationId, navigation]);
   // Keyboard listeners
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
@@ -118,35 +120,20 @@ useEffect(() => {
     };
   }, [messages.length]);
 
-  // Early return if no conversationId
-  useEffect(() => {
-    console.log('ChatScreen route params:', { conversationId, conversation, otherUser, currentUser });
-    
-    if (!conversationId) {
-      console.error('No conversationId provided');
-      Alert.alert('Error', 'Invalid conversation', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
-      return;
-    }
-  }, [conversationId, navigation]);
 
   // Initialize other user
-  useEffect(() => {
-    if (otherUser) {
-      console.log('Using provided otherUser:', otherUser);
-      setDerivedOtherUser(otherUser);
-    } else if (conversation && conversation.participants) {
-      const currentUserId = getCurrentUserId();
-      const otherParticipant = conversation.participants.find(p => 
-        (p._id || p.id) !== currentUserId
-      );
-      console.log('Found other participant from conversation:', otherParticipant);
-      setDerivedOtherUser(otherParticipant);
-    } else {
-      console.log('No otherUser info available, will fetch from messages');
-    }
-  }, [otherUser, conversation, currentUser]);
+useEffect(() => {
+  if (otherUser) {
+    setDerivedOtherUser(otherUser);
+  } else if (conversation?.participants?.length) {
+    const currentUserId = getCurrentUserId();
+    const otherParticipant = conversation.participants.find(p => {
+      const participantId = p._id || p.id;
+      return participantId && participantId !== currentUserId;
+    });
+    setDerivedOtherUser(otherParticipant);
+  }
+}, [otherUser, conversation, currentUser]);
 
   useEffect(() => {
     if (conversationId && (derivedOtherUser || !conversation)) {
@@ -171,32 +158,15 @@ useEffect(() => {
       }
     }, 100);
   }, [messages.length, loadingMore, loading]);
-useEffect(() => {
-  debugCurrentUser();
-  
-  // Debug messages when they load
-  if (messages.length > 0) {
-    console.log('=== MESSAGES DEBUG ===');
-    console.log('Total messages:', messages.length);
-    messages.slice(0, 3).forEach((msg, index) => {
-      console.log(`Message ${index}:`, {
-        id: msg._id,
-        content: msg.content?.substring(0, 20),
-        senderId: msg.sender?._id || msg.sender?.id,
-        senderUsername: msg.sender?.username,
-        timestamp: msg.createdAt
-      });
-    });
-    console.log('====================');
-  }
-}, [messages, currentUser]);
+
 // Add this useEffect after your existing useEffects
 useEffect(() => {
-  // Call the debug function whenever messages or currentUser changes
   if (messages.length > 0 && currentUser) {
-    testUserComparison();
+    // Production: Remove debug call
+    // testUserComparison();
   }
 }, [messages, currentUser]);
+
   // Enhanced message normalization to handle readBy array
   const normalizeMessage = (msg) => {
     const readByUserIds = msg.readBy ? msg.readBy.map(readItem => readItem.user) : [];
@@ -210,358 +180,314 @@ useEffect(() => {
       ) : [],
     };
   };
-const testUserComparison = () => {
-  if (messages.length > 0) {
-    const testMessage = messages[0];
-    const msgSenderId = String(testMessage.sender?._id || testMessage.sender?.id || '');
-    const currUserId = String(getCurrentUserId() || '');
-    
-    console.log('=== USER COMPARISON TEST ===');
-    console.log('Test message sender ID:', msgSenderId);
-    console.log('Current user ID:', currUserId);
-    console.log('Are they equal?', msgSenderId === currUserId);
-    console.log('Length comparison:', msgSenderId.length, 'vs', currUserId.length);
-    console.log('Type comparison:', typeof msgSenderId, 'vs', typeof currUserId);
-    console.log('============================');
+
+const initializeChat = async () => {
+  if (!conversationId) {
+    // Optionally, you may want to report this to an error tracker instead of console
+    return;
+  }
+
+  try {
+    await loadMessages();
+    await connectSocket();
+    await markConversationAsRead();
+  } catch (error) {
+    // Log to your error tracker if needed, avoid console in production
+    Alert.alert('Error', 'Failed to load chat. Please try again.');
   }
 };
-  const initializeChat = async () => {
-    if (!conversationId) {
-      console.error('Cannot initialize chat without conversationId');
-      return;
-    }
 
-    try {
-      console.log('Initializing chat for conversation:', conversationId);
-      await loadMessages();
-      await connectSocket();
-      await markConversationAsRead();
-    } catch (error) {
-      console.error('Failed to initialize chat:', error);
-      Alert.alert('Error', 'Failed to load chat. Please try again.');
-    }
-  };
 
-  const connectSocket = async () => {
-    if (!token) {
-      console.log('No token available for socket connection');
-      logout();
-      return;
-    }
+const connectSocket = async () => {
+  if (!token) {
+    logout();
+    return;
+  }
 
-    try {
-      console.log('Connecting to socket...');
-      socketRef.current = io(SOCKET_URL, {
-        auth: { token },
-        transports: ['websocket'],
-        timeout: 20000,
-      });
-
-      // Connection events
-      socketRef.current.on('connect', () => {
-        console.log('Socket connected:', socketRef.current.id);
-        setReconnecting(false);
-        
-        socketRef.current.emit('join_conversation', { conversationId });
-        console.log('Emitted join_conversation for:', conversationId);
-      });
-
-      socketRef.current.on('disconnect', (reason) => {
-        console.log('Socket disconnected:', reason);
-        if (reason === 'io server disconnect') {
-          setReconnecting(true);
-        }
-      });
-
-      socketRef.current.on('connect_error', (error) => {
-        console.error('Socket connection error:', error);
-        if (error.message.includes('Authentication')) {
-          logout();
-        } else {
-          setReconnecting(true);
-        }
-      });
-
-      // Message events
-      socketRef.current.on('new_message', (messageData) => {
-        console.log('New message received in ChatScreen:', messageData);
-        handleNewMessage(messageData);
-      });
-
-      socketRef.current.on('message_sent', (messageData) => {
-        console.log('Message sent confirmation:', messageData);
-        updateMessageStatus(messageData.tempId, messageData, 'sent');
-      });
-
-      socketRef.current.on('message_delivered', (data) => {
-        console.log('Message delivered:', data);
-        updateMessageStatus(data.messageId, null, 'delivered');
-      });
-
-      socketRef.current.on('message_read', (data) => {
-        console.log('Message read:', data);
-        updateMessageReadStatus(data.messageId, data.readBy);
-      });
-
-      // Typing events
-      socketRef.current.on('user_typing', (data) => {
-        console.log('User typing received:', data);
-        const currentUserId = getCurrentUserId();
-        if (data.userId !== currentUserId) {
-          setOtherUserTyping(data.isTyping);
-          
-          if (data.isTyping) {
-            setTimeout(() => setOtherUserTyping(false), 3000);
-          }
-        }
-      });
-
-      // User status events
-      socketRef.current.on('user_status_changed', (data) => {
-        console.log('User status changed:', data);
-        if (data.userId === (derivedOtherUser?._id || derivedOtherUser?.id)) {
-          setOtherUserOnline(data.status === 'online');
-        }
-      });
-
-      socketRef.current.on('error', (error) => {
-        console.error('Socket error:', error);
-        Alert.alert('Connection Error', error.message);
-      });
-
-    } catch (error) {
-      console.error('Socket connection failed:', error);
-      setReconnecting(true);
-    }
-  };
-
-  const loadMessages = async (pageNum = 1, isLoadMore = false) => {
-    if (!token) {
-      console.warn('No token – aborting message load');
-      logout();
-      return;
-    }
-
-    if (!conversationId) {
-      console.error('No conversationId – aborting message load');
-      return;
-    }
-
-    try {
-      console.log(`Loading messages [page=${pageNum}, isLoadMore=${isLoadMore}]...`);
-
-      if (isLoadMore) {
-        setLoadingMore(true);
-      } else {
-        setLoading(true);
-      }
-
-      const response = await fetch(
-        `${BASE_URL}/messages/conversations/${conversationId}/messages?page=${pageNum}&limit=20`,
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        if (response.status === 401) {
-          console.warn('Unauthorized – logging out');
-          logout();
-        } else {
-          console.error(`Message load failed [${response.status}]:`, errorText);
-          throw new Error('Failed to load messages');
-        }
-        return;
-      }
-
-      const raw = await response.json();
-      const rawMessages = raw.messages || raw.data || raw || [];
-
-      const normalizedMessages = rawMessages.map((msg) => ({
-        ...msg,
-        sender: msg.sender || {},
-        readByUserIds: (msg.readBy || []).map((r) => r.user),
-        deliveredToUserIds: (msg.deliveredTo || []).map((d) => d.user),
-      }));
-
-      console.log('Normalized messages:', normalizedMessages);
-
-      if (isLoadMore) {
-        setMessages((prev) => [...prev, ...normalizedMessages]);
-      } else {
-        const sortedMessages = normalizedMessages.sort(
-          (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
-        );
-        setMessages(sortedMessages);
-      }
-
-      setHasMoreMessages(normalizedMessages.length === 20);
-      setPage(pageNum);
-
-      if (normalizedMessages.length > 0) {
-        const latest = normalizedMessages[normalizedMessages.length - 1];
-        lastMessageIdRef.current = latest._id;
-
-        if (!derivedOtherUser) {
-          const currentUserId = getCurrentUserId();
-          const other = normalizedMessages.find(
-            (m) => (m.sender._id || m.sender.id) !== currentUserId
-          )?.sender;
-
-          if (other) {
-            console.log('Derived other user:', other);
-            setDerivedOtherUser(other);
-          }
-        }
-      }
-
-      console.log(`Loaded ${normalizedMessages.length} messages`);
-
-    } catch (error) {
-      console.error('Error loading messages:', error.message || error);
-      Alert.alert('Error', 'Could not load chat messages');
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  };
-
-  const handleNewMessage = (messageData) => {
-    console.log('Handling new message:', messageData);
-
-    const normalized = normalizeMessage(messageData);
-
-    setMessages(prev => {
-      const exists = prev.some(msg => msg._id === normalized._id);
-      if (exists) {
-        console.log('Message already exists, skipping duplicate');
-        return prev;
-      }
-
-      console.log('Adding new message to state');
-      return [normalized, ...prev];
+  try {
+    socketRef.current = io(SOCKET_URL, {
+      auth: { token },
+      transports: ['websocket'],
+      timeout: 20000,
     });
 
-    const messageSenderId = normalized.sender._id || normalized.sender.id;
-    const currentUserId = getCurrentUserId();
-    if (messageSenderId !== currentUserId) {
-      setTimeout(() => markMessageAsRead(normalized._id), 500);
-    }
-  };
+    socketRef.current.on('connect', () => {
+      setReconnecting(false);
+      socketRef.current.emit('join_conversation', { conversationId });
+    });
 
-  const updateMessageStatus = (identifier, messageData, status) => {
-    console.log('Updating message status:', { identifier, status, messageData });
-    
-    setMessages(prev => prev.map(msg => {
-      if (msg._id === identifier || msg.tempId === identifier) {
-        const updatedMessage = {
-          ...msg,
-          ...(messageData ? normalizeMessage(messageData) : {}),
-          status,
-        };
-        
-        if (messageData && messageData._id) {
-          delete updatedMessage.tempId;
+    socketRef.current.on('disconnect', (reason) => {
+      if (reason === 'io server disconnect') {
+        setReconnecting(true);
+      }
+    });
+
+    socketRef.current.on('connect_error', (error) => {
+      if (error.message.includes('Authentication')) {
+        logout();
+      } else {
+        setReconnecting(true);
+      }
+    });
+
+    socketRef.current.on('new_message', (messageData) => {
+      handleNewMessage(messageData);
+    });
+
+    socketRef.current.on('message_sent', (messageData) => {
+      updateMessageStatus(messageData.tempId, messageData, 'sent');
+    });
+
+    socketRef.current.on('message_delivered', (data) => {
+      updateMessageStatus(data.messageId, null, 'delivered');
+    });
+
+    socketRef.current.on('message_read', (data) => {
+      updateMessageReadStatus(data.messageId, data.readBy);
+    });
+
+    socketRef.current.on('user_typing', (data) => {
+      const currentUserId = getCurrentUserId();
+      if (data.userId !== currentUserId) {
+        setOtherUserTyping(data.isTyping);
+        if (data.isTyping) {
+          setTimeout(() => setOtherUserTyping(false), 3000);
         }
-        
-        console.log('Message updated:', updatedMessage);
-        return updatedMessage;
       }
-      return msg;
-    }));
-  };
+    });
 
-  const updateMessageReadStatus = (messageId, readByArray) => {
-    console.log('Updating message read status:', { messageId, readByArray });
-    
-    setMessages(prev => prev.map(msg => {
-      if (msg._id === messageId) {
-        const readByUserIds = readByArray ? readByArray.map(item => 
-          typeof item === 'string' ? item : item.user
-        ) : [];
-        
-        return {
-          ...msg,
-          readBy: readByArray || [],
-          readByUserIds,
-          status: 'read'
-        };
+    socketRef.current.on('user_status_changed', (data) => {
+      if (data.userId === (derivedOtherUser?._id || derivedOtherUser?.id)) {
+        setOtherUserOnline(data.status === 'online');
       }
-      return msg;
-    }));
-  };
+    });
 
-  const sendMessage = async () => {
-    const content = newMessage.trim();
-    if (!content || sending) {
-      console.log('Cannot send message:', { content, sending });
+    socketRef.current.on('error', (error) => {
+      Alert.alert('Connection Error', error.message);
+    });
+
+  } catch (error) {
+    setReconnecting(true);
+  }
+};
+
+const loadMessages = async (pageNum = 1, isLoadMore = false) => {
+  if (!token) {
+    console.warn('No token – aborting message load');
+    logout();
+    return;
+  }
+
+  if (!conversationId) {
+    console.error('No conversationId – aborting message load');
+    return;
+  }
+
+  try {
+    console.log(`Loading messages [page=${pageNum}, isLoadMore=${isLoadMore}]...`);
+
+    if (isLoadMore) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
+
+    const response = await fetch(
+      `${BASE_URL}/messages/conversations/${conversationId}/messages?page=${pageNum}&limit=20`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        console.warn('Unauthorized – logging out');
+        logout();
+      } else {
+        console.error(`Message load failed [${response.status}]`);
+        throw new Error('Failed to load messages');
+      }
       return;
     }
 
-    if (!socketRef.current?.connected) {
-      Alert.alert('Connection Error', 'Not connected to server. Please check your connection.');
-      return;
-    }
+    const raw = await response.json();
+    const rawMessages = raw.messages || raw.data || raw || [];
 
-    const tempId = 'temp_' + Date.now();
-    const currentUserId = getCurrentUserId();
-    const tempMessage = {
-      _id: tempId,
-      tempId,
-      content,
-      sender: {
-        _id: currentUserId,
-        id: currentUserId,
-        username: currentUser?.username,
-        ...currentUser
-      },
-      createdAt: new Date().toISOString(),
-      status: 'sending',
-      messageType: 'text',
-      readByUserIds: [],
-      deliveredToUserIds: [],
-    };
+    console.log(`Fetched ${rawMessages.length} raw messages`);
 
-    console.log('Sending message:', { content, tempId, conversationId, currentUserId });
+    const normalizedMessages = rawMessages.map((msg) => ({
+      ...msg,
+      sender: msg.sender || {},
+      readByUserIds: (msg.readBy || []).map((r) => r.user),
+      deliveredToUserIds: (msg.deliveredTo || []).map((d) => d.user),
+    }));
 
-    setMessages(prev => [tempMessage, ...prev]);
-    setNewMessage('');
-    setSending(true);
+    console.log('Normalized messages:', normalizedMessages.length);
 
-    try {
-      socketRef.current.emit('send_message', {
-        conversationId,
-        content,
-        messageType: 'text',
-        tempId,
-        chatType
+    if (isLoadMore) {
+      setMessages((prev) => [...prev, ...normalizedMessages]);
+    } else {
+      const sortedMessages = normalizedMessages.sort((a, b) => {
+        const aTime = new Date(a.createdAt).getTime() || 0;
+        const bTime = new Date(b.createdAt).getTime() || 0;
+        return aTime - bTime;
       });
-      
-      console.log('Message sent via socket');
-      
-      handleTyping(false);
-      
-      setTimeout(() => {
-        try {
-          flatListRef.current?.scrollToIndex({ index: 0, animated: true });
-        } catch (error) {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }
-      }, 100);
-      
-    } catch (error) {
-      console.error('Send message error:', error);
-      setMessages(prev => prev.filter(msg => msg.tempId !== tempId));
-      Alert.alert('Error', 'Failed to send message');
-    } finally {
-      setSending(false);
+
+      console.log('Sorted messages:', sortedMessages.map(m => `${m.content} - ${m.createdAt}`));
+      setMessages(sortedMessages);
     }
+
+    setHasMoreMessages(normalizedMessages.length === 20);
+    setPage(pageNum);
+
+    if (normalizedMessages.length > 0) {
+      const latest = normalizedMessages[normalizedMessages.length - 1];
+      lastMessageIdRef.current = latest._id;
+
+      if (!derivedOtherUser) {
+        const currentUserId = getCurrentUserId();
+        const other = normalizedMessages.find(
+          (m) => (m.sender._id || m.sender.id) !== currentUserId
+        )?.sender;
+
+        if (other) {
+          console.log('Derived other user:', other);
+          setDerivedOtherUser(other);
+        }
+      }
+    }
+
+  } catch (error) {
+    console.error('Error loading messages:', error.message || error);
+    Alert.alert('Error', 'Could not load chat messages');
+  } finally {
+    setLoading(false);
+    setLoadingMore(false);
+  }
+};
+
+
+
+const handleNewMessage = (messageData) => {
+  const normalized = normalizeMessage(messageData);
+
+  setMessages(prev => {
+    const exists = prev.some(msg => msg._id === normalized._id);
+    if (exists) {
+      return prev;
+    }
+    return [normalized, ...prev];
+  });
+
+  const messageSenderId = normalized.sender._id || normalized.sender.id;
+  const currentUserId = getCurrentUserId();
+  if (messageSenderId !== currentUserId) {
+    setTimeout(() => markMessageAsRead(normalized._id), 500);
+  }
+};
+
+const updateMessageStatus = (identifier, messageData, status) => {
+  setMessages(prev => prev.map(msg => {
+    if (msg._id === identifier || msg.tempId === identifier) {
+      const updatedMessage = {
+        ...msg,
+        ...(messageData ? normalizeMessage(messageData) : {}),
+        status,
+      };
+
+      if (messageData && messageData._id) {
+        delete updatedMessage.tempId;
+      }
+
+      return updatedMessage;
+    }
+    return msg;
+  }));
+};
+
+const updateMessageReadStatus = (messageId, readByArray) => {
+  setMessages(prev => prev.map(msg => {
+    if (msg._id === messageId) {
+      const readByUserIds = readByArray ? readByArray.map(item =>
+        typeof item === 'string' ? item : item.user
+      ) : [];
+
+      return {
+        ...msg,
+        readBy: readByArray || [],
+        readByUserIds,
+        status: 'read',
+      };
+    }
+    return msg;
+  }));
+};
+
+const sendMessage = async () => {
+  const content = newMessage.trim();
+  if (!content || sending) {
+    return;
+  }
+
+  if (!socketRef.current?.connected) {
+    Alert.alert('Connection Error', 'Not connected to server. Please check your connection.');
+    return;
+  }
+
+  const tempId = 'temp_' + Date.now();
+  const currentUserId = getCurrentUserId();
+  const tempMessage = {
+    _id: tempId,
+    tempId,
+    content,
+    sender: {
+      _id: currentUserId,
+      id: currentUserId,
+      username: currentUser?.username,
+      ...currentUser
+    },
+    createdAt: new Date().toISOString(),
+    status: 'sending',
+    messageType: 'text',
+    readByUserIds: [],
+    deliveredToUserIds: [],
   };
+
+  setMessages(prev => [tempMessage, ...prev]);
+  setNewMessage('');
+  setSending(true);
+
+  try {
+    socketRef.current.emit('send_message', {
+      conversationId,
+      content,
+      messageType: 'text',
+      tempId,
+      chatType
+    });
+
+    handleTyping(false);
+
+    setTimeout(() => {
+      try {
+        flatListRef.current?.scrollToIndex({ index: 0, animated: true });
+      } catch {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }
+    }, 100);
+
+  } catch {
+    setMessages(prev => prev.filter(msg => msg.tempId !== tempId));
+    Alert.alert('Error', 'Failed to send message');
+  } finally {
+    setSending(false);
+  }
+};
+
 
   const handleTyping = (typing) => {
     if (!socketRef.current?.connected) return;
@@ -584,22 +510,22 @@ const testUserComparison = () => {
     }
   };
 
-  const markConversationAsRead = async () => {
-    if (!token || !conversationId) return;
+const markConversationAsRead = async () => {
+  if (!token || !conversationId) return;
 
-    try {
-      await fetch(`${BASE_URL}/messages/conversations/${conversationId}/read`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      console.log('Conversation marked as read');
-    } catch (error) {
-      console.error('Mark conversation read error:', error);
-    }
-  };
+  try {
+    await fetch(`${BASE_URL}/messages/conversations/${conversationId}/read`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+  } catch {
+    // Silently fail — marking read is non-critical
+  }
+};
+
 
   const markMessageAsRead = async (messageId) => {
     if (!socketRef.current?.connected) return;
@@ -697,32 +623,40 @@ const testUserComparison = () => {
     );
   };
 
-  const cleanup = () => {
-    console.log('Cleaning up ChatScreen');
-    
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-    
-    if (socketRef.current) {
-      socketRef.current.disconnect();
-    }
-  };
+const cleanup = () => {
+  if (typingTimeoutRef.current) {
+    clearTimeout(typingTimeoutRef.current);
+  }
 
-  const formatTime = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
+  if (socketRef.current) {
+    socketRef.current.disconnect();
+  }
+};
 
-// Enhanced message status with proper blue ticks and string conversion
-// Fixed getMessageStatus function for blue ticks
-const getMessageStatus = (message, currentUserId, otherUserId) => { 
+const formatTime = (dateString) => {
+  const date = new Date(dateString);
+  const now = new Date();
+
+  const isToday = date.toDateString() === now.toDateString();
+
+  const yesterday = new Date();
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+
+  const timePart = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  if (isToday) return `Today ${timePart}`;
+  if (isYesterday) return `Yesterday ${timePart}`;
+
+  return `${date.toLocaleDateString()} ${timePart}`;
+};
+
+
+const getMessageStatus = (message, currentUserId, otherUserId) => {
   const messageSenderId = String(message.sender?._id || message.sender?.id || '');
 
-  // Only show status for your own messages
   if (messageSenderId !== currentUserId) return null;
 
-  // Normalize user IDs from readBy and deliveredTo
   const readUserIds = (message.readBy || []).map(entry =>
     String(entry.user?._id || entry.user?.id || entry.user || '')
   );
@@ -733,31 +667,23 @@ const getMessageStatus = (message, currentUserId, otherUserId) => {
   const isReadByOther = readUserIds.includes(String(otherUserId));
   const isDeliveredToOther = deliveredUserIds.includes(String(otherUserId));
 
-  // Blue double tick - message has been read
   if (isReadByOther) {
     return (
       <View style={styles.blueTickContainer}>
         <Icon name="done-all" size={14} color="#FFFFFF" />
       </View>
     );
-  } 
-  // Grey double tick - message has been delivered but not read
-  else if (isDeliveredToOther || message.status === 'delivered') {
+  } else if (isDeliveredToOther || message.status === 'delivered') {
     return <Icon name="done-all" size={14} color="rgba(255, 255, 255, 0.7)" />;
-  } 
-  // Grey single tick - message has been sent but not delivered
-  else if (message.status === 'sent') {
+  } else if (message.status === 'sent') {
     return <Icon name="check" size={14} color="rgba(255, 255, 255, 0.7)" />;
-  } 
-  // Clock - message is being sent
-  else if (message.status === 'sending') {
+  } else if (message.status === 'sending') {
     return <Icon name="schedule" size={14} color="rgba(255, 255, 255, 0.7)" />;
   }
 
-  // Fallback
-  console.log('Returning FALLBACK single tick');
-  return <Icon name="check" size={14} color="#8E8E93" />; // Fallback
+  return <Icon name="check" size={14} color="#8E8E93" />;
 };
+
 
 
 const renderMessage = ({ item: message }) => {
@@ -784,16 +710,12 @@ const renderMessage = ({ item: message }) => {
         styles.messageWrapper,
         isOwnMessage ? styles.ownMessageWrapper : styles.otherMessageWrapper
       ]}>
-        {/* Avatar for other messages only */}
         {!isOwnMessage && (
           <View style={styles.otherAvatar}>
-            <Text style={styles.avatarText}>
-              {avatarText}
-            </Text>
+            <Text style={styles.avatarText}>{avatarText}</Text>
           </View>
         )}
 
-        {/* Message bubble */}
         <View style={[
           styles.messageBubble,
           isOwnMessage ? styles.ownBubble : styles.otherBubble
@@ -805,15 +727,13 @@ const renderMessage = ({ item: message }) => {
             {message.content}
           </Text>
 
-          {/* Message footer with time and status */}
           <View style={styles.messageFooter}>
             <Text style={[
-              styles.messageTime, 
+              styles.messageTime,
               isOwnMessage ? styles.ownMessageTime : styles.otherMessageTime
             ]}>
               {formatTime(message.createdAt)}
             </Text>
-            {/* Only show status for own messages */}
             {isOwnMessage && messageStatus && (
               <View style={styles.messageStatus}>
                 {messageStatus}
@@ -826,38 +746,28 @@ const renderMessage = ({ item: message }) => {
   );
 };
 
-// Add this debug function to test your current user ID
-const debugCurrentUser = () => {
-  console.log('=== CURRENT USER DEBUG ===');
-  console.log('currentUser object:', currentUser);
-  console.log('currentUser._id:', currentUser?._id);
-  console.log('currentUser.id:', currentUser?.id);
-  console.log('getCurrentUserId():', getCurrentUserId());
-  console.log('currentUserIdRef.current:', currentUserIdRef.current);
-  console.log('token:', token ? 'EXISTS' : 'NULL');
-  console.log('==========================');
-};
 
-  const renderTypingIndicator = () => {
-    if (!otherUserTyping || !derivedOtherUser) return null;
-    
-    return (
-      <View style={[styles.messageContainer, styles.otherMessageContainer]}>
-        <View style={styles.messageWrapper}>
-          <View style={styles.otherAvatar}>
-            <Text style={styles.avatarText}>
-              {derivedOtherUser.username?.charAt(0).toUpperCase() || '?'}
-            </Text>
-          </View>
-          <View style={[styles.messageBubble, styles.otherBubble, styles.typingBubble]}>
-            <Text style={styles.typingText}>
-              {derivedOtherUser.username || 'User'} is typing...
-            </Text>
-          </View>
+const renderTypingIndicator = () => {
+  if (!otherUserTyping || !derivedOtherUser) return null;
+
+  return (
+    <View style={[styles.messageContainer, styles.otherMessageContainer]}>
+      <View style={styles.messageWrapper}>
+        <View style={styles.otherAvatar}>
+          <Text style={styles.avatarText}>
+            {derivedOtherUser.username?.charAt(0).toUpperCase() || '?'}
+          </Text>
+        </View>
+        <View style={[styles.messageBubble, styles.otherBubble, styles.typingBubble]}>
+          <Text style={styles.typingText}>
+            {derivedOtherUser.username || 'User'} is typing...
+          </Text>
         </View>
       </View>
-    );
-  };
+    </View>
+  );
+};
+
 
   // Render long press modal
   const renderLongPressModal = () => {
@@ -921,19 +831,19 @@ const debugCurrentUser = () => {
     );
   };
 
-  // Show loading if we don't have the conversation ID
-  if (loading || !conversationId) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading chat...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+// No log needed here
+if (loading || !conversationId) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Loading chat...</Text>
+      </View>
+    </SafeAreaView>
+  );
+}
 
-  console.log('Rendering ChatScreen with messages:', messages.length, 'otherUser:', derivedOtherUser?.username);
+// ✅ No log here
 
 return (
   <SafeAreaView style={{ flex: 1 }}>
@@ -976,11 +886,13 @@ return (
 
     {/* Chat UI */}
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
-      >
+<KeyboardAvoidingView
+  style={{ flex: 1 }}
+  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+  keyboardVerticalOffset={Platform.OS === 'ios' ? 70 : 70}
+>
+
+
         <View style={{ flex: 1 }}>
           {/* Header */}
           <View style={[styles.header, { zIndex: 1 }]}>
@@ -1012,37 +924,34 @@ return (
             </View>
           )}
 
-          {/* Messages */}
-          <View style={[styles.chatContainer, { zIndex: 1, flex: 1 }]}>
-            <FlatList
-              ref={flatListRef}
-              data={[...messages]}
-              keyExtractor={(item) => item._id || item.tempId}
-              renderItem={renderMessage}
-              inverted
-              showsVerticalScrollIndicator={false}
-              onEndReached={loadMoreMessages}
-              onEndReachedThreshold={0.1}
-              ListHeaderComponent={renderTypingIndicator}
-              ListFooterComponent={
-                loadingMore ? (
-                  <View style={styles.loadingMore}>
-                    <ActivityIndicator size="small" color="#007AFF" />
-                    <Text style={styles.loadingMoreText}>Loading more messages...</Text>
-                  </View>
-                ) : null
-              }
-              contentContainerStyle={styles.messagesList}
-              maintainVisibleContentPosition={{
-                minIndexForVisible: 0,
-                autoscrollToTopThreshold: 100,
-              }}
-              removeClippedSubviews={true}
-              maxToRenderPerBatch={10}
-              windowSize={10}
-              initialNumToRender={20}
-            />
-          </View>
+<FlatList
+  ref={flatListRef}
+  data={[...messages].reverse()}  // ✅ reverse when inverted
+  keyExtractor={(item) => item._id || item.tempId}
+  renderItem={renderMessage}
+  inverted  // ✅ using inverted means reversed data
+  showsVerticalScrollIndicator={false}
+  onEndReached={loadMoreMessages}
+  onEndReachedThreshold={0.1}
+  ListHeaderComponent={renderTypingIndicator}
+  ListFooterComponent={
+    loadingMore ? (
+      <View style={styles.loadingMore}>
+        <ActivityIndicator size="small" color="#007AFF" />
+        <Text style={styles.loadingMoreText}>Loading more messages...</Text>
+      </View>
+    ) : null
+  }
+  contentContainerStyle={styles.messagesList}
+  maintainVisibleContentPosition={{
+    minIndexForVisible: 0,
+    autoscrollToTopThreshold: 100,
+  }}
+  removeClippedSubviews={true}
+  maxToRenderPerBatch={10}
+  windowSize={10}
+  initialNumToRender={20}
+/>
 
           {/* Input */}
           <View style={[styles.inputContainer, { zIndex: 1 }]}>

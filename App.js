@@ -27,6 +27,8 @@ import LinkMeNavigator from './navigation/LinkMeNavigator';
 import MySchoolNavigator from './navigation/MySchoolNavigator';
 import BlogsNavigator from './navigation/BlogsNavigator';
 import AdminNavigator from './navigation/AdminNavigator';
+import WriterNavigator from './navigation/WriterNavigator';
+
 import OAuthDebug from './screens/OAuthDebug';
 import EshopOwnerNavigator from './navigation/EshopOwnerNavigator';
 import EditProductScreen from './screens/eshop/dashboards/EditProductScreen';
@@ -174,6 +176,7 @@ function AppNavigator() {
   />
 
             <Stack.Screen name="VendorDashboard" component={FoodVendorNavigator} />
+            <Stack.Screen name="BlogManagement" component={WriterNavigator} /> 
           </>
         ) : (
           <Stack.Screen name="Auth" component={AuthStackNavigator} />

@@ -58,7 +58,7 @@ const getDashboardInfo = (role) => {
         title: 'WRITER STUDIO',
         subtitle: 'Access Writer Dashboard',
         icon: '✍️',
-        route: 'WriterDashboard'
+        route: 'BlogManagement'
       };
     case 'vendor':
       return {

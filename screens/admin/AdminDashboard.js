@@ -44,9 +44,9 @@ const AdminDashboard = ({ navigation }) => {
     },
     
     {
-      title: 'Push Notifications',
-      subtitle: 'Send and manage notifications',
-      icon: 'notifications',
+      title: 'Users and Notifications',
+      subtitle: 'Manage user accounts andnotifications',
+      icon: 'people',
       color: '#ef4444',
       route: 'NotificationManagement',
     },

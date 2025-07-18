@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "sdkVersion": "53.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/appicon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "backgroundColor": "#005f4b",
@@ -17,12 +17,16 @@
     ],
     "ios": {
       "bundleIdentifier": "com.kylexvin.moihub",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSUserTrackingUsageDescription": "This identifier will be used for notifications."
+      }
     },
     "android": {
       "package": "com.kylexvin.moihub",
       "versionCode": 1,
       "permissions": [
+        "NOTIFICATIONS",
         "CAMERA",
         "RECORD_AUDIO",
         "MODIFY_AUDIO_SETTINGS",
@@ -33,8 +37,8 @@
         "com.google.android.c2dm.permission.RECEIVE"
       ],
       "adaptiveIcon": {
-        "foregroundImage":"./assets/icon.png",
-        "backgroundColor": "#005f4b"
+        "foregroundImage": "./assets/appicon.png",
+        "backgroundColor": "#f2f5f4ff"
       },
       "intentFilters": [
         {
@@ -53,7 +57,8 @@
     },
     "plugins": [
       "expo-audio",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-notifications"
     ],
     "scheme": "moihubapp",
     "updates": {

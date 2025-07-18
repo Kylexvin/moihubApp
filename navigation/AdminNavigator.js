@@ -123,7 +123,7 @@ const AdminNavigator = () => {
         <Stack.Screen
           name="NotificationManagement"
           component={NotificationManagement}
-          options={{ title: 'Push Notifications' }}
+          options={{ title: 'Push Notifications' , headerShown: false }}
         />
         <Stack.Screen
           name="LocalServicesManagement"
@@ -138,7 +138,7 @@ const AdminNavigator = () => {
         <Stack.Screen
           name="BlogManagement"
           component={BlogManagement}
-          options={{ title: 'Blog Management' }}
+          options={{ title: 'Blog Management'  , headerShown: false}}
         />
         <Stack.Screen
           name="HomescreenManagement"

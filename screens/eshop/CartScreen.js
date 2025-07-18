@@ -477,7 +477,7 @@ const CartScreen = ({ navigation }) => {
               <>
                 <Icon name="send" size={20} color="#fff" />
                 <Text style={styles.placeOrderText}>
-                  Place Order - {formatPrice(getSubtotal())}
+                  Inquire - {formatPrice(getSubtotal())}
                 </Text>
               </>
             )}

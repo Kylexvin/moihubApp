@@ -9,6 +9,7 @@ import {
   Alert,
   Platform,
   TouchableOpacity,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -18,10 +19,53 @@ const DashboardScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [subscriptionExpired, setSubscriptionExpired] = useState(false);
 
   const baseURL = Platform.OS === 'ios'
     ? 'http://localhost:5000'
     : 'https://moihub.onrender.com';
+
+  const checkSubscriptionStatus = (subscriptionEndDate) => {
+    const today = new Date();
+    const endDate = new Date(subscriptionEndDate);
+    return today > endDate;
+  };
+
+  const getDaysRemaining = (subscriptionEndDate) => {
+    const today = new Date();
+    const endDate = new Date(subscriptionEndDate);
+    const timeDiff = endDate.getTime() - today.getTime();
+    const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+    return daysDiff;
+  };
+
+  const handleContactAdmin = () => {
+    const phoneNumber = '0768610613';
+    const message = `Hello, my subscription has expired. Shop: ${dashboardData?.vendor?.shopName || 'Unknown'}. Please help me renew it.`;
+    
+    Alert.alert(
+      'Contact Admin',
+      'Choose how to contact the admin:',
+      [
+        {
+          text: 'Call',
+          onPress: () => Linking.openURL(`tel:${phoneNumber}`)
+        },
+        {
+          text: 'WhatsApp',
+          onPress: () => Linking.openURL(`whatsapp://send?phone=254768610613&text=${encodeURIComponent(message)}`)
+        },
+        {
+          text: 'SMS',
+          onPress: () => Linking.openURL(`sms:${phoneNumber}?body=${encodeURIComponent(message)}`)
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        }
+      ]
+    );
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -30,7 +74,12 @@ const DashboardScreen = () => {
       const response = await axios.get(`${baseURL}/api/food/vendors/dashboard`);
 
       if (response.data && response.data.data) {
-        setDashboardData(response.data.data);
+        const data = response.data.data;
+        setDashboardData(data);
+        
+        // Check subscription status
+        const isExpired = checkSubscriptionStatus(data.vendor.subscriptionEndDate);
+        setSubscriptionExpired(isExpired);
       } else {
         setError('Invalid response format');
       }
@@ -39,7 +88,6 @@ const DashboardScreen = () => {
       
       if (err.response?.status === 401) {
         setError('Authentication failed. Please login again.');
-        // Optionally redirect to login screen
       } else if (err.response?.status === 403) {
         setError('Access denied. Please check your permissions.');
       } else if (err.response?.data?.message) {
@@ -62,19 +110,16 @@ const DashboardScreen = () => {
     try {
       const newStatus = !dashboardData.vendor.isOpen;
       
-      // Update UI optimistically
       setDashboardData(prev => ({
         ...prev,
         vendor: { ...prev.vendor, isOpen: newStatus }
       }));
 
-      // Make API call to update shop status
       await axios.patch(
         `${baseURL}/api/food/vendors/toggle-status`,
         { isOpen: newStatus }
       );
     } catch (err) {
-      // Revert optimistic update on error
       setDashboardData(prev => ({
         ...prev,
         vendor: { ...prev.vendor, isOpen: !dashboardData.vendor.isOpen }
@@ -109,7 +154,42 @@ const DashboardScreen = () => {
     );
   }
 
+  // Show subscription expired screen
+  if (subscriptionExpired) {
+    return (
+      <View style={styles.subscriptionExpiredContainer}>
+        <Ionicons name="time-outline" size={80} color="#f44336" />
+        <Text style={styles.expiredTitle}>Subscription Expired</Text>
+        <Text style={styles.expiredMessage}>
+          Your subscription has expired on {new Date(dashboardData.vendor.subscriptionEndDate).toLocaleDateString()}.
+        </Text>
+        <Text style={styles.expiredSubMessage}>
+          Please contact the admin to renew your subscription and continue using the dashboard.
+        </Text>
+        
+        <TouchableOpacity 
+          style={styles.contactAdminButton}
+          onPress={handleContactAdmin}
+        >
+          <Ionicons name="call-outline" size={20} color="white" />
+          <Text style={styles.contactAdminButtonText}>Contact Admin</Text>
+        </TouchableOpacity>
+        
+        <Text style={styles.adminNumber}>0768610613</Text>
+        
+        <TouchableOpacity 
+          style={styles.refreshButton}
+          onPress={fetchDashboardData}
+        >
+          <Ionicons name="refresh-outline" size={20} color="#4caf50" />
+          <Text style={styles.refreshButtonText}>Refresh</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   const { activeOrders, totalOrders, totalSales, vendor } = dashboardData;
+  const daysRemaining = getDaysRemaining(vendor.subscriptionEndDate);
 
   return (
     <ScrollView
@@ -118,6 +198,19 @@ const DashboardScreen = () => {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
+      {/* Subscription Warning Banner */}
+      {daysRemaining <= 7 && daysRemaining > 0 && (
+        <View style={styles.warningBanner}>
+          <Ionicons name="warning-outline" size={20} color="#ff9800" />
+          <Text style={styles.warningText}>
+            Subscription expires in {daysRemaining} day{daysRemaining !== 1 ? 's' : ''}
+          </Text>
+          <TouchableOpacity onPress={handleContactAdmin}>
+            <Text style={styles.renewLink}>Renew</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Header */}
       <View style={styles.header}>
         <View>
@@ -213,15 +306,24 @@ const DashboardScreen = () => {
           </View>
         </View>
 
-        <View style={styles.subscriptionInfo}>
+        <View style={[
+          styles.subscriptionInfo,
+          { backgroundColor: daysRemaining <= 7 ? '#fff3cd' : '#f8f9fa' }
+        ]}>
           <Text style={styles.subscriptionLabel}>Subscription expires:</Text>
-          <Text style={styles.subscriptionDate}>
+          <Text style={[
+            styles.subscriptionDate,
+            { color: daysRemaining <= 7 ? '#856404' : '#333' }
+          ]}>
             {new Date(vendor.subscriptionEndDate).toLocaleDateString()}
           </Text>
+          {daysRemaining <= 7 && (
+            <Text style={styles.daysRemaining}>
+              ({daysRemaining} day{daysRemaining !== 1 ? 's' : ''} remaining)
+            </Text>
+          )}
         </View>
       </View>
-
-
     </ScrollView>
   );
 };
@@ -265,6 +367,90 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  subscriptionExpiredContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    padding: 30,
+  },
+  expiredTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#f44336',
+    marginTop: 20,
+    marginBottom: 15,
+  },
+  expiredMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 10,
+    lineHeight: 24,
+  },
+  expiredSubMessage: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 30,
+    lineHeight: 20,
+  },
+  contactAdminButton: {
+    backgroundColor: '#4caf50',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  contactAdminButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  adminNumber: {
+    fontSize: 16,
+    color: '#4caf50',
+    fontWeight: 'bold',
+    marginBottom: 30,
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#4caf50',
+  },
+  refreshButtonText: {
+    color: '#4caf50',
+    fontSize: 16,
+    marginLeft: 8,
+  },
+  warningBanner: {
+    backgroundColor: '#fff3cd',
+    padding: 15,
+    margin: 20,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderLeftWidth: 4,
+    borderLeftColor: '#ff9800',
+  },
+  warningText: {
+    flex: 1,
+    marginLeft: 10,
+    color: '#856404',
+    fontSize: 14,
+  },
+  renewLink: {
+    color: '#4caf50',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
   header: {
     flexDirection: 'row',
@@ -401,38 +587,11 @@ const styles = StyleSheet.create({
     color: '#333',
     marginTop: 5,
   },
-  actionsContainer: {
-    padding: 20,
-  },
-  actionsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 15,
-  },
-  actionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 15,
-  },
-  actionCard: {
-    backgroundColor: 'white',
-    width: '47%',
-    padding: 20,
-    borderRadius: 12,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  actionText: {
-    fontSize: 14,
-    color: '#333',
-    marginTop: 8,
-    fontWeight: '500',
+  daysRemaining: {
+    fontSize: 12,
+    color: '#856404',
+    marginTop: 5,
+    fontStyle: 'italic',
   },
 });
 

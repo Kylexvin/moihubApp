@@ -11,14 +11,18 @@ import {
   ActivityIndicator,
   RefreshControl,
   Switch,
-  Picker,
   FlatList,
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { Picker } from '@react-native-picker/picker';
+
+import axios from 'axios';
 
 const { width, height } = Dimensions.get('window');
+
+
 
 const NotificationManagement = () => {
   // State Management
@@ -46,185 +50,178 @@ const NotificationManagement = () => {
   const [pushUserIds, setPushUserIds] = useState('');
   const [pushHoursAgo, setPushHoursAgo] = useState('24');
 
-  const API_BASE = 'http://your-api-url.com/api/admin';
 
-  // Load initial data
-  useEffect(() => {
-    loadUsers();
-    loadStats();
-  }, [currentPage, selectedRole, searchQuery]);
+ 
+useEffect(() => {
+  loadUsers();
+  loadStats();
+}, [currentPage, selectedRole, searchQuery]);
 
-  // API Calls
-  const apiCall = async (endpoint, options = {}) => {
-    try {
-      const response = await fetch(`${API_BASE}${endpoint}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          // Add your auth headers here
-        },
-        ...options,
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('API call error:', error);
-      Alert.alert('Error', error.message);
-      return null;
-    }
-  };
-
-  const loadUsers = async () => {
-    setLoading(true);
-    const params = new URLSearchParams({
-      page: currentPage.toString(),
-      limit: '20',
+const loadUsers = async () => {
+  setLoading(true);
+  try {
+    const params = {
+      page: currentPage,
+      limit: 20,
       ...(selectedRole && { role: selectedRole }),
       ...(searchQuery && { search: searchQuery }),
-    });
-    
-    const data = await apiCall(`/users?${params}`);
-    if (data) {
-      setUsers(data.users);
-      setTotalPages(data.pagination.totalPages);
-    }
+    };
+
+    const { data } = await axios.get('/api/admin/users', { params });
+
+    setUsers(data.users);
+    setTotalPages(data.pagination.totalPages);
+  } catch (error) {
+    console.error('Failed to load users:', error);
+    Alert.alert('Error', error?.response?.data?.message || 'Failed to load users');
+  } finally {
     setLoading(false);
-  };
+  }
+};
 
-  const loadStats = async () => {
-    const data = await apiCall('/stats');
-    if (data) {
-      setStats(data);
-    }
-  };
+const loadStats = async () => {
+  try {
+    const { data } = await axios.get('/api/admin/stats');
+    setStats(data);
+  } catch (error) {
+    console.error('Failed to load stats:', error);
+    Alert.alert('Error', error?.response?.data?.message || 'Failed to load stats');
+  }
+};
 
-  const loadUserDetails = async (userId) => {
-    const data = await apiCall(`/users/${userId}`);
-    if (data) {
-      setSelectedUser(data);
-      setShowUserModal(true);
-    }
-  };
+const loadUserDetails = async (userId) => {
+  try {
+    const { data } = await axios.get(`/api/admin/users/${userId}`);
+    setSelectedUser(data);
+    setShowUserModal(true);
+  } catch (error) {
+    console.error('Failed to load user details:', error);
+    Alert.alert('Error', error?.response?.data?.message || 'Failed to load user details');
+  }
+};
 
-  // User Actions
-  const deactivateUser = async (userId) => {
-    Alert.alert(
-      'Confirm Deactivation',
-      'Are you sure you want to deactivate this user?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Deactivate',
-          style: 'destructive',
-          onPress: async () => {
-            const data = await apiCall(`/users/${userId}/deactivate`, {
-              method: 'PATCH',
-              body: JSON.stringify({ reason: 'Admin action' }),
+const deactivateUser = async (userId) => {
+  Alert.alert(
+    'Confirm Deactivation',
+    'Are you sure you want to deactivate this user?',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Deactivate',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await axios.patch(`/api/admin/users/${userId}/deactivate`, {
+              reason: 'Admin action',
             });
-            if (data) {
-              Alert.alert('Success', 'User deactivated successfully');
-              loadUsers();
-            }
-          },
+            Alert.alert('Success', 'User deactivated successfully');
+            loadUsers();
+          } catch (error) {
+            console.error('Failed to deactivate user:', error);
+            Alert.alert('Error', error?.response?.data?.message || 'Failed to deactivate user');
+          }
         },
-      ]
-    );
-  };
+      },
+    ]
+  );
+};
 
-  const deleteUser = async (userId) => {
-    Alert.alert(
-      'Confirm Deletion',
-      'This action cannot be undone. Are you sure?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const data = await apiCall(`/users/${userId}`, {
-              method: 'DELETE',
-              body: JSON.stringify({ confirmDelete: true }),
+const deleteUser = async (userId) => {
+  Alert.alert(
+    'Confirm Deletion',
+    'This action cannot be undone. Are you sure?',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await axios.delete(`/api/admin/users/${userId}`, {
+              data: { confirmDelete: true },
             });
-            if (data) {
-              Alert.alert('Success', 'User deleted successfully');
-              loadUsers();
-            }
-          },
+            Alert.alert('Success', 'User deleted successfully');
+            loadUsers();
+          } catch (error) {
+            console.error('Failed to delete user:', error);
+            Alert.alert('Error', error?.response?.data?.message || 'Failed to delete user');
+          }
         },
-      ]
-    );
-  };
+      },
+    ]
+  );
+};
 
-  const resetPushToken = async (userId) => {
-    const data = await apiCall(`/users/${userId}/reset-push-token`, {
-      method: 'PATCH',
+const resetPushToken = async (userId) => {
+  try {
+    await axios.patch(`/api/admin/users/${userId}/reset-push-token`);
+    Alert.alert('Success', 'Push token reset successfully');
+    loadUsers();
+  } catch (error) {
+    console.error('Failed to reset push token:', error);
+    Alert.alert('Error', error?.response?.data?.message || 'Failed to reset push token');
+  }
+};
+
+
+const forcePasswordReset = async (userId) => {
+  try {
+    await axios.post(`/api/admin/users/${userId}/force-password-reset`, {
+      reason: 'Admin forced reset',
     });
-    if (data) {
-      Alert.alert('Success', 'Push token reset successfully');
-      loadUsers();
-    }
-  };
+    Alert.alert('Success', 'Password reset forced successfully');
+  } catch (error) {
+    console.error('Failed to force password reset:', error);
+    Alert.alert('Error', error?.response?.data?.message || 'Failed to force password reset');
+  }
+};
 
-  const forcePasswordReset = async (userId) => {
-    const data = await apiCall(`/users/${userId}/force-password-reset`, {
-      method: 'POST',
-      body: JSON.stringify({ reason: 'Admin forced reset' }),
-    });
-    if (data) {
-      Alert.alert('Success', 'Password reset forced successfully');
-    }
-  };
+const sendPushNotification = async () => {
+  if (!pushTitle || !pushBody) {
+    Alert.alert('Error', 'Title and body are required');
+    return;
+  }
 
-  // Push Notification Functions
-  const sendPushNotification = async () => {
-    if (!pushTitle || !pushBody) {
-      Alert.alert('Error', 'Title and body are required');
+  let endpoint = '';
+  const pushDataObj = pushData ? JSON.parse(pushData) : {};
+  const body = { title: pushTitle, body: pushBody, data: pushDataObj };
+
+  switch (pushTarget) {
+    case 'all':
+      endpoint = '/api/admin/push/all';
+      break;
+    case 'role':
+      endpoint = '/api/admin/push/role';
+      body.role = pushRole;
+      break;
+    case 'users':
+      endpoint = '/api/admin/push/users';
+      body.userIds = pushUserIds.split(',').map(id => id.trim());
+      break;
+    case 'active':
+      endpoint = '/api/admin/push/active';
+      body.hoursAgo = parseInt(pushHoursAgo);
+      break;
+    default:
+      Alert.alert('Error', 'Invalid push target');
       return;
-    }
+  }
 
-    const pushDataObj = pushData ? JSON.parse(pushData) : {};
-    let endpoint = '';
-    let body = { title: pushTitle, body: pushBody, data: pushDataObj };
+  try {
+    const { data } = await axios.post(endpoint, body);
+    Alert.alert('Success', `Push notification sent: ${data.result.message}`);
+    setShowPushModal(false);
+    // Reset form
+    setPushTitle('');
+    setPushBody('');
+    setPushData('');
+    setPushUserIds('');
+  } catch (error) {
+    console.error('Failed to send push notification:', error);
+    Alert.alert('Error', error?.response?.data?.message || 'Failed to send push notification');
+  }
+};
 
-    switch (pushTarget) {
-      case 'all':
-        endpoint = '/push/all';
-        break;
-      case 'role':
-        endpoint = '/push/role';
-        body.role = pushRole;
-        break;
-      case 'users':
-        endpoint = '/push/users';
-        body.userIds = pushUserIds.split(',').map(id => id.trim());
-        break;
-      case 'active':
-        endpoint = '/push/active';
-        body.hoursAgo = parseInt(pushHoursAgo);
-        break;
-      default:
-        Alert.alert('Error', 'Invalid push target');
-        return;
-    }
-
-    const data = await apiCall(endpoint, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-
-    if (data) {
-      Alert.alert('Success', `Push notification sent: ${data.result.message}`);
-      setShowPushModal(false);
-      // Reset form
-      setPushTitle('');
-      setPushBody('');
-      setPushData('');
-      setPushUserIds('');
-    }
-  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -575,32 +572,32 @@ const NotificationManagement = () => {
           </View>
         </View>
       ) : (
-        <ScrollView 
-          style={styles.content}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        >
-          {/* Stats Cards */}
-          <View style={styles.statsContainer}>
-            {renderStatsCard('Total Users', stats.totalUsers, 'people', '#007AFF')}
-            {renderStatsCard('Verified Users', stats.verifiedUsers, 'checkmark-circle', '#34C759')}
-            {renderStatsCard('Online Users', stats.onlineUsers, 'radio-button-on', '#30D158')}
-            {renderStatsCard('Push Enabled', stats.usersWithPushTokens, 'notifications', '#FF9500')}
-            {renderStatsCard('New This Week', stats.recentRegistrations, 'trending-up', '#FF3B30')}
-          </View>
+<ScrollView 
+  refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+>
+  <View style={{ paddingHorizontal: 20, marginTop: 16 }}>
+    <View style={styles.statsContainer}>
+      {renderStatsCard('Total Users', stats.totalUsers, 'people', '#007AFF')}
+      {renderStatsCard('Verified Users', stats.verifiedUsers, 'checkmark-circle', '#34C759')}
+      {renderStatsCard('Online Users', stats.onlineUsers, 'radio-button-on', '#30D158')}
+      {renderStatsCard('Push Enabled', stats.usersWithPushTokens, 'notifications', '#FF9500')}
+      {renderStatsCard('New This Week', stats.recentRegistrations, 'trending-up', '#FF3B30')}
+    </View>
 
-          {/* Users by Role */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Users by Role</Text>
-            {stats.usersByRole && stats.usersByRole.map((role, index) => (
-              <View key={index} style={styles.roleRow}>
-                <Text style={styles.roleLabel}>{role._id.toUpperCase()}</Text>
-                <Text style={[styles.roleCount, { color: getRoleColor(role._id) }]}>
-                  {role.count}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </ScrollView>
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Users by Role</Text>
+      {stats.usersByRole?.map((role, index) => (
+        <View key={index} style={styles.roleRow}>
+          <Text style={styles.roleLabel}>{role._id.toUpperCase()}</Text>
+          <Text style={[styles.roleCount, { color: getRoleColor(role._id) }]}>
+            {role.count}
+          </Text>
+        </View>
+      ))}
+    </View>
+  </View>
+</ScrollView>
+
       )}
 
       {/* Modals */}
@@ -729,27 +726,30 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 4,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 24,
-  },
-  statsCard: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: (width - 40) / 2,
-    borderLeftWidth: 4,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
+statsContainer: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  marginBottom: 24,
+  marginHorizontal: -6,  // compensate for horizontal margins on cards
+},
+statsCard: {
+  backgroundColor: '#fff',
+  padding: 16,
+  borderRadius: 8,
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  width: (width - 40 - 12) / 2,  // 40 = parent horizontal padding, 12 = total margin between 2 cards
+  marginHorizontal: 6,  // half of the 12 gap divided per side
+  marginBottom: 12,
+  borderLeftWidth: 4,
+  elevation: 2,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.1,
+  shadowRadius: 4,
+},
+
   statsContent: {
     flex: 1,
   },
