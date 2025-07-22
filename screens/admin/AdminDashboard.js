@@ -36,6 +36,13 @@ const AdminDashboard = ({ navigation }) => {
       route: 'EshopsManagement',
     },
     {
+      title: 'Marketplace Management',
+      subtitle: 'Manage Marketplace listings and products',
+      icon: 'shopping-basket',
+      color: '#f59e0b',
+      route: 'MarketplaceManagement',
+    },
+    {
       title: 'LinkMe Management',
       subtitle: 'Manage LinkMe connections',
       icon: 'link',

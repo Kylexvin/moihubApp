@@ -22,7 +22,7 @@ import MissionScreen from '../screens/admin/homescreen/MissionScreen';
 import HighlightScreen from '../screens/admin/homescreen/HighlightScreen';
 import VendorScreen from '../screens/admin/homescreen/VendorScreen';
 import AdsScreen from '../screens/admin/homescreen/AdsScreen';
-
+import MarketplaceManagement from '../screens/admin/MarketplaceManagement';
 
 
 
@@ -109,6 +109,11 @@ const AdminNavigator = () => {
           name="EshopsManagement"
           component={EshopsManagement}
           options={{ title: 'E-shops Management',headerShown: false, }}
+        />
+        <Stack.Screen
+          name="MarketplaceManagement"
+          component={MarketplaceManagement}
+          options={{ title: 'Marketplace Management',headerShown: false, }}
         />
         <Stack.Screen
           name="LinkmeManagement"

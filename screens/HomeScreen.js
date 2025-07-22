@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
-  Linking  // Add this import
+  Linking 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Animatable from 'react-native-animatable';
@@ -363,50 +363,40 @@ const HomeScreen = () => {
     });
   };
 
-// Optimized WhatsApp and link handler
 const handleLinkPress = async (url) => {
   try {
     // Handle WhatsApp links
     if (url.includes('wa.me') || url.includes('whatsapp.com')) {
-      // Extract phone number and message from URL
       const phoneMatch = url.match(/\d+/);
       const phoneNumber = phoneMatch ? phoneMatch[0] : '';
       const messageMatch = url.split('text=')[1];
       const message = messageMatch ? decodeURIComponent(messageMatch) : '';
-      
-      // Clean and format phone number
+
       const cleanNumber = phoneNumber.replace(/\D/g, '');
-      const formattedNumber = cleanNumber.startsWith('254') ? cleanNumber : `254${cleanNumber.replace(/^0/, '')}`;
-      
+      const formattedNumber = cleanNumber.startsWith('254')
+        ? cleanNumber
+        : `254${cleanNumber.replace(/^0/, '')}`;
+
       const encodedMessage = encodeURIComponent(message);
-      
-      // Check if WhatsApp is installed
+
       const whatsappInstalled = await Linking.canOpenURL('whatsapp://');
-      
+
       if (whatsappInstalled) {
-        // Try to open WhatsApp app directly
-        const whatsappUrl = `whatsapp://send?phone=${formattedNumber}&text=${encodedMessage}`;
         try {
-          await Linking.openURL(whatsappUrl);
+          await Linking.openURL(`whatsapp://send?phone=${formattedNumber}&text=${encodedMessage}`);
           return;
-        } catch (error) {
-          console.warn('WhatsApp deep link failed:', error);
+        } catch (err) {
+          console.warn('WhatsApp deep link failed:', err);
         }
       }
-      
-      // If WhatsApp app fails or not installed, try web version
+
       try {
-        const webUrl = `https://wa.me/${formattedNumber}?text=${encodedMessage}`;
-        const canOpenWeb = await Linking.canOpenURL(webUrl);
-        if (canOpenWeb) {
-          await Linking.openURL(webUrl);
-          return;
-        }
-      } catch (error) {
-        console.warn('WhatsApp web failed:', error);
+        await Linking.openURL(`https://wa.me/${formattedNumber}?text=${encodedMessage}`);
+        return;
+      } catch (err) {
+        console.warn('WhatsApp web failed:', err);
       }
-      
-      // If all attempts fail, show user options
+
       Alert.alert(
         'WhatsApp Not Available',
         'WhatsApp is not available on this device. Choose an option:',
@@ -417,9 +407,9 @@ const handleLinkPress = async (url) => {
               try {
                 await Clipboard.setStringAsync(formattedNumber);
                 Alert.alert('Copied!', `${formattedNumber} copied to clipboard`);
-              } catch (copyError) {
-                Alert.alert('Error', 'Failed to copy number');
-                console.error('Copy failed:', copyError);
+              } catch (copyErr) {
+                console.error('Copy failed:', copyErr);
+                Alert.alert('Error', 'Failed to copy number.');
               }
             }
           },
@@ -428,49 +418,78 @@ const handleLinkPress = async (url) => {
             onPress: async () => {
               try {
                 await Linking.openURL(`https://wa.me/${formattedNumber}?text=${encodedMessage}`);
-              } catch (browserError) {
-                Alert.alert('Error', 'Failed to open in browser');
-                console.error('Browser open failed:', browserError);
+              } catch (browserErr) {
+                console.error('Browser open failed:', browserErr);
+                Alert.alert('Error', 'Failed to open in browser.');
               }
             }
           },
-          {
-            text: 'Cancel',
-            style: 'cancel'
-          }
+          { text: 'Cancel', style: 'cancel' }
         ]
       );
+
       return;
     }
 
-    // Handle regular URLs
+    // Handle regular web links directly (skip canOpenURL check)
+    if (url.startsWith('http')) {
+      try {
+        await Linking.openURL(url);
+      } catch (err) {
+        console.error('Failed to open URL:', err);
+        Alert.alert('Error', 'Could not open the link.');
+      }
+      return;
+    }
+
+    // Fallback for other link types
     const canOpen = await Linking.canOpenURL(url);
     if (canOpen) {
       await Linking.openURL(url);
     } else {
-      Alert.alert('Error', 'Cannot open this link on your device');
+      Alert.alert('Error', 'Cannot open this link on your device.');
     }
+
   } catch (error) {
     console.error('Error opening link:', error);
-    Alert.alert(
-      'Error',
-      'Could not open the link. Please check if the app is installed or try again.',
-      [{ text: 'OK' }]
-    );
+    Alert.alert('Error', 'Could not open the link. Please try again.');
   }
 };
 
-// Simplified helper function for direct WhatsApp calls
-const openWhatsApp = (phoneNumber, message = '') => {
-  const formattedUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
-  handleLinkPress(formattedUrl);
+const openWhatsApp = async (phoneNumber, message = '') => {
+  const cleanNumber = phoneNumber.replace(/\D/g, '');
+  const formattedNumber = cleanNumber.startsWith('254')
+    ? cleanNumber
+    : `254${cleanNumber.replace(/^0/, '')}`;
+  const encodedMessage = encodeURIComponent(message);
+
+  try {
+    const canOpen = await Linking.canOpenURL('whatsapp://send');
+    if (canOpen) {
+      await Linking.openURL(`whatsapp://send?phone=${formattedNumber}&text=${encodedMessage}`);
+    } else {
+      // Fallback to web version
+      await Linking.openURL(`https://wa.me/${formattedNumber}?text=${encodedMessage}`);
+    }
+  } catch (error) {
+    console.error('WhatsApp open failed:', error);
+    Alert.alert('Error', 'Could not open WhatsApp.');
+  }
 };
 
-// Usage examples
+
+
 const handleInquirePress = () => {
-  const defaultWhatsApp = 'https://wa.me/254768610613?text=Hello, I have an inquiry';
-  handleLinkPress(homescreenData?.highlight?.ctaLink || defaultWhatsApp);
+  const url = homescreenData?.highlight?.ctaLink || 'https://wa.me/254768610613?text=Hello, I have an inquiry';
+  handleLinkPress(url);
 };
+
+const handleVendorCTAPress = () => {
+  const url = homescreenData?.vendorCall?.ctaLink || 'https://wa.me/254768610613?text=I am interested in becoming a vendor';
+  handleLinkPress(url);
+};
+
+
 
 // Alternative direct usage
 const handleDirectWhatsApp = () => {

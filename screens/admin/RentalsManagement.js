@@ -61,108 +61,96 @@ const RentalsManagement = ({ navigation }) => {
   });
 
   // Memoized filtered rentals based on active tab
-  const filteredRentals = useMemo(() => {
-    if (!allRentals.length) return [];
-    
-    let filtered = [...allRentals];
-    
+const filteredRentals = useMemo(() => {
+  if (!allRentals.length) return [];
+
+  return allRentals.filter(rental => {
     // Filter by tab
-    switch (activeTab) {
-      case TABS.PENDING:
-        filtered = filtered.filter(rental => rental.isApproved === false);
-        break;
-      case TABS.APPROVED:
-        filtered = filtered.filter(rental => rental.isApproved === true);
-        break;
-      case TABS.ALL:
-      default:
-        // Show all rentals
-        break;
-    }
-    
-    // Apply search filter
+    if (activeTab === TABS.PENDING && rental.isApproved !== false) return false;
+    if (activeTab === TABS.APPROVED && rental.isApproved !== true) return false;
+
+    // Search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(rental =>
+      const matchesSearch =
         rental.name?.toLowerCase().includes(query) ||
         rental.location?.toLowerCase().includes(query) ||
         rental.type?.toLowerCase().includes(query) ||
-        rental.caretakerNumber?.includes(query)
-      );
-    }
-    
-    // Apply additional filters
-    if (filters.location) {
-      filtered = filtered.filter(rental =>
-        rental.location?.toLowerCase().includes(filters.location.toLowerCase())
-      );
-    }
-    
-    if (filters.type) {
-      filtered = filtered.filter(rental =>
-        rental.type?.toLowerCase().includes(filters.type.toLowerCase())
-      );
-    }
-    
-    if (filters.vacancyStatus) {
-      filtered = filtered.filter(rental =>
-        rental.vacancyStatus === filters.vacancyStatus
-      );
-    }
-    
-    return filtered;
-  }, [allRentals, activeTab, searchQuery, filters]);
+        rental.caretakerNumber?.includes(query);
 
-  // API call to fetch rentals
-  const fetchRentals = useCallback(async (page = 1, shouldReset = false) => {
-    try {
-      // Set appropriate loading state
-      if (page === 1) {
-        shouldReset ? setRefreshing(true) : setLoading(true);
-      } else {
-        setLoadingMore(true);
-      }
+      if (!matchesSearch) return false;
+    }
 
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: '20', // Fetch more items per page
-      });
+    // Location filter
+    if (filters.location && !rental.location?.toLowerCase().includes(filters.location.toLowerCase())) {
+      return false;
+    }
 
-      const response = await axios.get(`/api/admin/rentals/all?${params}`);
+    // Type filter
+    if (filters.type && !rental.type?.toLowerCase().includes(filters.type.toLowerCase())) {
+      return false;
+    }
+
+    // Vacancy Status filter
+    if (filters.vacancyStatus && rental.vacancyStatus !== filters.vacancyStatus) {
+      return false;
+    }
+
+    return true;
+  });
+}, [allRentals, activeTab, searchQuery, filters]);
+
+const fetchRentals = useCallback(async (page = 1, shouldReset = false) => {
+  try {
+    if (page === 1) {
+      shouldReset ? setRefreshing(true) : setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
+
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: '20',
+    });
+
+    const response = await axios.get(`/api/admin/rentals/all?${params.toString()}`);
+    
+    if (response.data?.success) {
+      const newRentals = response.data.data || [];
+      const paginationData = response.data.pagination || {};
       
-      if (response.data?.success) {
-        const newRentals = response.data.data || [];
-        const paginationData = response.data.pagination || {};
-        
-        // Update rentals state
-        if (page === 1) {
-          setAllRentals(newRentals);
-        } else {
-          setAllRentals(prev => [...prev, ...newRentals]);
-        }
-        
-        // Update pagination
-        setPagination({
-          current: paginationData.current || page,
-          pages: paginationData.pages || 1,
-          total: paginationData.total || 0,
-          hasMore: page < (paginationData.pages || 1)
-        });
+      if (page === 1) {
+        setAllRentals(newRentals);
       } else {
-        throw new Error(response.data?.message || 'Failed to fetch rentals');
+        setAllRentals(prev => {
+          const existingIds = new Set(prev.map(r => r._id));
+          const merged = [...prev, ...newRentals.filter(r => !existingIds.has(r._id))];
+          return merged;
+        });
       }
-    } catch (error) {
-      console.error('Error fetching rentals:', error);
-      Alert.alert(
-        'Error',
-        error.response?.data?.message || 'Failed to fetch rentals. Please try again.'
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-      setLoadingMore(false);
+      
+      setPagination({
+        current: paginationData.current || page,
+        pages: paginationData.pages || 1,
+        total: paginationData.total || 0,
+        hasMore: page < (paginationData.pages || 1),
+      });
+    } else {
+      throw new Error(response.data?.message || 'Failed to fetch rentals');
     }
-  }, []);
+  } catch (error) {
+    console.error('Error fetching rentals:', error);
+    Alert.alert(
+      'Error',
+      error.response?.data?.message || 'Failed to fetch rentals. Please try again.'
+    );
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+    setLoadingMore(false);
+  }
+}, []);
+
 
   // Initial load
   useEffect(() => {

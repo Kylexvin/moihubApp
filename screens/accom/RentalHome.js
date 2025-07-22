@@ -47,13 +47,13 @@ const RentalHome = ({ navigation }) => {
   // Rental types and locations for filter dropdown
   const rentalTypes = ['bedsitter', 'one-bedroom', 'two-bedroom'];
   const vacancyStatuses = [
-  { label: 'All', value: '' },
-  { label: 'Vacant (Voted)', value: 'vacant' },
-  { label: 'Occupied (Voted)', value: 'occupied' },
-  { label: 'Vacant (Admin)', value: 'admin_vacant' },
-  { label: 'Occupied (Admin)', value: 'admin_occupied' },
-  { label: 'Unverified', value: 'unverified' }
-];
+    { label: 'All', value: '' },
+    { label: 'Vacant (Voted)', value: 'vacant' },
+    { label: 'Occupied (Voted)', value: 'occupied' },
+    { label: 'Vacant (Admin)', value: 'admin_vacant' },
+    { label: 'Occupied (Admin)', value: 'admin_occupied' },
+    { label: 'Unverified', value: 'unverified' }
+  ];
 
   useEffect(() => {
     fetchRentals();
@@ -75,69 +75,92 @@ const RentalHome = ({ navigation }) => {
     }
   };
 
-const normalizeFilter = (key, value) => {
-  if (typeof value !== 'string') return value;
+  const normalizeFilter = (key, value) => {
+    if (typeof value !== 'string') return value;
 
-  switch (key) {
-    case 'type':
-      return value.toLowerCase();
-    case 'vacancyStatus':
-      switch (value.toLowerCase()) {
-        case 'vacant': return 'verified_vacant';
-        case 'occupied': return 'verified_occupied';
-        case 'admin_vacant': return 'admin_verified_vacant';
-        case 'admin_occupied': return 'admin_verified_occupied';
-        case 'unverified': return 'unverified';
-        default: return value;
-      }
-    default:
-      return value.trim();
-  }
-};
+    switch (key) {
+      case 'type':
+        return value.toLowerCase();
+      case 'vacancyStatus':
+        switch (value.toLowerCase()) {
+          case 'vacant': return 'verified_vacant';
+          case 'occupied': return 'verified_occupied';
+          case 'admin_vacant': return 'admin_verified_vacant';
+          case 'admin_occupied': return 'admin_verified_occupied';
+          case 'unverified': return 'unverified';
+          default: return value;
+        }
+      default:
+        return value.trim();
+    }
+  };
 
-
-const searchRentals = async (query = '', appliedFilters = {}) => {
-  if (!query.trim() && Object.keys(appliedFilters).length === 0) {
-    fetchRentals(); // fallback to all
-    return;
-  }
-
-  try {
-    setIsSearching(true);
-
-    const params = {
-      page: 1,
-      limit: 10,
-    };
-
-    if (query && query.trim()) {
-      params.q = query.trim();
+  const searchRentals = async (query = '', appliedFilters = {}, page = 1) => {
+    if (!query.trim() && Object.keys(appliedFilters).length === 0) {
+      fetchRentals(page);
+      return;
     }
 
-    Object.keys(appliedFilters).forEach(key => {
-      const raw = appliedFilters[key];
-      if (raw !== undefined && raw.toString().trim() !== '') {
-        params[key] = normalizeFilter(key, raw);
+    try {
+      setIsSearching(true);
+
+      const params = {
+        page,
+        limit: 10,
+      };
+
+      if (query && query.trim()) {
+        params.q = query.trim();
       }
-    });
 
-    console.log('🔍 Search params:', params);
+      Object.keys(appliedFilters).forEach(key => {
+        const raw = appliedFilters[key];
+        if (raw !== undefined && raw.toString().trim() !== '') {
+          params[key] = normalizeFilter(key, raw);
+        }
+      });
 
-    const response = await axios.get(`${API_URL}/rentals/search`, { params });
+      console.log('🔍 Search params:', params);
 
-    if (response.data.success) {
-      setRentals(response.data.data);
-      setPagination(response.data.pagination);
+      const response = await axios.get(`${API_URL}/rentals/search`, { params });
+
+      if (response.data.success) {
+        setRentals(response.data.data);
+        setPagination(response.data.pagination);
+      }
+
+    } catch (error) {
+      console.error('Search error:', error);
+      Alert.alert('Error', error.response?.data?.message || 'Search failed');
+    } finally {
+      setIsSearching(false);
     }
+  };
 
-  } catch (error) {
-    console.error('Search error:', error);
-    Alert.alert('Error', error.response?.data?.message || 'Search failed');
-  } finally {
-    setIsSearching(false);
-  }
-};
-
+  const handlePageChange = async (newPage) => {
+    if (newPage < 1 || newPage > pagination.pages) return;
+    
+    try {
+      setLoading(true);
+      
+      // Check if we're searching/filtering
+      const activeFilters = getActiveFilters();
+      const hasSearchOrFilters = searchQuery.trim() || Object.keys(activeFilters).length > 0;
+      
+      if (hasSearchOrFilters) {
+        // For search/filter results
+        searchRentals(searchQuery, activeFilters, newPage);
+      } else {
+        // For regular fetch
+        await fetchRentals(newPage);
+      }
+    } catch (error) {
+      console.error('Error changing page:', error);
+      Alert.alert('Error', 'Failed to load page');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -372,6 +395,74 @@ const searchRentals = async (query = '', appliedFilters = {}) => {
       </View>
     </TouchableOpacity>
   );
+
+  const renderPaginationControls = () => {
+    if (pagination.total === 0) return null;
+
+    const canGoPrev = pagination.current > 1;
+    const canGoNext = pagination.current < pagination.pages;
+    const startItem = ((pagination.current - 1) * 10) + 1;
+    const endItem = Math.min(pagination.current * 10, pagination.total);
+
+    return (
+      <View style={styles.paginationContainer}>
+        <View style={styles.paginationInfo}>
+          <Text style={styles.paginationText}>
+            Showing {startItem}-{endItem} of {pagination.total} rentals
+          </Text>
+          <Text style={styles.paginationPageText}>
+            Page {pagination.current} of {pagination.pages}
+          </Text>
+        </View>
+        
+        {pagination.pages > 1 && (
+          <View style={styles.paginationControls}>
+            <TouchableOpacity
+              style={[
+                styles.paginationButton,
+                !canGoPrev && styles.paginationButtonDisabled
+              ]}
+              onPress={() => handlePageChange(pagination.current - 1)}
+              disabled={!canGoPrev || loading}
+            >
+              <Ionicons 
+                name="chevron-back" 
+                size={20} 
+                color={canGoPrev ? '#2196F3' : '#ccc'} 
+              />
+              <Text style={[
+                styles.paginationButtonText,
+                !canGoPrev && styles.paginationButtonTextDisabled
+              ]}>
+                Previous
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.paginationButton,
+                !canGoNext && styles.paginationButtonDisabled
+              ]}
+              onPress={() => handlePageChange(pagination.current + 1)}
+              disabled={!canGoNext || loading}
+            >
+              <Text style={[
+                styles.paginationButtonText,
+                !canGoNext && styles.paginationButtonTextDisabled
+              ]}>
+                Next
+              </Text>
+              <Ionicons 
+                name="chevron-forward" 
+                size={20} 
+                color={canGoNext ? '#2196F3' : '#ccc'} 
+              />
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  };
 
   const renderFilterModal = () => (
     <Modal
@@ -625,14 +716,8 @@ const searchRentals = async (query = '', appliedFilters = {}) => {
         }
       />
 
-      {/* Pagination Info */}
-      {pagination.total > 0 && (
-        <View style={styles.paginationContainer}>
-          <Text style={styles.paginationText}>
-            Showing {rentals.length} of {pagination.total} rentals
-          </Text>
-        </View>
-      )}
+      {/* Pagination Controls */}
+      {renderPaginationControls()}
 
       {/* Filter Modal */}
       {renderFilterModal()}
@@ -648,7 +733,6 @@ const searchRentals = async (query = '', appliedFilters = {}) => {
     </View>
   );
 };
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -889,7 +973,7 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 20,
-    bottom: 20,
+    bottom: 60,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -1069,6 +1153,54 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
     fontWeight: 'bold',
+  },
+  paginationContainer: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  paginationInfo: {
+    marginBottom: 8,
+  },
+  paginationText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  paginationPageText: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  paginationControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  paginationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+    minWidth: 100,
+    justifyContent: 'center',
+  },
+  paginationButtonDisabled: {
+    backgroundColor: '#f9f9f9',
+  },
+  paginationButtonText: {
+    fontSize: 14,
+    color: '#2196F3',
+    fontWeight: '500',
+    marginHorizontal: 4,
+  },
+  paginationButtonTextDisabled: {
+    color: '#ccc',
   },
 });
 export default RentalHome;  

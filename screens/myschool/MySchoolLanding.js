@@ -7,6 +7,8 @@ import {
   StyleSheet,
   Dimensions,
   StatusBar,
+  Clipboard,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
@@ -76,6 +78,16 @@ const MySchoolLanding = ({ navigation }) => {
       featured: true,
       available: true
     },
+{ 
+  name: 'HEF/HELB Loans', 
+  description: 'Access government-funded student loans and application portal',
+  icon: 'account-balance-wallet',  // Suggestion: Material Icon
+  screen: 'HEFLoan',
+  color: '#37C015',
+  bgColor: '#E8F5E9',
+  featured: true,
+  available: true
+},
 
     { 
       name: 'Moi University Website', 
@@ -94,7 +106,33 @@ const MySchoolLanding = ({ navigation }) => {
     { name: 'Past Papers', status: 'Coming Soon', icon: 'description', available: false, color: '#4CAF50' },
     { name: 'Exam Schedule', status: 'Coming Soon', icon: 'event', available: false, color: '#FF9800' },
     { name: 'Library', status: 'Coming Soon', icon: 'local-library', available: false, color: '#2196F3' },
-    
+  ];
+
+  const whatsappAiNumbers = [
+    {
+      name: 'ChatGPT',
+      number: '+1 800 242 8478',
+      description: 'General AI assistant for questions and help',
+      icon: 'chat',
+      color: '#10A37F',
+      bgColor: '#E8F7F4'
+    },
+    {
+      name: 'Perplexity',
+      number: '+1 833 436 3285',
+      description: 'Research and information assistant',
+      icon: 'search',
+      color: '#5A67D8',
+      bgColor: '#EDF2F7'
+    },
+    {
+      name: 'August AI',
+      number: '+91 87380 30604',
+      description: 'Specialized health and wellness assistant',
+      icon: 'local-hospital',
+      color: '#E53E3E',
+      bgColor: '#FED7D7'
+    }
   ];
 
   const handleServicePress = (service) => {
@@ -106,6 +144,15 @@ const MySchoolLanding = ({ navigation }) => {
   const handleBlogPress = (blog) => {
     // You can add navigation to a blog detail screen here if needed
     console.log('Blog pressed:', blog.title);
+  };
+
+  const copyToClipboard = (text, name) => {
+    Clipboard.setString(text);
+    Alert.alert(
+      'Copied!',
+      `${name} number copied to clipboard`,
+      [{ text: 'OK', style: 'default' }]
+    );
   };
 
   const renderHeader = () => (
@@ -145,6 +192,56 @@ const MySchoolLanding = ({ navigation }) => {
             </View>
           </TouchableOpacity>
         ))}
+      </View>
+    </View>
+  );
+
+  const renderWhatsAppAiSection = () => (
+    <View style={styles.whatsappSection}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>AI Assistants</Text>
+        <View style={styles.whatsappBadge}>
+          <Icon name="chat" size={14} color="#25D366" />
+          <Text style={styles.whatsappBadgeText}>WhatsApp</Text>
+        </View>
+      </View>
+      <Text style={styles.sectionSubtitle}>Get instant help from AI assistants via WhatsApp</Text>
+      
+      <View style={styles.aiNumbersGrid}>
+        {whatsappAiNumbers.map((ai, index) => (
+          <TouchableOpacity
+            key={ai.name}
+            style={[styles.aiNumberCard, { backgroundColor: ai.bgColor }]}
+            onPress={() => copyToClipboard(ai.number, ai.name)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.aiCardHeader}>
+              <View style={[styles.aiIcon, { backgroundColor: ai.color }]}>
+                <Icon name={ai.icon} size={20} color="#FFFFFF" />
+              </View>
+              <View style={styles.copyIconContainer}>
+                <Icon name="content-copy" size={16} color={ai.color} />
+              </View>
+            </View>
+            
+            <View style={styles.aiCardContent}>
+              <Text style={styles.aiName}>{ai.name}</Text>
+              <Text style={styles.aiNumber}>{ai.number}</Text>
+              <Text style={styles.aiDescription}>{ai.description}</Text>
+            </View>
+            
+            <View style={styles.tapToCopyHint}>
+              <Text style={styles.tapToCopyText}>Tap to copy</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+      
+      <View style={styles.aiDisclaimer}>
+        <Icon name="info-outline" size={16} color="#6B7280" />
+        <Text style={styles.disclaimerText}>
+          These are third-party AI services. Data charges may apply.
+        </Text>
       </View>
     </View>
   );
@@ -205,8 +302,6 @@ const MySchoolLanding = ({ navigation }) => {
     </View>
   );
 
-
-
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#F8F9FA" />
@@ -217,8 +312,8 @@ const MySchoolLanding = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent}
       >
         {renderFeaturedServices()}
+        {renderWhatsAppAiSection()}
         {renderAllServices()}
-        
       </ScrollView>
     </View>
   );
@@ -332,6 +427,117 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     lineHeight: 20,
   },
+
+  // WhatsApp AI Section Styles
+  whatsappSection: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  whatsappBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F7F4',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  whatsappBadgeText: {
+    fontSize: 12,
+    color: '#25D366',
+    fontWeight: '600',
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  aiNumbersGrid: {
+    gap: 12,
+  },
+  aiNumberCard: {
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  aiCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  aiIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  copyIconContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    padding: 8,
+    borderRadius: 12,
+  },
+  aiCardContent: {
+    marginBottom: 8,
+  },
+  aiName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  aiNumber: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 6,
+    fontFamily: 'monospace',
+  },
+  aiDescription: {
+    fontSize: 13,
+    color: '#6B7280',
+    lineHeight: 18,
+  },
+  tapToCopyHint: {
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  tapToCopyText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  aiDisclaimer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    gap: 8,
+  },
+  disclaimerText: {
+    fontSize: 12,
+    color: '#6B7280',
+    flex: 1,
+    lineHeight: 16,
+  },
   
   // Services Section
   servicesSection: {
@@ -434,13 +640,6 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 16,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 16,
-  },
   seeAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -503,7 +702,7 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     lineHeight: 20,
     marginBottom: 16,
-  },
+  },  
   updateFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',

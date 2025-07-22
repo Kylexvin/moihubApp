@@ -98,7 +98,7 @@ const startConversation = async (user) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ participantId: user._id, chatType: 'normal' }),
-    });
+    }); 
 
     if (res.ok) {
       const convo = await res.json();

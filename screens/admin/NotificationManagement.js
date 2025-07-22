@@ -191,36 +191,50 @@ const sendPushNotification = async () => {
       endpoint = '/api/admin/push/all';
       break;
     case 'role':
+      if (!pushRole) {
+        Alert.alert('Error', 'Role is required');
+        return;
+      }
       endpoint = '/api/admin/push/role';
       body.role = pushRole;
       break;
     case 'users':
+      if (!pushUserIds) {
+        Alert.alert('Error', 'User IDs are required');
+        return;
+      }
       endpoint = '/api/admin/push/users';
       body.userIds = pushUserIds.split(',').map(id => id.trim());
       break;
     case 'active':
+      if (!pushHoursAgo || isNaN(pushHoursAgo)) {
+        Alert.alert('Error', 'Valid hoursAgo is required');
+        return;
+      }
       endpoint = '/api/admin/push/active';
       body.hoursAgo = parseInt(pushHoursAgo);
       break;
     default:
-      Alert.alert('Error', 'Invalid push target');
+      Alert.alert('Error', 'Invalid push target selected');
       return;
   }
 
   try {
     const { data } = await axios.post(endpoint, body);
-    Alert.alert('Success', `Push notification sent: ${data.result.message}`);
+    Alert.alert('Success', `Push notification sent: ${data.message}`);
     setShowPushModal(false);
-    // Reset form
     setPushTitle('');
     setPushBody('');
     setPushData('');
     setPushUserIds('');
+    setPushHoursAgo('');
+    setPushRole('');
   } catch (error) {
     console.error('Failed to send push notification:', error);
     Alert.alert('Error', error?.response?.data?.message || 'Failed to send push notification');
   }
 };
+
 
 
   const onRefresh = async () => {

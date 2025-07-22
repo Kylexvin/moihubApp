@@ -12,9 +12,7 @@
       "resizeMode": "contain",
       "image": "./assets/moihublogo.png"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "bundleIdentifier": "com.kylexvin.moihub",
       "supportsTablet": true,
@@ -36,6 +34,7 @@
         "FOREGROUND_SERVICE",
         "com.google.android.c2dm.permission.RECEIVE"
       ],
+      "googleServicesFile": "./android/app/google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/appicon.png",
         "backgroundColor": "#f2f5f4ff"
@@ -58,7 +57,17 @@
     "plugins": [
       "expo-audio",
       "expo-web-browser",
-      "expo-notifications"
+      "expo-notifications",
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 21
+          }
+        }
+      ]
     ],
     "scheme": "moihubapp",
     "updates": {

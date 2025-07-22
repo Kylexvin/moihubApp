@@ -13,8 +13,13 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { Linking } from 'react-native';
-import { registerForPushNotificationsAsync } from '../utils/registerPushToken';
+
+import { requestNotificationPermission } from '../utils/notifications';
 import axios from 'axios'; // Add this import
+import Constants from 'expo-constants';
+
+const isExpoGo = Constants?.appOwnership === 'expo';
+const messaging = !isExpoGo ? require('@react-native-firebase/messaging').default : null;
 
 const { width } = Dimensions.get('window');
 
@@ -31,6 +36,9 @@ const LoginScreen = ({ navigation }) => {
   const slideAnim = useState(new Animated.Value(50))[0];
 
   useEffect(() => {
+  requestNotificationPermission();
+}, []);
+  useEffect(() => {
     // Entrance animation
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -46,52 +54,48 @@ const LoginScreen = ({ navigation }) => {
     ]).start();
   }, []);
 
-  const handleLogin = async () => {
-    if (!emailOrUsername || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
+const handleLogin = async () => {
+  if (!emailOrUsername || !password) {
+    Alert.alert('Error', 'Please fill in all fields');
+    return;
+  }
 
-    try {
-      setIsRedirecting(true);
-      setFeedback('Logging in...');
+  try {
+    setIsRedirecting(true);
+    setFeedback('Logging in...');
 
-      // Login first
-      const user = await login(emailOrUsername, password);
+    const user = await login(emailOrUsername, password);
 
-      setFeedback('Login successful! Setting up notifications...');
+    setFeedback('Login successful! Setting up notifications...');
 
-      // Register for push notifications after successful login
+    if (messaging) {
       try {
-        const token = await registerForPushNotificationsAsync();
-        
-        if (token && user?._id) {
+        const fcmToken = await messaging().getToken();
+
+        if (fcmToken && user?._id) {
           await axios.post('/api/auth/update-push-token', {
             userId: user._id,
-            expoPushToken: token,
+            fcmToken,
           });
-          console.log('Push token updated successfully');
+          console.log('FCM token registered successfully');
         }
       } catch (pushError) {
-        console.warn('Push notification setup failed:', pushError);
-        // Don't fail the login process if push notifications fail
+        console.warn('FCM token setup failed:', pushError);
       }
-
-      setFeedback('Login successful! Redirecting...');
-      
-      // The navigation will be handled by your AuthContext or App.js
-      // based on the authentication state change
-
-    } catch (err) {
-      console.error('Login error:', err);
-      setIsRedirecting(false);
-      setFeedback('');
-      
-      // Clear any previous error state
-      const errorMessage = err.response?.data?.message || err.message || 'Please check your credentials and try again';
-      Alert.alert('Login Failed', errorMessage);
     }
-  };
+
+    setFeedback('Login successful! Redirecting...');
+
+  } catch (err) {
+    console.error('Login error:', err);
+    setIsRedirecting(false);
+    setFeedback('');
+
+    const errorMessage = err.response?.data?.message || err.message || 'Please check your credentials and try again';
+    Alert.alert('Login Failed', errorMessage);
+  }
+};
+
 
   const handleGoogleSignIn = () => {
     Alert.alert(

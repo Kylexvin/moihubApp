@@ -6,40 +6,20 @@ import MusomiScreen from '../screens/myschool/MusomiScreen';
 import AdmissionsScreen from '../screens/myschool/AdmissionsScreen';
 import MoiWebsiteScreen from '../screens/myschool/MoiWebsiteScreen';
 import OrganizationScreen from '../screens/myschool/OrganizationScreen';
+import HEFLoanScreen from '../screens/myschool/HEFLoanScreen';
 
 const Stack = createStackNavigator();
 
 const MySchoolNavigator = () => {
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-      }}
-    >
-      <Stack.Screen 
-        name="MySchoolHome" 
-        component={MySchoolLanding}
-      />
-      <Stack.Screen 
-        name="Portal" 
-        component={PortalScreen}
-      />
-      <Stack.Screen 
-        name="Musomi" 
-        component={MusomiScreen}
-      />
-      <Stack.Screen 
-        name="Admissions" 
-        component={AdmissionsScreen}
-      />
-      <Stack.Screen 
-        name="MoiWebsite" 
-        component={MoiWebsiteScreen}
-      />
-      <Stack.Screen 
-        name="Organizations" 
-        component={OrganizationScreen}
-      />
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="MySchoolHome" component={MySchoolLanding} />
+      <Stack.Screen name="Portal" component={PortalScreen} />
+      <Stack.Screen name="Musomi" component={MusomiScreen} />
+      <Stack.Screen name="Admissions" component={AdmissionsScreen} />
+      <Stack.Screen name="MoiWebsite" component={MoiWebsiteScreen} />
+      <Stack.Screen name="Organizations" component={OrganizationScreen} />
+      <Stack.Screen name="HEFLoan" component={HEFLoanScreen} />
     </Stack.Navigator>
   );
 };

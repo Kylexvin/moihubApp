@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "440940724570",
+    "project_id": "moihub-5595",
+    "storage_bucket": "moihub-5595.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:440940724570:android:d833a7158e60e86279b363",
+        "android_client_info": {
+          "package_name": "com.kylexvin.moihub"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGnkHnAG19TTL71uyK1s8CqA0P2O1-u1g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

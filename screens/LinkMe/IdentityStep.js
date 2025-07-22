@@ -9,6 +9,8 @@ import {
   Alert,
   ActivityIndicator,
   SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import axios from 'axios';
@@ -32,7 +34,6 @@ const IdentityStep = ({ navigation }) => {
   const preferenceOptions = [
     { value: 'male', label: 'Men' },
     { value: 'female', label: 'Women' },
-
   ];
 
   const isFormValid = () => {
@@ -73,7 +74,6 @@ const IdentityStep = ({ navigation }) => {
       );
 
       if (response.data.success) {
-        // Navigate to personality step
         navigation.navigate('PersonalityStep');
       }
     } catch (error) {
@@ -103,6 +103,7 @@ const IdentityStep = ({ navigation }) => {
               selectedValue === option.value && styles.optionChipSelected
             ]}
             onPress={() => onSelect(option.value)}
+            activeOpacity={0.7}
           >
             <LinearGradient
               colors={
@@ -127,11 +128,10 @@ const IdentityStep = ({ navigation }) => {
         ))}
       </View>
       
-      {/* Matching explanation */}
       {title === '💕 Interested in' && (
         <View style={styles.matchingNote}>
           <Text style={styles.matchingNoteText}>
-            💡 You'll be matched with people who share mutual interest
+            💡 You'll be matched with people who share mutual interest. 
           </Text>
         </View>
       )}
@@ -156,75 +156,97 @@ const IdentityStep = ({ navigation }) => {
         <View style={[styles.glowOrb, styles.orb1]} />
         <View style={[styles.glowOrb, styles.orb2]} />
 
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-          <View style={styles.header}>
-            <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-              <Text style={styles.backText}>← Back</Text>
-            </TouchableOpacity>
-            <View style={styles.stepContainer}>
-              <Text style={styles.step}>Step 1 of 4</Text>
-              <View style={styles.progressBar}>
-                <View style={styles.progressFill} />
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.content}>
-            <Text style={styles.title}>
-              Let's get to know{' '}
-              <Text style={styles.highlightText}>you</Text>
-            </Text>
-            <Text style={styles.subtitle}>
-              Tell us a bit about yourself to create your{' '}
-              <Text style={styles.brandText}>cosmic profile</Text>
-            </Text>
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>✨ Display Name</Text>
-              <View style={styles.inputContainer}>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="What should we call you?"
-                  placeholderTextColor="#888"
-                  value={displayName}
-                  onChangeText={setDisplayName}
-                  maxLength={50}
-                />
-                <View style={styles.inputGlow} />
+        <KeyboardAvoidingView 
+          style={styles.keyboardAvoidingView}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <ScrollView 
+            style={styles.scrollView} 
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.scrollContent}
+          >
+            <View style={styles.header}>
+              <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+                <Text style={styles.backText}>← Back</Text>
+              </TouchableOpacity>
+              <View style={styles.stepContainer}>
+                <Text style={styles.step}>Step 1 of 4</Text>
+                <View style={styles.progressBar}>
+                  <View style={styles.progressFill} />
+                </View>
               </View>
             </View>
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>🎂 Age</Text>
-              <View style={styles.inputContainer}>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="How old are you?"
-                  placeholderTextColor="#888"
-                  value={age}
-                  onChangeText={setAge}
-                  keyboardType="numeric"
-                  maxLength={3}
-                />
-                <View style={styles.inputGlow} />
+            <View style={styles.content}>
+              <Text style={styles.title}>
+                Let's get to know{' '}
+                <Text style={styles.highlightText}>you</Text>
+              </Text>
+              <Text style={styles.subtitle}>
+                Tell us a bit about yourself to create your{' '}
+                <Text style={styles.brandText}>LinkMe profile</Text>
+              </Text>
+
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>✨ Display Name</Text>
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="What should we call you?"
+                    placeholderTextColor="#888"
+                    value={displayName}
+                    onChangeText={setDisplayName}
+                    maxLength={50}
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                    returnKeyType="next"
+                    blurOnSubmit={false}
+                    textContentType="name"
+                  />
+                  <View style={styles.inputGlow} />
+                </View>
               </View>
+
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>🎂 Age</Text>
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="How old are you?"
+                    placeholderTextColor="#888"
+                    value={age}
+                    onChangeText={(text) => {
+                      // Only allow numbers
+                      const numericValue = text.replace(/[^0-9]/g, '');
+                      setAge(numericValue);
+                    }}
+                    keyboardType="numeric"
+                    maxLength={3}
+                    returnKeyType="done"
+                    textContentType="none"
+                  />
+                  <View style={styles.inputGlow} />
+                </View>
+              </View>
+
+              {renderOptionGroup(
+                '👤 Gender',
+                genderOptions,
+                gender,
+                setGender
+              )}
+
+              {renderOptionGroup(
+                '💕 Interested in',
+                preferenceOptions,
+                sexualPreference,
+                setSexualPreference
+              )}
             </View>
-
-            {renderOptionGroup(
-              '👤 Gender',
-              genderOptions,
-              gender,
-              setGender
-            )}
-
-            {renderOptionGroup(
-              '💕 Interested in',
-              preferenceOptions,
-              sexualPreference,
-              setSexualPreference
-            )}
-          </View>
-        </ScrollView>
+          </ScrollView>
+        </KeyboardAvoidingView>
 
         <View style={styles.footer}>
           <TouchableOpacity
@@ -234,6 +256,7 @@ const IdentityStep = ({ navigation }) => {
             ]}
             onPress={handleContinue}
             disabled={loading || !isFormValid()}
+            activeOpacity={0.8}
           >
             <LinearGradient
               colors={
@@ -269,6 +292,9 @@ const styles = StyleSheet.create({
   gradient: {
     flex: 1,
   },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
   heartsContainer: {
     position: 'absolute',
     top: 0,
@@ -276,6 +302,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 1,
+    pointerEvents: 'none', // Allow touches to pass through
   },
   floatingHeart: {
     position: 'absolute',
@@ -302,6 +329,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     borderRadius: 100,
     opacity: 0.1,
+    pointerEvents: 'none', // Allow touches to pass through
   },
   orb1: {
     width: 200,
@@ -328,6 +356,10 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     zIndex: 2,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
   },
   header: {
     flexDirection: 'row',
@@ -414,6 +446,8 @@ const styles = StyleSheet.create({
     color: '#fff',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
+    // Ensure proper touch handling
+    zIndex: 10,
   },
   inputGlow: {
     position: 'absolute',
@@ -426,6 +460,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(199, 125, 255, 0.3)',
     opacity: 0,
+    pointerEvents: 'none', // Don't interfere with TextInput
   },
   optionsGrid: {
     flexDirection: 'row',

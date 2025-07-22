@@ -28,7 +28,6 @@ import MySchoolNavigator from './navigation/MySchoolNavigator';
 import BlogsNavigator from './navigation/BlogsNavigator';
 import AdminNavigator from './navigation/AdminNavigator';
 import WriterNavigator from './navigation/WriterNavigator';
-
 import OAuthDebug from './screens/OAuthDebug';
 import EshopOwnerNavigator from './navigation/EshopOwnerNavigator';
 import EditProductScreen from './screens/eshop/dashboards/EditProductScreen';
@@ -36,6 +35,11 @@ import FoodVendorNavigator from './navigation/FoodVendorNavigator';
 import EchemNavigator from './navigation/EchemNavigator';
 import ServicesStackNavigator from './navigation/ServicesStackNavigator';
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
+
+const isExpoGo = Constants?.appOwnership === 'expo';
+const messaging = !isExpoGo ? require('@react-native-firebase/messaging').default : null;
+
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -44,6 +48,11 @@ Notifications.setNotificationHandler({
     shouldSetBadge: false,
   }),
 });
+if (messaging) {
+  messaging().setBackgroundMessageHandler(async remoteMessage => {
+    console.log('Background FCM message:', remoteMessage);
+  });
+}
 
 
 const Stack = createNativeStackNavigator();
@@ -83,29 +92,56 @@ function AppNavigator() {
   const [appState, setAppState] = useState('splash');
   const [firstLaunch, setFirstLaunch] = useState(null);
 
+
+
+useEffect(() => {
+  if (!messaging) return;
+
+  const unsubscribe = messaging().onMessage(async remoteMessage => {
+    console.log('Foreground FCM message:', remoteMessage);
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: remoteMessage.notification?.title || 'MoiHub',
+        body: remoteMessage.notification?.body || '',
+        data: remoteMessage.data,
+      },
+      trigger: null,
+    });
+  });
+
+  return unsubscribe;
+}, []);
+
+
+useEffect(() => {
+  const unsubscribe = Notifications.addNotificationResponseReceivedListener(async response => {
+    console.log('Notification tapped:', response);
+
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        require('./assets/sounds/moihub_sound.mp3')
+      );
+      await sound.playAsync();
+    } catch (error) {
+      console.error('Error playing sound after tap:', error);
+    }
+
+    // Handle navigation here if needed
+  });
+
+  return () => unsubscribe.remove();
+}, []);
+
+
   useEffect(() => {
-    const checkFirstLaunch = async () => {
-      try {
-        const value = await AsyncStorage.getItem('alreadyLaunched');
-        setFirstLaunch(value === null);
-      } catch (error) {
-        console.error("AsyncStorage error:", error);
-        setFirstLaunch(false);
-      }
-    };
-
-    checkFirstLaunch();
-  }, []);
-
- useEffect(() => {
     const subscription = Notifications.addNotificationReceivedListener(async notification => {
-      console.log('Foreground notification received:', notification);
+      console.log('Foreground Local notification:', notification);
 
       try {
         const { sound } = await Audio.Sound.createAsync(
-  require('./assets/sounds/moihub_sound.mp3')
-);
-
+          require('./assets/sounds/moihub_sound.mp3')
+        );
         await sound.playAsync();
       } catch (error) {
         console.error('Error playing notification sound:', error);
@@ -114,6 +150,23 @@ function AppNavigator() {
 
     return () => subscription.remove();
   }, []);
+
+  useEffect(() => {
+    const checkFirstLaunch = async () => {
+      try {
+        const value = await AsyncStorage.getItem('alreadyLaunched');
+        setFirstLaunch(value === null);
+      } catch (error) {
+        console.error('AsyncStorage error:', error);
+        setFirstLaunch(false);
+      }
+    };
+
+    checkFirstLaunch();
+  }, []);
+
+
+
 
   const handleSplashComplete = () => {
     if (firstLaunch === null) return;

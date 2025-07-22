@@ -39,56 +39,135 @@ const RentalEdit = ({ navigation }) => {
   const [actionLoading, setActionLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [editImages, setEditImages] = useState([]);
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRentals, setTotalRentals] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasNextPage, setHasNextPage] = useState(false);
+  const ITEMS_PER_PAGE = 20;
 
-  // Set up axios defaults
-  useEffect(() => {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+// Set up axios defaults
+useEffect(() => {
+  if (token) {
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  }
+}, [token]);
+
+useEffect(() => {
+  const delayedSearch = setTimeout(() => {
+    setCurrentPage(1);
+    fetchRentals(true, 1, searchQuery.trim());
+  }, 500);
+
+  return () => clearTimeout(delayedSearch);
+}, [searchQuery]);
+
+
+
+  // Fetch rentals with pagination
+// Fetch rentals with pagination
+const fetchRentals = useCallback(async (showLoader = true, page = 1, search = '') => {
+  try {
+    if (showLoader) setLoading(true);
+    if (page > 1) setLoadingMore(true);
+
+    const params = {
+      page,
+      limit: ITEMS_PER_PAGE,
+    };
+
+    if (search.trim()) {
+      params.search = search.trim();
     }
-  }, [token]);
 
-  // Search functionality
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredRentals(rentals);
-    } else {
-      const filtered = rentals.filter(rental =>
-        rental.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        rental.location?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        rental.type?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        rental.createdBy?.email?.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      setFilteredRentals(filtered);
-    }
-  }, [searchQuery, rentals]);
+    const response = await axios.get('/api/admin/rentals/all', { params });
 
-  // Fetch rentals
-  const fetchRentals = useCallback(async (showLoader = true) => {
-    try {
-      if (showLoader) setLoading(true);
-      
-      const response = await axios.get('/api/admin/rentals/all');
-      
-      if (response.data.success) {
-        setRentals(response.data.data);
+    if (response.data.success) {
+      const { data, pagination } = response.data;
+
+      const mergeUniqueById = (prev, next) => {
+        const combined = [...prev, ...next];
+        return combined.filter(
+          (item, index, self) => index === self.findIndex(r => r._id === item._id)
+        );
+      };
+
+      if (page === 1) {
+        setRentals(data);
+        setFilteredRentals(data);
+      } else {
+        setRentals(prev => mergeUniqueById(prev, data));
+        setFilteredRentals(prev => mergeUniqueById(prev, data));
       }
-    } catch (error) {
-      console.error('Error fetching rentals:', error);
+
+      if (pagination) {
+        const currentPage = pagination.currentPage || pagination.page || page;
+        const totalPages = pagination.totalPages || pagination.pages || Math.ceil((pagination.total || 0) / ITEMS_PER_PAGE);
+        const total = pagination.total || pagination.totalCount || 0;
+        const hasNext = pagination.hasNext || pagination.hasNextPage || currentPage < totalPages;
+
+        setCurrentPage(currentPage);
+        setTotalPages(totalPages);
+        setTotalRentals(total);
+        setHasNextPage(hasNext);
+      } else {
+        const total = response.data.total || data.length;
+        const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
+        const hasNext = page < totalPages;
+
+        setCurrentPage(page);
+        setTotalPages(totalPages);
+        setTotalRentals(total);
+        setHasNextPage(hasNext);
+      }
+    } else {
       Alert.alert('Error', 'Failed to fetch rentals');
-    } finally {
-      setLoading(false);
     }
-  }, []);
+  } catch (error) {
+    Alert.alert('Error', 'Failed to fetch rentals');
+  } finally {
+    setLoading(false);
+    setLoadingMore(false);
+  }
+}, []);
+
+useEffect(() => {
+  fetchRentals();
+}, [fetchRentals]);
+
+const onRefresh = async () => {
+  setRefreshing(true);
+  setCurrentPage(1);
+  setRentals([]);
+  setFilteredRentals([]);
+  await fetchRentals(false, 1, searchQuery);
+  setRefreshing(false);
+};
+
 
   useEffect(() => {
     fetchRentals();
   }, [fetchRentals]);
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchRentals(false);
-    setRefreshing(false);
-  };
+
+
+  // Load more rentals (pagination)
+const loadMoreRentals = () => {
+  console.log('loadMoreRentals called:', {
+    loadingMore,
+    hasNextPage,
+    currentPage,
+    totalPages
+  });
+  
+  if (!loadingMore && hasNextPage && currentPage < totalPages) {
+    const nextPage = currentPage + 1;
+    console.log('Loading page:', nextPage);
+    fetchRentals(false, nextPage, searchQuery);
+  }
+};
 
   // Edit rental
   const handleEdit = (rental) => {
@@ -144,7 +223,9 @@ const RentalEdit = ({ navigation }) => {
       if (response.data.success) {
         Alert.alert('Success', 'Rental updated successfully');
         setShowEditModal(false);
-        fetchRentals(false);
+        // Refresh current page
+        fetchRentals(false, 1, searchQuery);
+        setCurrentPage(1);
       }
     } catch (error) {
       console.error('Error updating rental:', error);
@@ -181,7 +262,9 @@ const RentalEdit = ({ navigation }) => {
       if (response.data.success) {
         Alert.alert('Success', 'Vacancy status overridden successfully');
         setShowOverrideModal(false);
-        fetchRentals(false);
+        // Refresh current page
+        fetchRentals(false, 1, searchQuery);
+        setCurrentPage(1);
       }
     } catch (error) {
       console.error('Error overriding vacancy:', error);
@@ -190,29 +273,32 @@ const RentalEdit = ({ navigation }) => {
       setActionLoading(false);
     }
   };
-// Add this function after handleSubmitOverride (around line 186)
-const handleRemoveOverride = async (rental) => {
-  try {
-    setActionLoading(true);
-    const response = await axios.delete(`/api/admin/rentals/${rental._id}/override`);
-    
-    if (response.data.success) {
-      Alert.alert('Success', 'Override removed successfully');
-      fetchRentals(false);
-    }
-  } catch (error) {
-    console.error('Error removing override:', error);
-    Alert.alert('Error', error.response?.data?.message || 'Failed to remove override');
-  } finally {
-    setActionLoading(false);
-  }
-};
 
-// Delete rental
-const handleDelete = (rental) => {
-  setSelectedRental(rental);
-  setDeleteReason('');
-  setShowDeleteModal(true);
+  // Remove override
+  const handleRemoveOverride = async (rental) => {
+    try {
+      setActionLoading(true);
+      const response = await axios.delete(`/api/admin/rentals/${rental._id}/override`);
+      
+      if (response.data.success) {
+        Alert.alert('Success', 'Override removed successfully');
+        // Refresh current page
+        fetchRentals(false, 1, searchQuery);
+        setCurrentPage(1);
+      }
+    } catch (error) {
+      console.error('Error removing override:', error);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to remove override');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Delete rental
+  const handleDelete = (rental) => {
+    setSelectedRental(rental);
+    setDeleteReason('');
+    setShowDeleteModal(true);
   };
 
   const handleConfirmDelete = async () => {
@@ -228,7 +314,9 @@ const handleDelete = (rental) => {
       if (response.data.success) {
         Alert.alert('Success', 'Rental deleted successfully');
         setShowDeleteModal(false);
-        fetchRentals(false);
+        // Refresh current page
+        fetchRentals(false, 1, searchQuery);
+        setCurrentPage(1);
       }
     } catch (error) {
       console.error('Error deleting rental:', error);
@@ -246,7 +334,9 @@ const handleDelete = (rental) => {
       
       if (response.data.success) {
         Alert.alert('Success', 'Rental approved successfully');
-        fetchRentals(false);
+        // Refresh current page
+        fetchRentals(false, 1, searchQuery);
+        setCurrentPage(1);
       }
     } catch (error) {
       Alert.alert('Error', error.response?.data?.message || 'Failed to approve rental');
@@ -255,37 +345,7 @@ const handleDelete = (rental) => {
     }
   };
 
-  const handleReject = async (rental) => {
-    Alert.prompt(
-      'Reject Rental',
-      'Provide a reason for rejection:',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reject',
-          onPress: async (reason) => {
-            if (!reason?.trim()) return;
-            try {
-              setActionLoading(true);
-              const response = await axios.put(`/api/admin/rentals/${rental._id}/reject`, {
-                reason: reason.trim(),
-              });
-              
-              if (response.data.success) {
-                Alert.alert('Success', 'Rental rejected successfully');
-                fetchRentals(false);
-              }
-            } catch (error) {
-              Alert.alert('Error', error.response?.data?.message || 'Failed to reject rental');
-            } finally {
-              setActionLoading(false);
-            }
-          }
-        }
-      ],
-      'plain-text'
-    );
-  };
+
 
   // Image picker
   const handlePickEditImages = async () => {
@@ -308,7 +368,7 @@ const handleDelete = (rental) => {
     }
   };
 
-  // Render rental item (minimal, no images)
+  // Render rental item
   const renderRentalItem = ({ item }) => (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
@@ -336,36 +396,72 @@ const handleDelete = (rental) => {
       )}
 
       <View style={styles.actions}>
-  <TouchableOpacity style={styles.editBtn} onPress={() => handleEdit(item)}>
-    <Ionicons name="create-outline" size={16} color="#2196F3" />
-    <Text style={styles.editBtnText}>Edit</Text>
-  </TouchableOpacity>
-  
-  {item.adminOverride?.isActive ? (
-    <TouchableOpacity style={styles.removeOverrideBtn} onPress={() => handleRemoveOverride(item)}>
-      <Ionicons name="close-circle-outline" size={16} color="#FF5722" />
-      <Text style={styles.removeOverrideBtnText}>Remove Override</Text>
-    </TouchableOpacity>
-  ) : (
-    <TouchableOpacity style={styles.overrideBtn} onPress={() => handleOverride(item)}>
-      <Ionicons name="shield-outline" size={16} color="#9C27B0" />
-      <Text style={styles.overrideBtnText}>Override</Text>
-    </TouchableOpacity>
-  )}
-  
-  {!item.isApproved && (
-    <TouchableOpacity style={styles.approveBtn} onPress={() => handleApprove(item)}>
-      <Ionicons name="checkmark-outline" size={16} color="#4CAF50" />
-      <Text style={styles.approveBtnText}>Approve</Text>
-    </TouchableOpacity>
-  )}
-  
-  <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item)}>
-    <Ionicons name="trash-outline" size={16} color="#F44336" />
-  </TouchableOpacity>
-</View>
+        <TouchableOpacity style={styles.editBtn} onPress={() => handleEdit(item)}>
+          <Ionicons name="create-outline" size={16} color="#2196F3" />
+          <Text style={styles.editBtnText}>Edit</Text>
+        </TouchableOpacity>
+        
+        {item.adminOverride?.isActive ? (
+          <TouchableOpacity style={styles.removeOverrideBtn} onPress={() => handleRemoveOverride(item)}>
+            <Ionicons name="close-circle-outline" size={16} color="#FF5722" />
+            <Text style={styles.removeOverrideBtnText}>Remove Override</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.overrideBtn} onPress={() => handleOverride(item)}>
+            <Ionicons name="shield-outline" size={16} color="#9C27B0" />
+            <Text style={styles.overrideBtnText}>Override</Text>
+          </TouchableOpacity>
+        )}
+        
+        {!item.isApproved && (
+          <TouchableOpacity style={styles.approveBtn} onPress={() => handleApprove(item)}>
+            <Ionicons name="checkmark-outline" size={16} color="#4CAF50" />
+            <Text style={styles.approveBtnText}>Approve</Text>
+          </TouchableOpacity>
+        )}
+        
+        <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item)}>
+          <Ionicons name="trash-outline" size={16} color="#F44336" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
+
+  // Render footer for pagination
+const renderFooter = () => {
+  if (loadingMore) {
+    return (
+      <View style={styles.footerLoader}>
+        <ActivityIndicator size="small" color="#2196F3" />
+        <Text style={styles.loadingText}>Loading more rentals...</Text>
+      </View>
+    );
+  }
+  
+  // Only show "all loaded" message if we have valid pagination data
+  if (hasNextPage === false && filteredRentals.length > 0 && totalRentals > 0) {
+    return (
+      <View style={styles.footerLoader}>
+        <Text style={styles.loadingText}>
+          All {totalRentals} rentals loaded
+        </Text>
+      </View>
+    );
+  }
+  
+  // Show debug info if pagination is undefined
+  if (filteredRentals.length > 0 && (hasNextPage === undefined || totalPages === undefined)) {
+    return (
+      <View style={styles.footerLoader}>
+        <Text style={styles.loadingText}>
+          Debug: {filteredRentals.length} rentals loaded (pagination data missing)
+        </Text>
+      </View>
+    );
+  }
+  
+  return null;
+};
 
   if (loading) {
     return (
@@ -381,44 +477,125 @@ const handleDelete = (rental) => {
   return (
     <SafeAreaView style={styles.container}>
       {/* Header with search */}
-      <View style={styles.header}>
 
-        <View style={styles.searchContainer}>
-          <Ionicons name="search-outline" size={20} color="#666" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search rentals..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery !== '' && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color="#666" />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
 
-      {/* Results count */}
+      {/* Results count and pagination info */}
       <View style={styles.resultsBar}>
         <Text style={styles.resultsText}>
-          {filteredRentals.length} rental{filteredRentals.length !== 1 ? 's' : ''}
+          {totalRentals} total rental{totalRentals !== 1 ? 's' : ''} 
+          {totalPages > 1 && ` • Page ${currentPage} of ${totalPages}`}
         </Text>
-        <TouchableOpacity onPress={() => fetchRentals()}>
+        <TouchableOpacity onPress={() => {
+  setCurrentPage(1);
+  setRentals([]);
+  setFilteredRentals([]);
+  fetchRentals(true, 1, searchQuery);
+}}>
           <Ionicons name="refresh-outline" size={20} color="#2196F3" />
         </TouchableOpacity>
       </View>
 
       {/* Rentals list */}
       <FlatList
-        data={filteredRentals}
-        renderItem={renderRentalItem}
-        keyExtractor={(item) => item._id}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.list}
-      />
+  data={filteredRentals}
+  renderItem={renderRentalItem}
+  keyExtractor={(item) => item._id}
+  refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+  showsVerticalScrollIndicator={false}
+  contentContainerStyle={styles.list}
+  onEndReached={loadMoreRentals}
+  onEndReachedThreshold={0.1} // Reduced threshold for better triggering
+  ListFooterComponent={renderFooter}
+  removeClippedSubviews={true}
+  maxToRenderPerBatch={10}
+  updateCellsBatchingPeriod={50}
+  initialNumToRender={20}
+  windowSize={21}
+  // Add empty state
+  ListEmptyComponent={
+    !loading && (
+      <View style={styles.emptyState}>
+        <Text style={styles.emptyText}>No rentals found</Text>
+      </View>
+    )
+  }
+/>
+{hasNextPage && !loadingMore && (
+  <TouchableOpacity 
+    style={styles.loadMoreButton}
+    onPress={() => loadMoreRentals()}
+  >
+    <Text style={styles.loadMoreButtonText}>
+      Load More ({filteredRentals.length} of {totalRentals})
+    </Text>
+  </TouchableOpacity>
+)}
+{totalPages > 1 && (
+  <View style={styles.paginationContainer}>
+    <Text style={styles.paginationInfo}>
+      Page {currentPage} of {totalPages} ({totalRentals} total rentals)
+    </Text>
+    <View style={styles.paginationControls}>
+      <TouchableOpacity
+        style={[
+          styles.pageButton,
+          currentPage === 1 && styles.pageButtonDisabled
+        ]}
+        onPress={() => {
+          if (currentPage > 1) {
+            const prevPage = currentPage - 1;
+            setCurrentPage(prevPage);
+            setRentals([]);
+            setFilteredRentals([]);
+            fetchRentals(true, prevPage, searchQuery);
+          }
+        }}
+        disabled={currentPage === 1}
+      >
+        <Ionicons 
+          name="chevron-back" 
+          size={16} 
+          color={currentPage === 1 ? "#999" : "#fff"} 
+        />
+        <Text style={[
+          styles.pageButtonText,
+          currentPage === 1 && styles.pageButtonTextDisabled
+        ]}>
+          Previous
+        </Text>
+      </TouchableOpacity>
 
+      <TouchableOpacity
+        style={[
+          styles.pageButton,
+          currentPage === totalPages && styles.pageButtonDisabled
+        ]}
+        onPress={() => {
+          if (currentPage < totalPages) {
+            const nextPage = currentPage + 1;
+            setCurrentPage(nextPage);
+            setRentals([]);
+            setFilteredRentals([]);
+            fetchRentals(true, nextPage, searchQuery);
+          }
+        }}
+        disabled={currentPage === totalPages}
+      >
+        <Text style={[
+          styles.pageButtonText,
+          currentPage === totalPages && styles.pageButtonTextDisabled
+        ]}>
+          Next
+        </Text>
+        <Ionicons 
+          name="chevron-forward" 
+          size={16} 
+          color={currentPage === totalPages ? "#999" : "#fff"} 
+        />
+      </TouchableOpacity>
+    </View>
+  </View>
+)}
       {/* Edit Modal */}
       <Modal visible={showEditModal} animationType="slide" transparent={true}>
         <View style={styles.modalContainer}>
@@ -582,6 +759,8 @@ const handleDelete = (rental) => {
   );
 };
 
+
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -591,58 +770,61 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 10,
   },
   header: {
     backgroundColor: '#fff',
-    padding: 10,
-    borderBottomWidth: 0.5,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 12,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f8f8',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 25,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    gap: 10,
   },
   searchInput: {
     flex: 1,
-    marginLeft: 8,
     fontSize: 16,
+    color: '#333',
   },
   resultsBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
   resultsText: {
-    color: '#666',
     fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
   },
   list: {
     padding: 16,
+    paddingBottom: 100, // Extra space for load more button
   },
   card: {
     backgroundColor: '#fff',
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -652,15 +834,18 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     flex: 1,
+    marginRight: 12,
   },
   name: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
+    color: '#333',
     marginBottom: 4,
   },
   status: {
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
+    textTransform: 'uppercase',
   },
   amount: {
     fontSize: 16,
@@ -669,106 +854,190 @@ const styles = StyleSheet.create({
   },
   cardInfo: {
     marginBottom: 12,
+    gap: 4,
   },
   location: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 2,
+    textTransform: 'capitalize',
   },
   caretaker: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 2,
   },
   owner: {
     fontSize: 12,
     color: '#999',
+    fontStyle: 'italic',
   },
   override: {
-    backgroundColor: '#f3e5f5',
-    padding: 8,
-    borderRadius: 4,
+    backgroundColor: '#fff3cd',
+    borderLeftWidth: 4,
+    borderLeftColor: '#ffc107',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     marginBottom: 12,
+    borderRadius: 4,
   },
   overrideText: {
     fontSize: 12,
-    color: '#9C27B0',
+    color: '#856404',
     fontWeight: '500',
   },
-  removeOverrideBtn: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  paddingHorizontal: 12,
-  paddingVertical: 6,
-  backgroundColor: '#FFF3E0',
-  borderRadius: 6,
-  marginRight: 8,
-},
-removeOverrideBtnText: {
-  color: '#FF5722',
-  fontSize: 12,
-  fontWeight: '500',
-  marginLeft: 4,
-},
   actions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
     alignItems: 'center',
   },
   editBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#e3f2fd',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#e3f2fd',
-    borderRadius: 4,
+    borderRadius: 16,
+    gap: 4,
   },
   editBtnText: {
     color: '#2196F3',
     fontSize: 12,
-    marginLeft: 4,
+    fontWeight: '500',
   },
   overrideBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#f3e5f5',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#f3e5f5',
-    borderRadius: 4,
+    borderRadius: 16,
+    gap: 4,
   },
   overrideBtnText: {
     color: '#9C27B0',
     fontSize: 12,
-    marginLeft: 4,
+    fontWeight: '500',
+  },
+  removeOverrideBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffebee',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 4,
+  },
+  removeOverrideBtnText: {
+    color: '#FF5722',
+    fontSize: 12,
+    fontWeight: '500',
   },
   approveBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#e8f5e8',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#e8f5e8',
-    borderRadius: 4,
+    borderRadius: 16,
+    gap: 4,
   },
   approveBtnText: {
     color: '#4CAF50',
     fontSize: 12,
-    marginLeft: 4,
+    fontWeight: '500',
   },
   deleteBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
     backgroundColor: '#ffebee',
-    borderRadius: 4,
+    padding: 8,
+    borderRadius: 16,
   },
+  footerLoader: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 20,
+    gap: 10,
+  },
+  loadingText: {
+    color: '#666',
+    fontSize: 14,
+  },
+  // Pagination Controls Styles
+  paginationContainer: {
+    backgroundColor: '#fff',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    marginTop: 10,
+    marginHorizontal: 16,
+    marginBottom: 20,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  paginationInfo: {
+    textAlign: 'center',
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+  },
+  paginationControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  pageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+    minWidth: 100,
+    justifyContent: 'center',
+  },
+  pageButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  pageButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  pageButtonTextDisabled: {
+    color: '#999',
+  },
+  loadMoreButton: {
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 20,
+  },
+  loadMoreButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Modal Styles
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modal: {
     backgroundColor: '#fff',
     borderRadius: 12,
+    padding: 20,
     width: '90%',
     maxHeight: '80%',
   },
@@ -776,106 +1045,106 @@ removeOverrideBtnText: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    marginBottom: 20,
+    paddingBottom: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
+    color: '#333',
   },
   form: {
-    padding: 16,
+    gap: 15,
+    marginBottom: 20,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#ddd',
     borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
     fontSize: 16,
+    backgroundColor: '#fafafa',
   },
   row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 10,
   },
   halfInput: {
-    flex: 0.48,
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
+    flex: 1,
   },
   switchRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    paddingVertical: 10,
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  warningText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 15,
   },
   imageSection: {
-    marginTop: 8,
+    gap: 10,
   },
   imagePreview: {
     flexDirection: 'row',
-    marginTop: 8,
-    flexWrap: 'wrap',
+    gap: 10,
   },
   previewImage: {
     width: 60,
     height: 60,
     borderRadius: 8,
-    marginRight: 8,
-    marginBottom: 8,
   },
   modalActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    gap: 10,
+    justifyContent: 'flex-end',
   },
   cancelBtn: {
-    flex: 0.48,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    alignItems: 'center',
+    borderColor: '#ddd',
   },
   cancelText: {
     color: '#666',
     fontSize: 16,
+    fontWeight: '500',
   },
   saveBtn: {
-    flex: 0.48,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     borderRadius: 8,
     backgroundColor: '#2196F3',
+    minWidth: 80,
     alignItems: 'center',
   },
   saveText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   deleteActionBtn: {
-    flex: 0.48,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     borderRadius: 8,
     backgroundColor: '#F44336',
+    minWidth: 80,
     alignItems: 'center',
   },
   deleteActionText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '500',
-  },
-  warningText: {
-    color: '#F44336',
-    fontSize: 16,
-    marginBottom: 16,
-    textAlign: 'center',
+    fontWeight: '600',
   },
 });
 
