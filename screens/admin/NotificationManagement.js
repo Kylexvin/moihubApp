@@ -78,7 +78,7 @@ const loadUsers = async () => {
     setLoading(false);
   }
 };
-
+ 
 const loadStats = async () => {
   try {
     const { data } = await axios.get('/api/admin/stats');
@@ -322,7 +322,7 @@ const sendPushNotification = async () => {
             <Picker
               selectedValue={pushTarget}
               onValueChange={setPushTarget}
-              style={styles.picker}
+              style={[styles.picker, { color: 'red' }]}
             >
               <Picker.Item label="All Users" value="all" />
               <Picker.Item label="By Role" value="role" />
@@ -336,7 +336,7 @@ const sendPushNotification = async () => {
                 <Picker
                   selectedValue={pushRole}
                   onValueChange={setPushRole}
-                  style={styles.picker}
+                  style={[styles.picker, { color: 'red' }]}
                 >
                   <Picker.Item label="User" value="user" />
                   <Picker.Item label="Admin" value="admin" />
@@ -351,7 +351,8 @@ const sendPushNotification = async () => {
               <>
                 <Text style={styles.inputLabel}>User IDs (comma-separated)</Text>
                 <TextInput
-                  style={styles.input}
+                  style={styles.input} placeholderTextColor="#666"
+
                   value={pushUserIds}
                   onChangeText={setPushUserIds}
                   placeholder="user1,user2,user3"
@@ -374,7 +375,7 @@ const sendPushNotification = async () => {
 
             <Text style={styles.inputLabel}>Title *</Text>
             <TextInput
-              style={styles.input}
+              style={styles.input} placeholderTextColor="#999"
               value={pushTitle}
               onChangeText={setPushTitle}
               placeholder="Notification title"
@@ -382,7 +383,7 @@ const sendPushNotification = async () => {
 
             <Text style={styles.inputLabel}>Body *</Text>
             <TextInput
-              style={[styles.input, styles.textArea]}
+              style={[styles.input, styles.textArea]} placeholderTextColor="#999"
               value={pushBody}
               onChangeText={setPushBody}
               placeholder="Notification body"
@@ -391,7 +392,7 @@ const sendPushNotification = async () => {
 
             <Text style={styles.inputLabel}>Data (JSON)</Text>
             <TextInput
-              style={[styles.input, styles.textArea]}
+              style={[styles.input, styles.textArea]} placeholderTextColor="green"
               value={pushData}
               onChangeText={setPushData}
               placeholder='{"key": "value"}'
@@ -537,14 +538,14 @@ const sendPushNotification = async () => {
           <View style={styles.searchContainer}>
             <TextInput
               style={styles.searchInput}
-              placeholder="Search users..."
+              placeholder="Search users..." placeholderTextColor="#333"
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
             <Picker
               selectedValue={selectedRole}
               onValueChange={setSelectedRole}
-              style={styles.roleFilter}
+              style={[styles.roleFilter, { color: '#333' }]} 
             >
               <Picker.Item label="All Roles" value="" />
               <Picker.Item label="Users" value="user" />

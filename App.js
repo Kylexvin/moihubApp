@@ -6,6 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import axios from 'axios';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
@@ -92,7 +93,26 @@ function AppNavigator() {
   const [appState, setAppState] = useState('splash');
   const [firstLaunch, setFirstLaunch] = useState(null);
 
+ useEffect(() => {
+    const configureAudio = async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: false,
+          interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
+          playThroughEarpieceAndroid: false,
+          staysActiveInBackground: true,
+        });
+        console.log('Audio mode configured successfully');
+      } catch (e) {
+        console.log('Error setting audio mode:', e);
+      }
+    };
 
+    configureAudio();
+  }, []);
 
 useEffect(() => {
   if (!messaging) return;
@@ -134,22 +154,30 @@ useEffect(() => {
 }, []);
 
 
-  useEffect(() => {
-    const subscription = Notifications.addNotificationReceivedListener(async notification => {
-      console.log('Foreground Local notification:', notification);
 
-      try {
-        const { sound } = await Audio.Sound.createAsync(
-          require('./assets/sounds/moihub_sound.mp3')
-        );
-        await sound.playAsync();
-      } catch (error) {
-        console.error('Error playing notification sound:', error);
-      }
-    });
+useEffect(() => {
+  const subscription = Notifications.addNotificationReceivedListener(async notification => {
+    console.log('Foreground Local notification:', notification);
 
-    return () => subscription.remove();
-  }, []);
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        require('./assets/sounds/moihub_sound.mp3'),
+        { shouldPlay: true }
+      );
+      
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) {
+          sound.unloadAsync();
+        }
+      });
+    } catch (error) {
+      console.error('Error playing notification sound:', error);
+    }
+  });
+
+  return () => subscription.remove();
+}, []);
 
   useEffect(() => {
     const checkFirstLaunch = async () => {
@@ -165,7 +193,14 @@ useEffect(() => {
     checkFirstLaunch();
   }, []);
 
-
+useEffect(() => {
+  return () => {
+    // Clean up any sound instances when component unmounts
+    Audio.Sound.unloadAsync().catch(error => {
+      console.log('Error unloading sounds:', error);
+    });
+  };
+}, []);
 
 
   const handleSplashComplete = () => {

@@ -17,6 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
+import * as Clipboard from 'expo-clipboard';
+;
 
 const { width } = Dimensions.get('window');
 
@@ -88,19 +90,75 @@ const RentalDashboard = ({ navigation }) => {
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
   };
 
-  // Handle WhatsApp contact
-  const handleWhatsAppContact = (phoneNumber, userName, propertyName) => {
+
+const handleWhatsAppContact = async (phoneNumber, userName, propertyName) => {
+  try {
     const message = `Hello ${userName}, I'm responding to your inquiry about ${propertyName}. How can I help you?`;
-    const url = `whatsapp://send?phone=${phoneNumber}&text=${encodeURIComponent(message)}`;
-    
-    Linking.canOpenURL(url).then((supported) => {
-      if (supported) {
-        Linking.openURL(url);
-      } else {
-        Alert.alert('Error', 'WhatsApp is not installed on this device');
+
+    // Clean and format number to Kenyan international format
+    const cleanNumber = phoneNumber.replace(/\D/g, '');
+    const formattedNumber = cleanNumber.startsWith('254')
+      ? cleanNumber
+      : `254${cleanNumber.replace(/^0/, '')}`;
+
+    const encodedMessage = encodeURIComponent(message);
+
+    const whatsappInstalled = await Linking.canOpenURL('whatsapp://');
+
+    if (whatsappInstalled) {
+      try {
+        await Linking.openURL(`whatsapp://send?phone=${formattedNumber}&text=${encodedMessage}`);
+        return;
+      } catch (err) {
+        console.warn('WhatsApp deep link failed:', err);
       }
-    });
-  };
+    }
+
+    // Fallback to HTTPS
+    try {
+      await Linking.openURL(`https://wa.me/${formattedNumber}?text=${encodedMessage}`);
+      return;
+    } catch (err) {
+      console.warn('WhatsApp web fallback failed:', err);
+    }
+
+    // Final fallback – show options to user
+    Alert.alert(
+      'WhatsApp Not Available',
+      'WhatsApp is not available on this device. Choose an option:',
+      [
+        {
+          text: 'Copy Number',
+          onPress: async () => {
+            try {
+              await Clipboard.setStringAsync(formattedNumber);
+              Alert.alert('Copied!', `${formattedNumber} copied to clipboard`);
+            } catch (copyErr) {
+              console.error('Copy failed:', copyErr);
+              Alert.alert('Error', 'Failed to copy number.');
+            }
+          }
+        },
+        {
+          text: 'Open in Browser',
+          onPress: async () => {
+            try {
+              await Linking.openURL(`https://wa.me/${formattedNumber}?text=${encodedMessage}`);
+            } catch (browserErr) {
+              console.error('Browser open failed:', browserErr);
+              Alert.alert('Error', 'Failed to open in browser.');
+            }
+          }
+        },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+
+  } catch (error) {
+    console.error('Error opening WhatsApp contact:', error);
+    Alert.alert('Error', 'Could not initiate WhatsApp contact.');
+  }
+};
 
   // Handle phone call
   const handlePhoneCall = (phoneNumber) => {
@@ -211,7 +269,7 @@ const RentalDashboard = ({ navigation }) => {
           <Ionicons name="search" size={20} color="#6B7280" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search inquiries..."
+            placeholder="Search inquiries..." placeholderTextColor="#15b3cfff"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />

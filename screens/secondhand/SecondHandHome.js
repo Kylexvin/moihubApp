@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
+import api from '../../utils/api'; 
 const { width } = Dimensions.get('window');
 const cardWidth = (width - 45) / 2; 
 
@@ -107,7 +107,8 @@ const fetchWantedPosts = useCallback(async (page = 1, append = false) => {
     if (!append) setLoading(true);
 
     const queryParams = buildQueryParams(page);
-    const { data } = await axios.get(`api/wanted/active?${queryParams}`);
+    const { data } = await api.get(`/api/wanted/active?${queryParams}`);
+
 
     const newPosts = data.wantedPosts || [];
 
@@ -131,7 +132,8 @@ const fetchProducts = useCallback(async (page = 1, append = false) => {
     if (!append) setLoading(true);
 
     const queryParams = buildQueryParams(page);
-    const { data } = await axios.get(`api/marketplace/approved?${queryParams}`);
+    const { data } = await api.get(`/api/marketplace/approved?${queryParams}`);
+
 
     const newProducts = data.products || [];
 
@@ -156,7 +158,8 @@ const startConversation = async (user, chatType = 'normal') => {
   }
 
   try {
-    const { data } = await axios.post('api/messages/conversations', {
+    const { data } = await api.post('/api/messages/conversations', {
+
       participantId: user._id,
       chatType
     });
@@ -503,7 +506,7 @@ const renderWanted = ({ item }) => {
         </Text>
         <View style={styles.priceRow}>
           <TextInput
-            placeholder="Min"
+            placeholder="Min" placeholderTextColor="#888"
             value={activeTab === 'buyers' ? filters.minBudget : filters.minPrice}
             onChangeText={(text) => setFilters(prev => ({ 
               ...prev, 
@@ -514,7 +517,7 @@ const renderWanted = ({ item }) => {
           />
           <Text style={styles.priceSeparator}>to</Text>
           <TextInput
-            placeholder="Max"
+            placeholder="Max" placeholderTextColor="#888"
             value={activeTab === 'buyers' ? filters.maxBudget : filters.maxPrice}
             onChangeText={(text) => setFilters(prev => ({ 
               ...prev, 
@@ -616,7 +619,8 @@ const renderWanted = ({ item }) => {
         <View style={styles.searchBar}>
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
-            placeholder="Search products or requests..."
+            placeholder="Search products..."
+            placeholderTextColor="#888"
             value={searchQuery}
             onChangeText={setSearchQuery}
             style={styles.searchInput}

@@ -143,7 +143,7 @@ const getDashboardInfo = (role) => {
           
           <Text style={styles.username}>{currentUser?.username}</Text>
           <Text style={styles.email}>{currentUser?.email}</Text>
-          
+           
           {/* Role Badge */}
           <View style={[styles.roleBadge, { backgroundColor: getRoleColor(currentUser?.role) }]}>
             <Text style={styles.roleText}>{currentUser?.role?.toUpperCase() || 'USER'}</Text>

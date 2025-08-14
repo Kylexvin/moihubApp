@@ -54,21 +54,28 @@
     "web": {
       "favicon": "./assets/moihublogo.png"
     },
-    "plugins": [
-      "expo-audio",
-      "expo-web-browser",
-      "expo-notifications",
-      "@react-native-firebase/app",
-      "@react-native-firebase/messaging",
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "minSdkVersion": 21
-          }
-        }
-      ]
-    ],
+"plugins": [
+  "expo-audio",
+  "expo-web-browser",
+  [
+    "expo-notifications",
+    {
+      "icon": "./assets/ic_stat_notification.png",
+      "color": "#005f4b"
+    }
+  ],
+  "@react-native-firebase/app",
+  "@react-native-firebase/messaging",
+  [
+    "expo-build-properties",
+    {
+      "android": {
+        "minSdkVersion": 21
+      }
+    }
+  ]
+],
+
     "scheme": "moihubapp",
     "updates": {
       "fallbackToCacheTimeout": 0

@@ -331,7 +331,7 @@ const FoodVendor = ({ navigation }) => {
     <Icon name="search" size={20} color="#666" style={styles.searchIcon} />
     <TextInput
       style={styles.searchInput}
-      placeholder="Search vendors..."
+      placeholder="Search vendors..." placeholderTextColor="blue"
       value={searchTerm}
       onChangeText={setSearchTerm}
     />

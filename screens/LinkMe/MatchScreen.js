@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
   },
 });
-//$env:REACT_NATIVE_PACKAGER_HOSTNAME="192.168.100.51"
-// PS E:\Native App\MoiHub> $env:EXPO_DEVTOOLS_LISTEN_ADDRESS="192.168.100.51"
-// PS E:\Native App\MoiHub> npx expo start --lan --clear
-export default MatchScreen;  
+//$env:REACT_NATIVE_PACKAGER_HOSTNAME="172.16.7.125"
+// $env:EXPO_DEVTOOLS_LISTEN_ADDRESS="172.16.7.125"
+// npx expo start --lan --clear
+export default MatchScreen;

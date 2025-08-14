@@ -11,7 +11,7 @@ import {
   Modal,
   Dimensions,
   ActivityIndicator,
-} from 'react-native';
+} from 'react-native';''
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 

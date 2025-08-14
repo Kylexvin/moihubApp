@@ -23,7 +23,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as Clipboard from 'expo-clipboard';
-
+import WhatsAppFAB from './WhatsAppFAB';
 
 const { width } = Dimensions.get('window');
 
@@ -137,7 +137,6 @@ const HomeScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [currentAdSlide, setCurrentAdSlide] = useState(0);
-  const [lastFetchTime, setLastFetchTime] = useState(null);
 
   // Add icon loading check
   const [iconsLoaded, setIconsLoaded] = useState(false);
@@ -161,7 +160,7 @@ const HomeScreen = () => {
   // Cache keys
   const CACHE_KEY = 'homescreen_data';
   const CACHE_TIMESTAMP_KEY = 'homescreen_timestamp';
-  const CACHE_DURATION = 60 * 60 * 1000; // 60 minutes
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   // Slideshow data - can be replaced with API data
   const slideData = [
@@ -209,57 +208,79 @@ const HomeScreen = () => {
       const cachedData = await AsyncStorage.getItem(CACHE_KEY);
       const cachedTimestamp = await AsyncStorage.getItem(CACHE_TIMESTAMP_KEY);
       
-      if (cachedData && cachedTimestamp) {
-        const timestamp = parseInt(cachedTimestamp);
-        const now = Date.now();
+      if (cachedData) {
+        const parsedData = JSON.parse(cachedData);
+        setHomescreenData(parsedData);
         
-        // If cache is still valid, use it
-        if (now - timestamp < CACHE_DURATION) {
-          setHomescreenData(JSON.parse(cachedData));
-          setLastFetchTime(timestamp);
-          setLoading(false);
-          return true;
-        }
+        // If we have cached data, stop loading immediately
+        setLoading(false);
+        
+        // Check if cache is still fresh
+        const now = Date.now();
+        const cacheTime = cachedTimestamp ? parseInt(cachedTimestamp) : 0;
+        const isCacheFresh = (now - cacheTime) < CACHE_DURATION;
+        
+        console.log('Cache found:', {
+          isCacheFresh,
+          cacheAge: now - cacheTime,
+          maxAge: CACHE_DURATION
+        });
+        
+        return { hasCache: true, isFresh: isCacheFresh };
       }
-      return false;
+      
+      return { hasCache: false, isFresh: false };
     } catch (error) {
       console.error('Error loading cached data:', error);
-      return false;
+      return { hasCache: false, isFresh: false };
     }
   };
 
-  // Save data to cache
-  const saveCacheData = async (data) => {
+  // Fetch homescreen data from backend with better caching
+  const fetchHomescreenData = async (showRefreshIndicator = false, forceRefresh = false) => {
     try {
-      const timestamp = Date.now();
+      if (showRefreshIndicator) setRefreshing(true);
+      if (forceRefresh) setLoading(true);
+
+      console.log('Fetching homescreen data...');
+      const response = await axios.get('https://moihub.onrender.com/api/homescreen', {
+        timeout: 10000, // 10 second timeout
+      });
+      
+      const data = response.data;
+      
+      // Update state
+      setHomescreenData(data);
+      
+      // Cache the data with timestamp
       await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
-      await AsyncStorage.setItem(CACHE_TIMESTAMP_KEY, timestamp.toString());
-      setLastFetchTime(timestamp);
-    } catch (error) {
-      console.error('Error saving cached data:', error);
-    }
-  };
-
-  // Fetch homescreen data from backend
-  const fetchHomescreenData = async (showRefreshIndicator = false) => {
-    try {
-      if (showRefreshIndicator) {
-        setRefreshing(true);
-      }
-
-      const response = await axios.get('/api/homescreen/');
-      const newData = response.data;
+      await AsyncStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
       
-      // Save to cache
-      await saveCacheData(newData);
-      setHomescreenData(newData);
+      console.log('Data fetched and cached successfully');
       
     } catch (error) {
-      console.error('Error fetching homescreen data:', error);
+      console.error('Fetch homescreen failed:', error.message);
       
-      // If we have cached data, don't show error
+      // Only show error if we don't have cached data
       if (!homescreenData) {
-        Alert.alert('Error', 'Failed to load homescreen data. Please check your connection.');
+        // Try to load any available cached data as fallback
+        const fallback = await loadCachedData();
+        if (!fallback.hasCache) {
+          Alert.alert(
+            'Connection Error', 
+            'Unable to load data. Please check your internet connection and try again.',
+            [
+              {
+                text: 'Retry',
+                onPress: () => fetchHomescreenData(false, true)
+              },
+              {
+                text: 'OK',
+                style: 'cancel'
+              }
+            ]
+          );
+        }
       }
     } finally {
       setLoading(false);
@@ -267,40 +288,55 @@ const HomeScreen = () => {
     }
   };
 
-  // Check if we need to refresh data
-  const shouldRefreshData = useCallback(() => {
-    if (!lastFetchTime) return true;
-    return Date.now() - lastFetchTime > CACHE_DURATION;
-  }, [lastFetchTime]);
-
   // Initial data load
   useEffect(() => {
     const initializeData = async () => {
-      const hasCachedData = await loadCachedData();
+      console.log('Initializing homescreen data...');
       
-      // If no cached data or cache is expired, fetch fresh data
-      if (!hasCachedData || shouldRefreshData()) {
-        await fetchHomescreenData();
+      // First, try to load cached data
+      const cacheResult = await loadCachedData();
+      
+      if (cacheResult.hasCache) {
+        // We have cached data, UI is already showing
+        if (!cacheResult.isFresh) {
+          // Cache is stale, fetch fresh data in background
+          console.log('Cache is stale, fetching fresh data...');
+          fetchHomescreenData(false, false);
+        } else {
+          console.log('Using fresh cached data');
+        }
+      } else {
+        // No cached data, must fetch
+        console.log('No cached data, fetching from server...');
+        await fetchHomescreenData(false, true);
       }
     };
 
     initializeData();
   }, []);
 
-  // Periodic data refresh (every 5 minutes when app is active)
+  // Periodic background refresh
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (shouldRefreshData()) {
-        fetchHomescreenData();
+    const interval = setInterval(async () => {
+      const cachedTimestamp = await AsyncStorage.getItem(CACHE_TIMESTAMP_KEY);
+      if (cachedTimestamp) {
+        const now = Date.now();
+        const cacheTime = parseInt(cachedTimestamp);
+        const shouldRefresh = (now - cacheTime) > CACHE_DURATION;
+        
+        if (shouldRefresh) {
+          console.log('Background refresh triggered');
+          fetchHomescreenData(false, false);
+        }
       }
     }, 60000); // Check every minute
 
     return () => clearInterval(interval);
-  }, [shouldRefreshData]);
+  }, []);
 
   // Pull to refresh
   const onRefresh = useCallback(() => {
-    fetchHomescreenData(true);
+    fetchHomescreenData(true, false);
   }, []);
 
   // Auto-slide functionality for main slideshow
@@ -477,8 +513,6 @@ const openWhatsApp = async (phoneNumber, message = '') => {
   }
 };
 
-
-
 const handleInquirePress = () => {
   const url = homescreenData?.highlight?.ctaLink || 'https://wa.me/254768610613?text=Hello, I have an inquiry';
   handleLinkPress(url);
@@ -489,14 +523,10 @@ const handleVendorCTAPress = () => {
   handleLinkPress(url);
 };
 
-
-
 // Alternative direct usage
 const handleDirectWhatsApp = () => {
   openWhatsApp('254768610613', 'Hello, I have an inquiry about your services');
 };
-
-
 
   // Animation references
   const fadeInDown = {
@@ -602,7 +632,7 @@ const handleDirectWhatsApp = () => {
         colors={['#083028','#0a0a0a',  '#0a0a0a']}
         style={styles.background}
       />
-      
+        <WhatsAppFAB />
       {/* Header - Always visible */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
@@ -699,6 +729,7 @@ const handleDirectWhatsApp = () => {
             <HighlightSkeleton />
             <AdsSkeleton />
             <VendorCallSkeleton />
+           
           </>
         ) : (
           <>
@@ -884,8 +915,6 @@ const handleDirectWhatsApp = () => {
     </View>
   );
 };
-
-
 
 const styles = StyleSheet.create({
   container: {
@@ -1240,13 +1269,12 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     borderColor: 'rgba(255,255,255,0.1)',
-  backdropFilter: 'blur(10px)', // Only web — skip on native
-  shadowColor: '#00FFC6',
-  shadowOffset: { width: 0, height: 10 },
-  shadowOpacity: 0.3,
-  shadowRadius: 20,
-  elevation: 8,
-
+    backdropFilter: 'blur(10px)', // Only web — skip on native
+    shadowColor: '#00FFC6',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 8,
   },
   vendorCallContent: {
     alignItems: 'center',
@@ -1311,6 +1339,5 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
 });
-
 
 export default HomeScreen;

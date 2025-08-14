@@ -6,7 +6,7 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Linking,
-  Image,
+  ImageBackground,
 } from 'react-native';
 
 const MoiWebsiteScreen = () => {
@@ -16,55 +16,49 @@ const MoiWebsiteScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.inner}>
-        <Image
-          source={require('../../assets/moihublogo.png')} // Optional: Add Moi Uni logo in assets
-          style={styles.logo}
-          resizeMode="contain"
-        />
-
-        <Text style={styles.title}>Moi University</Text>
-
-        <Text style={styles.description}>
-          Moi University is a premier public university located in Eldoret, Kenya. It offers a wide range of academic programs, research opportunities, and a vibrant student life.
-        </Text>
-
-        <TouchableOpacity style={styles.button} onPress={handleOpenWebsite}>
-          <Text style={styles.buttonText}>Visit Website</Text>
-        </TouchableOpacity>
-      </View>
+      <ImageBackground
+        source={require('../../assets/hero.jpg')} 
+        style={styles.background}
+        imageStyle={{ opacity: 0.3 }} // control image opacity
+      >
+        <View style={styles.inner}>
+          <Text style={styles.title}>Moi University</Text>
+          <Text style={styles.description}>
+            Moi University is a premier public university located in Eldoret, Kenya. It offers a wide range of academic programs, research opportunities, and a vibrant student life.
+          </Text>
+          <TouchableOpacity style={styles.button} onPress={handleOpenWebsite}>
+            <Text style={styles.buttonText}>Visit Website</Text>
+          </TouchableOpacity>
+        </View>
+      </ImageBackground>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1 },
+  background: { flex: 1 },
   inner: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
   },
-  logo: {
-    width: 100,
-    height: 100,
-    marginBottom: 20,
-  },
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#7b20a1',
+    color: '#f3f7f5ff',
     marginBottom: 10,
   },
   description: {
     fontSize: 15,
-    color: '#444',
+    color: '#f5f1f1ff',
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 30,
   },
   button: {
-    backgroundColor: '#7b20a1',
+    backgroundColor: '#36a120ff',
     paddingVertical: 12,
     paddingHorizontal: 28,
     borderRadius: 10,

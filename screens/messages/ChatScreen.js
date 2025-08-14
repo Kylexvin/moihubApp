@@ -376,11 +376,16 @@ const handleNewMessage = (messageData) => {
   const normalized = normalizeMessage(messageData);
 
   setMessages(prev => {
-    const exists = prev.some(msg => msg._id === normalized._id);
-    if (exists) {
-      return prev;
-    }
-    return [normalized, ...prev];
+    const isDuplicate = prev.some(msg =>
+      (msg._id && msg._id === normalized._id) ||
+      (msg.tempId && msg.tempId === normalized.tempId)
+    );
+    if (isDuplicate) return prev;
+
+    const updated = [...prev, normalized];
+    // Ensure sort by newest first
+    updated.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return updated;
   });
 
   const messageSenderId = normalized.sender._id || normalized.sender.id;
@@ -389,6 +394,7 @@ const handleNewMessage = (messageData) => {
     setTimeout(() => markMessageAsRead(normalized._id), 500);
   }
 };
+
 
 const updateMessageStatus = (identifier, messageData, status) => {
   setMessages(prev => prev.map(msg => {
@@ -457,7 +463,8 @@ const sendMessage = async () => {
     deliveredToUserIds: [],
   };
 
-  setMessages(prev => [tempMessage, ...prev]);
+  setMessages(prev => [...prev, tempMessage]); // ✅
+
   setNewMessage('');
   setSending(true);
 
@@ -843,7 +850,7 @@ if (loading || !conversationId) {
   );
 }
 
-// ✅ No log here
+
 
 return (
   <SafeAreaView style={{ flex: 1 }}>
@@ -929,7 +936,7 @@ return (
   data={[...messages].reverse()}  // ✅ reverse when inverted
   keyExtractor={(item) => item._id || item.tempId}
   renderItem={renderMessage}
-  inverted  // ✅ using inverted means reversed data
+  inverted  
   showsVerticalScrollIndicator={false}
   onEndReached={loadMoreMessages}
   onEndReachedThreshold={0.1}

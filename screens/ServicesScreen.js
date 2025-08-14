@@ -9,6 +9,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import Svg, { Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as WebBrowser from 'expo-web-browser';
+import WhatsAppFAB from './WhatsAppFAB';
+
+
 const ServicesScreen = () => {
 const navigation = useNavigation();
 
@@ -75,6 +79,12 @@ const services = [
     color: "red" 
   },
   {
+  title: "Mavo Bingwa Bundles",
+  icon: "wifi",
+  category: "local",
+  color: "#1abc9c"
+ },
+  {
     title: "Blogs",
     icon: "book",
     category: "local",
@@ -132,6 +142,9 @@ const handleServicePress = (service) => {
     case 'Blogs':
       navigation.navigate('BlogsNavigator');
       break;
+    case 'Mavo Bingwa Bundles':
+      WebBrowser.openBrowserAsync('https://bingwastore.co.ke/1/mavobingwa');
+       break;
 
     default:
       if (service.category === 'local') {
@@ -224,7 +237,7 @@ return (
       
      
       <FeaturedServices />
-
+      <WhatsAppFAB />
       {/* Separator */}
       <View style={styles.separator} />
 

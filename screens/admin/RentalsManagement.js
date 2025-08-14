@@ -462,7 +462,7 @@ const fetchRentals = useCallback(async (page = 1, shouldReset = false) => {
               <Text style={styles.filterLabel}>Location</Text>
               <TextInput
                 style={styles.filterInput}
-                placeholder="Enter location..."
+                placeholder="Enter location..." placeholderTextColor="#6382beff"
                 value={filters.location}
                 onChangeText={(text) => setFilters(prev => ({ ...prev, location: text }))}
               />
@@ -472,7 +472,7 @@ const fetchRentals = useCallback(async (page = 1, shouldReset = false) => {
               <Text style={styles.filterLabel}>Type</Text>
               <TextInput
                 style={styles.filterInput}
-                placeholder="Enter type..."
+                placeholder="Enter type..." placeholderTextColor="#6382beff"
                 value={filters.type}
                 onChangeText={(text) => setFilters(prev => ({ ...prev, type: text }))}
               />
@@ -543,7 +543,7 @@ const fetchRentals = useCallback(async (page = 1, shouldReset = false) => {
         <Ionicons name="search" size={20} color="#6b7280" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search rentals..."
+          placeholder="Search rentals..." placeholderTextColor="#6382beff"
           value={searchQuery}
           onChangeText={setSearchQuery}
           returnKeyType="search"

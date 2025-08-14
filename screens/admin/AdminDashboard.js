@@ -21,6 +21,13 @@ const AdminDashboard = ({ navigation }) => {
       color: '#6366f1',
       route: 'StatsScreen',
     },
+     {
+      title: 'Users and Notifications',
+      subtitle: 'Manage user accounts andnotifications',
+      icon: 'people',
+      color: '#ef4444',
+      route: 'NotificationManagement',
+    },
     {
       title: 'Rentals Management',
       subtitle: 'Manage rental listings and bookings',
@@ -50,13 +57,7 @@ const AdminDashboard = ({ navigation }) => {
       route: 'LinkmeManagement',
     },
     
-    {
-      title: 'Users and Notifications',
-      subtitle: 'Manage user accounts andnotifications',
-      icon: 'people',
-      color: '#ef4444',
-      route: 'NotificationManagement',
-    },
+   
     {
       title: 'Local Services and Organizations',
       subtitle: 'Manage local service providers and Organizations',
