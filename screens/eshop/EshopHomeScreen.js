@@ -61,42 +61,81 @@ const EshopHomeScreen = ({ navigation }) => {
   };
 
   const handleWhatsAppPress = () => {
-    const phoneNumber = '+1234567890'; // Replace with your WhatsApp number
-    const message = 'Hi! I need help with the E-Shop app.';
-    const url = `whatsapp://send?phone=${phoneNumber}&text=${encodeURIComponent(message)}`;
+    const phoneNumber = '+254768610613';        
+    const message = 'Hi! I need help with the E-Shop in Moihub app.';
+    const whatsappUrl = `https://wa.me/${phoneNumber.replace('+', '')}?text=${encodeURIComponent(message)}`;
     
-    Linking.canOpenURL(url)
-      .then((supported) => {
-        if (supported) {
-          return Linking.openURL(url);
-        } else {
-          Alert.alert('WhatsApp not installed', 'Please install WhatsApp to contact support.');
-        }
-      })
-      .catch((err) => console.error('An error occurred', err));
+    Linking.openURL(whatsappUrl)
+      .catch((err) => {
+        console.error('Error opening WhatsApp:', err);
+        Alert.alert('Error', 'Unable to open WhatsApp. Please make sure it is installed.');
+      });
   };
 
   const handleMyOrdersPress = () => {
     navigation.navigate('Orders');
   };
 
-  const getIconName = (iconName) => {
-    const iconMap = {
-      'tshirt': 'checkroom',
-      'gift': 'card-giftcard',
-      'food': 'restaurant',
-      'electronics': 'devices',
-      'home': 'home',
-    };
-    
-    return iconMap[iconName] || 'category';
+  const handleOnboardingPress = () => {
+    navigation.navigate('OnboardingNavigator');
   };
 
-
+  const getIconName = (categoryName) => {
+    const name = categoryName.toLowerCase();
+    
+    // Check for specific keywords in category names
+    if (name.includes('boutique') || name.includes('fashion') || name.includes('clothing') || name.includes('apparel')) {
+      return 'checkroom';
+    }
+    if (name.includes('gift') || name.includes('accessories') || name.includes('jewelry')) {
+      return 'card-giftcard';
+    }
+    if (name.includes('food') || name.includes('restaurant') || name.includes('cafe') || name.includes('kitchen')) {
+      return 'restaurant';
+    }
+    if (name.includes('electronics') || name.includes('gadgets') || name.includes('tech') || name.includes('devices')) {
+      return 'devices';
+    }
+    if (name.includes('home') || name.includes('furniture') || name.includes('decor')) {
+      return 'home';
+    }
+    if (name.includes('pharmacy') || name.includes('medical') || name.includes('health') || name.includes('medicine')) {
+      return 'local-pharmacy';
+    }
+    if (name.includes('mali') || name.includes('general') || name.includes('variety') || name.includes('convenience')) {
+      return 'store';
+    }
+    if (name.includes('beauty') || name.includes('cosmetics') || name.includes('salon')) {
+      return 'face';
+    }
+    if (name.includes('sports') || name.includes('fitness') || name.includes('gym')) {
+      return 'fitness-center';
+    }
+    if (name.includes('books') || name.includes('stationery') || name.includes('education')) {
+      return 'menu-book';
+    }
+    if (name.includes('auto') || name.includes('car') || name.includes('vehicle')) {
+      return 'directions-car';
+    }
+    if (name.includes('pet') || name.includes('animal')) {
+      return 'pets';
+    }
+    if (name.includes('toy') || name.includes('kids') || name.includes('children')) {
+      return 'toys';
+    }
+    if (name.includes('flower') || name.includes('garden') || name.includes('plant')) {
+      return 'local-florist';
+    }
+    if (name.includes('shoe') || name.includes('footwear')) {
+      return 'shopping-bag';
+    }
+    
+    // Default fallback icon
+    return 'storefront';
+  };
 
   const renderQuickActions = () => (
     <View style={styles.quickActionsContainer}>
-     
       <View style={styles.quickActionsRow}>
         <TouchableOpacity 
           style={styles.quickActionButton}
@@ -121,19 +160,9 @@ const EshopHomeScreen = ({ navigation }) => {
           <Icon name="chat" size={24} color="#059669" />
           <Text style={styles.quickActionText}>Support</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.quickActionButton}
-          onPress={() => Alert.alert('Coming Soon', 'Wishlist feature coming soon!')}
-        >
-          <Icon name="favorite-border" size={24} color="#059669" />
-          <Text style={styles.quickActionText}>Wishlist</Text>
-        </TouchableOpacity>
       </View>
     </View>
   );
-
-
 
   const renderCategoryItem = ({ item, index }) => (
     <TouchableOpacity
@@ -143,7 +172,7 @@ const EshopHomeScreen = ({ navigation }) => {
     >
       <View style={styles.categoryIconContainer}>
         <Icon
-          name={getIconName(item.icon)}
+          name={getIconName(item.name)}
           size={32}
           color="#fff"
         />
@@ -204,13 +233,8 @@ const EshopHomeScreen = ({ navigation }) => {
       >
         {/* Header */}
         <View style={styles.header}>
-          {/* <Text style={styles.welcomeText}>Welcome back! 👋</Text> */}
           <Text style={styles.headerTitle}>Discover Amazing Deals</Text>
-          
         </View>
-
-       
-     
 
         {/* Quick Actions */}
         {renderQuickActions()}
@@ -240,23 +264,23 @@ const EshopHomeScreen = ({ navigation }) => {
           )}
         </View>
 
-        {/* Need Help Section */}
-        <View style={styles.helpSection}>
-  <TouchableOpacity 
-    style={styles.helpCard}
-    onPress={handleWhatsAppPress}
-    activeOpacity={0.8}
-  >
-    <Icon name="support-agent" size={40} color="#059669" />
-
-    <View style={styles.helpContent}>
-      <Text style={styles.helpTitle}>Need Help?</Text>
-      <Text style={styles.helpSubtitle}>
-        Chat with us on WhatsApp for instant support
-      </Text>
-    </View>
-  </TouchableOpacity>
-</View>
+        {/* Want Your Shop Here Section */}
+        <View style={styles.shopHereSection}>
+          <TouchableOpacity 
+            style={styles.shopHereCard}
+            onPress={handleOnboardingPress}
+            activeOpacity={0.8}
+          >
+            <Icon name="store" size={40} color="#059669" />
+            <View style={styles.shopHereContent}>
+              <Text style={styles.shopHereTitle}>Want Your Shop Here?</Text>
+              <Text style={styles.shopHereSubtitle}>
+                Join our marketplace and start selling to thousands of customers
+              </Text>
+            </View>
+            <Icon name="arrow-forward" size={20} color="#059669" />
+          </TouchableOpacity>
+        </View>
 
       </ScrollView>
 
@@ -296,80 +320,13 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
   },
-  welcomeText: {
-    fontSize: 16,
-    color: '#d1fae5',
-    marginBottom: 4,
-  },
   headerTitle: {
-  fontSize: 28,
-  fontWeight: 'bold',
-  color: '#fff',
-  marginBottom: 8,
-  textAlign: 'center',
-  alignSelf: 'center',
-},
-
-  headerSubtitle: {
-    fontSize: 16,
-    color: '#d1fae5',
-    lineHeight: 22,
-  },
-  promoBanner: {
-    backgroundColor: '#10b981',
-    marginHorizontal: 20,
-    marginTop: -20,
-    borderRadius: 16,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  promoContent: {
-    flex: 1,
-  },
-  promoTitle: {
-    fontSize: 18,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 4,  textAlign: 'center',
-  alignSelf: 'center',
-  },
-  promoSubtitle: {
-    fontSize: 14,
-    color: '#d1fae5',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    backgroundColor: '#fff',
-    marginHorizontal: 20,
-    marginTop: 20,
-    borderRadius: 16,
-    paddingVertical: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#059669',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#6b7280',
+    marginBottom: 8,
+    textAlign: 'center',
+    alignSelf: 'center',
   },
   quickActionsContainer: {
     marginHorizontal: 20,
@@ -383,12 +340,12 @@ const styles = StyleSheet.create({
   },
   quickActionsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
   },
   quickActionButton: {
     backgroundColor: '#fff',
     paddingVertical: 16,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     borderRadius: 12,
     alignItems: 'center',
     flex: 1,
@@ -451,12 +408,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  shopText: {
-    fontSize: 12,
-    color: '#fff',
-    fontWeight: '600',
-    marginRight: 4,
-  },
   emptyContainer: {
     alignItems: 'center',
     paddingVertical: 40,
@@ -477,12 +428,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   },
-  helpSection: {
+  shopHereSection: {
     marginHorizontal: 20,
     marginTop: 24,
     marginBottom: 100,
   },
-  helpCard: {
+  shopHereCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 20,
@@ -493,35 +444,23 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
-  helpContent: {
+  shopHereContent: {
     flex: 1,
     marginLeft: 16,
   },
-  helpTitle: {
+  shopHereTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#1f2937',
     marginBottom: 4,
   },
-  helpSubtitle: {
+  shopHereSubtitle: {
     fontSize: 14,
     color: '#6b7280',
     lineHeight: 20,
-  },
-  whatsappButton: {
-    backgroundColor: '#059669',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  whatsappText: {
-    color: '#fff',
-    fontWeight: '600',
-    marginLeft: 4,
-    fontSize: 14,
   },
   floatingButton: {
     position: 'absolute',

@@ -15,7 +15,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CreateProductScreen = ({ navigation }) => {
   const [formData, setFormData] = useState({
@@ -115,32 +114,26 @@ const CreateProductScreen = ({ navigation }) => {
     setLoading(true);
 
     try {
-      const token = await AsyncStorage.getItem('token');
-      
       // Create FormData for multipart/form-data
       const formDataToSend = new FormData();
-      formDataToSend.append('name', formData.name);
-      formDataToSend.append('description', formData.description);
-      formDataToSend.append('price', formData.price);
+      formDataToSend.append('name', formData.name.trim());
+      formDataToSend.append('description', formData.description.trim());
+      formDataToSend.append('price', parseFloat(formData.price).toString());
       formDataToSend.append('category', formData.category);
       
       // Add image file
       formDataToSend.append('image', {
         uri: image.uri,
         type: image.mimeType || 'image/jpeg',
-        name: image.fileName || 'product-image.jpg'
+        name: image.fileName || `product-${Date.now()}.jpg`
       });
 
-      const response = await axios.post(
-        'https://moihub.onrender.com/api/eshop/vendor/product/create',
-        formDataToSend,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data'
-          }
+      // Use axios with relative URL - base URL and auth handled in entry file
+      const response = await axios.post(`api/eshop/vendor/product/create`, formDataToSend, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
         }
-      );
+      });
 
       if (response.data.success) {
         Alert.alert(
@@ -149,14 +142,61 @@ const CreateProductScreen = ({ navigation }) => {
           [
             {
               text: 'OK',
-              onPress: () => navigation.goBack()
+              onPress: () => {
+                // Reset form
+                setFormData({
+                  name: '',
+                  description: '',
+                  price: '',
+                  category: '',
+                });
+                setImage(null);
+                navigation.goBack();
+              }
             }
           ]
         );
+      } else {
+        throw new Error(response.data.message || 'Failed to create product');
       }
     } catch (error) {
       console.error('Error creating product:', error);
-      const errorMessage = error.response?.data?.message || 'Failed to create product';
+      
+      let errorMessage = 'Failed to create product';
+      
+      if (error.response) {
+        // Server responded with error status
+        const status = error.response.status;
+        const data = error.response.data;
+        
+        switch (status) {
+          case 400:
+            errorMessage = data.message || 'Invalid product data';
+            break;
+          case 401:
+            errorMessage = 'Session expired. Please log in again.';
+            // Auth interceptor should handle this automatically
+            break;
+          case 403:
+            errorMessage = 'You are not authorized to create products';
+            break;
+          case 413:
+            errorMessage = 'Image file is too large';
+            break;
+          case 500:
+            errorMessage = 'Server error. Please try again later.';
+            break;
+          default:
+            errorMessage = data.message || 'An unexpected error occurred';
+        }
+      } else if (error.request) {
+        // Network error
+        errorMessage = 'Network error. Please check your internet connection.';
+      } else if (error.code === 'ECONNABORTED') {
+        // Timeout error
+        errorMessage = 'Request timeout. Please try again.';
+      }
+      
       Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
@@ -271,7 +311,12 @@ const CreateProductScreen = ({ navigation }) => {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator color="#fff" size="small" />
+                <Text style={[styles.submitButtonText, { marginLeft: 10 }]}>
+                  Creating...
+                </Text>
+              </View>
             ) : (
               <Text style={styles.submitButtonText}>Create Product</Text>
             )}
@@ -280,7 +325,8 @@ const CreateProductScreen = ({ navigation }) => {
       </ScrollView>
     </KeyboardAvoidingView>
   );
-};
+};   
+
 
 const styles = StyleSheet.create({
   container: {

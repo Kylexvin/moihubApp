@@ -21,6 +21,8 @@ const OrganizationScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const contactAdminNumber = '254768610613';
+  const defaultMessage = "Hello, I would like to add my organization to your platform.";
 
   // Extract unique categories from organizations data
   const getCategories = () => {
@@ -110,28 +112,109 @@ const OrganizationScreen = ({ navigation }) => {
     </View>
   );
 
-  const handleWhatsAppMessage = (organization) => {
-    // Use the phone number from the API data
-    const phoneNumber = organization.phoneNumber?.replace('+', '') || '254768610613';
-    const message = encodeURIComponent(organization.whatsappMessage || `Hello! I'm interested in learning more about ${organization.name}.`);
-    const whatsappUrl = `whatsapp://send?phone=${phoneNumber}&text=${message}`;
-    
-    Linking.canOpenURL(whatsappUrl)
-      .then((supported) => {
-        if (supported) {
-          return Linking.openURL(whatsappUrl);
-        } else {
-          // If WhatsApp is not installed, try to open in web browser
-          const webUrl = `https://web.whatsapp.com/send?phone=${phoneNumber}&text=${message}`;
-          return Linking.openURL(webUrl);
-        }
-      })
-      .catch((err) => {
-        Alert.alert('Error', 'Unable to open WhatsApp. Please make sure WhatsApp is installed on your device.');
-        console.error('WhatsApp error:', err);
-      });
-  };
+const handleWhatsAppMessage = async (organization) => {
+  const rawNumber = organization.phoneNumber || '254768610613';
+  const message = organization.whatsappMessage || `Hello! I'm interested in learning more about ${organization.name}.`;
 
+  // Clean and format phone number
+  const cleanNumber = rawNumber.replace(/\D/g, '');
+  const formattedNumber = cleanNumber.startsWith('254')
+    ? cleanNumber
+    : `254${cleanNumber.replace(/^0/, '')}`;
+  
+  const encodedMessage = encodeURIComponent(message);
+
+  // Try to open WhatsApp natively
+  try {
+    const canOpenNative = await Linking.canOpenURL('whatsapp://send');
+    if (canOpenNative) {
+      await Linking.openURL(`whatsapp://send?phone=${formattedNumber}&text=${encodedMessage}`);
+      return;
+    }
+  } catch (err) {
+    console.warn('Native WhatsApp open failed:', err);
+  }
+
+  // Fallback to WhatsApp Web
+  try {
+    await Linking.openURL(`https://wa.me/${formattedNumber}?text=${encodedMessage}`);
+    return;
+  } catch (err) {
+    console.warn('WhatsApp Web open failed:', err);
+  }
+
+  // If all fails, prompt options
+  Alert.alert(
+    'WhatsApp Not Available',
+    'WhatsApp could not be opened. Choose an option:',
+    [
+      {
+        text: 'Copy Number',
+        onPress: async () => {
+          try {
+            await Clipboard.setStringAsync(formattedNumber);
+            Alert.alert('Copied!', `${formattedNumber} copied to clipboard`);
+          } catch (copyErr) {
+            console.error('Copy failed:', copyErr);
+            Alert.alert('Error', 'Failed to copy number.');
+          }
+        }
+      },
+      {
+        text: 'Open in Browser',
+        onPress: async () => {
+          try {
+            await Linking.openURL(`https://wa.me/${formattedNumber}?text=${encodedMessage}`);
+          } catch (browserErr) {
+            console.error('Browser open failed:', browserErr);
+            Alert.alert('Error', 'Failed to open in browser.');
+          }
+        }
+      },
+      { text: 'Cancel', style: 'cancel' }
+    ]
+  );
+};
+
+const openWhatsApp = async (phoneNumber, message = '') => {
+    const cleanNumber = phoneNumber.replace(/\D/g, '');
+    const formattedNumber = cleanNumber.startsWith('254')
+      ? cleanNumber
+      : `254${cleanNumber.replace(/^0/, '')}`;
+    const encodedMessage = encodeURIComponent(message);
+
+    try {
+      const canOpenNative = await Linking.canOpenURL('whatsapp://send');
+      if (canOpenNative) {
+        await Linking.openURL(`whatsapp://send?phone=${formattedNumber}&text=${encodedMessage}`);
+        return;
+      }
+    } catch (err) {
+      console.warn('Native WhatsApp open failed:', err);
+    }
+
+    try {
+      await Linking.openURL(`https://wa.me/${formattedNumber}?text=${encodedMessage}`);
+      return;
+    } catch (err) {
+      console.warn('WhatsApp Web failed:', err);
+    }
+
+    Alert.alert(
+      'WhatsApp Not Available',
+      'WhatsApp could not be opened. Choose an option:',
+      [
+        {
+          text: 'Copy Number',
+          onPress: async () => {
+            await Clipboard.setStringAsync(formattedNumber);
+            Alert.alert('Copied!', `${formattedNumber} copied to clipboard`);
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  }; 
   const handleOrganizationPress = (organization) => {
     // Navigate to specific organization detail screen
     navigation.navigate('OrganizationDetail', { 
@@ -240,22 +323,19 @@ const OrganizationScreen = ({ navigation }) => {
           )}
         </View>
 
-        <View style={styles.joinSection}>
-          <Text style={styles.joinTitle}>Want to add your organization?</Text>
-          <Text style={styles.joinText}>
-            Contact the admin to get your organization featured here
-          </Text>
-          <TouchableOpacity 
-            style={styles.joinButton}
-            onPress={() => {
-              // Navigate to contact admin screen or open contact method
-              // navigation.navigate('ContactAdmin');
-              console.log('Contact admin pressed');
-            }}
-          >
-            <Text style={styles.joinButtonText}>Contact Admin</Text>
-          </TouchableOpacity>
-        </View>
+         {/* Join Section */}
+      <View style={styles.joinSection}>
+        <Text style={styles.joinTitle}>Want to add your organization?</Text>
+        <Text style={styles.joinText}>
+          Contact the admin to get your organization featured here
+        </Text>
+        <TouchableOpacity
+          style={styles.joinButton}
+          onPress={() => openWhatsApp(contactAdminNumber, defaultMessage)}
+        >
+          <Text style={styles.joinButtonText}>Contact Admin</Text>
+        </TouchableOpacity>
+      </View>
       </ScrollView>
     </View>
   );

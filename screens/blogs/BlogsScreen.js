@@ -8,7 +8,7 @@ import {
   ActivityIndicator, 
   StyleSheet, 
   RefreshControl,
-  Alert,
+  Alert,  
   Dimensions
 } from 'react-native';
 import axios from 'axios';

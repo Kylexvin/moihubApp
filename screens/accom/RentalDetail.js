@@ -475,7 +475,7 @@ const RentalDetail = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'ivory',
+    backgroundColor: '#bbe1ec',
   },
   centerContainer: {
     flex: 1,
@@ -489,14 +489,14 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   header: {
-    backgroundColor: '#fff',
+    backgroundColor: '#91c9d8ff',
     padding: 20,
     paddingTop: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     borderBottomWidth: 1,
-    marginBottom: 12,
+    marginBottom: 0,
     borderBottomColor: '#e5e7eb',
   },
   rentalName: {
@@ -704,7 +704,7 @@ placeholderText: {
     textAlign: 'center',
   },
   inquiryButton: {
-    backgroundColor: '#2563eb',
+    backgroundColor: '#147741ff',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

@@ -369,7 +369,8 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
   },
 });
-//$env:REACT_NATIVE_PACKAGER_HOSTNAME="172.16.7.125"
-// $env:EXPO_DEVTOOLS_LISTEN_ADDRESS="172.16.7.125"
+// $env:REACT_NATIVE_PACKAGER_HOSTNAME="10.12.1.148"
+// $env:EXPO_DEVTOOLS_LISTEN_ADDRESS="10.12.1.148"
 // npx expo start --lan --clear
-export default MatchScreen;
+
+export default MatchScreen; 

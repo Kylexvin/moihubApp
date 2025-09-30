@@ -439,11 +439,7 @@ const LocalServices = ({ navigation }) => {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Local Services</Text>
-        <Text style={styles.headerSubtitle}>Find services around campus</Text>
-      </View>
+    
 
       {/* Offline Indicator */}
       {renderOfflineIndicator()}

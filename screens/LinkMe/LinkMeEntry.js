@@ -54,31 +54,37 @@ const LinkMeEntry = ({ navigation }) => {
       hasNavigated.current = true;
 
       // Navigate based on status
-      switch (status) {
-        case null:
-          navigation.replace('OnboardingStart');
-          break;
-          
-        case 'draft':
-          navigateToAppropriateStep(profile.completedSteps);
-          break;
-          
-        case 'pending':
-          navigation.replace('AwaitingApproval');
-          break;
-          
-        case 'rejected':
-          navigation.replace('RejectionScreen');
-          break;
-          
-        case 'approved':
-          navigation.replace('SwipeFeed');
-          break;
-          
-        default:
-          hasNavigated.current = false;
-          setError('Unknown status received from server');
-      }
+// Navigate based on status
+switch (status) {
+  case null:
+    navigation.replace('OnboardingStart');
+    break;
+
+  case 'draft':
+    navigateToAppropriateStep(profile.completedSteps);
+    break;
+
+  case 'pending':
+    navigation.replace('AwaitingApproval');
+    break;
+
+  case 'rejected':
+    navigation.replace('RejectionScreen');
+    break;
+
+  case 'approved':
+    navigation.replace('SwipeFeed');
+    break;
+
+  case 'deleted':
+    navigation.replace('OnboardingStart'); // same as fresh user
+    break;
+
+  default:
+    hasNavigated.current = false;
+    setError('Unknown status received from server');
+} 
+
     } catch (err) {
       console.error('Error checking LinkMe status:', err);
       

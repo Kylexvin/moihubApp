@@ -64,37 +64,45 @@ const handleLogin = async () => {
     setIsRedirecting(true);
     setFeedback('Logging in...');
 
+    // Perform login
     const user = await login(emailOrUsername, password);
 
-    setFeedback('Login successful! Setting up notifications...');
-
-    if (messaging) {
-      try {
-        const fcmToken = await messaging().getToken();
-
-        if (fcmToken && user?._id) {
-          await axios.post('/api/auth/update-push-token', {
-            userId: user._id,
-            fcmToken,
-          });
-          console.log('FCM token registered successfully');
-        }
-      } catch (pushError) {
-        console.warn('FCM token setup failed:', pushError);
-      }
+    // Ensure Firebase Messaging is available (not in Expo Go)
+    if (!messaging) {
+      Alert.alert('Error', 'Push notifications are not supported on this device.');
+      setIsRedirecting(false);
+      return;
     }
+
+    // Request notification permission and get FCM token
+    const fcmToken = await messaging().getToken(); // null if denied
+    if (!fcmToken) {
+      Alert.alert(
+        'Permission Required',
+        'Push notifications are required to use this app. Please enable notifications in your settings.'
+      );
+      setIsRedirecting(false);
+      return; // Stop login flow
+    }
+
+    // Update FCM token in backend
+    await axios.post('/api/auth/update-push-token', {
+      userId: user._id,
+      fcmToken,
+    });
 
     setFeedback('Login successful! Redirecting...');
 
   } catch (err) {
-    console.error('Login error:', err);
     setIsRedirecting(false);
     setFeedback('');
 
-    const errorMessage = err.response?.data?.message || err.message || 'Please check your credentials and try again';
+    const errorMessage =
+      err.response?.data?.message || err.message || 'Please check your credentials and try again';
     Alert.alert('Login Failed', errorMessage);
   }
 };
+
 
 
   const handleGoogleSignIn = () => {

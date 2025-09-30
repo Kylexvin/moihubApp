@@ -17,16 +17,8 @@ import AwaitingApproval from '../screens/LinkMe/AwaitingApproval';
 import RejectionScreen from '../screens/LinkMe/RejectionScreen';
 import SwipeFeed from '../screens/LinkMe/SwipeFeed';
 import MatchesScreen from '../screens/LinkMe/MatchesScreen';
+import ProfileScreen from '../screens/LinkMe/ProfileScreen'; // Import the actual ProfileScreen
 import MessageStackNavigator from './MessageStackNavigator';
-
-const ProfileScreen = () => (
-  <LinearGradient colors={['#0a0a0a', '#1a1a2e']} style={styles.placeholderContainer}>
-    <Icon name="person-circle" size={80} color="#7b20a1" />
-    <Text style={styles.placeholderTitle}>Profile</Text>
-    <Text style={styles.placeholderSubtitle}>Manage your profile and settings</Text>
-    <Text style={styles.comingSoon}>Coming Soon!</Text>
-  </LinearGradient>
-);
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -96,7 +88,7 @@ const MainTabNavigator = () => {
      
       <Tab.Screen 
         name="Profile" 
-        component={ProfileScreen}
+        component={ProfileScreen} // Now using the actual ProfileScreen
         options={{ tabBarLabel: 'Profile' }}
       />
     </Tab.Navigator>
@@ -163,42 +155,20 @@ const LinkMeNavigator = () => {
         component={MainTabNavigator}
         options={{ headerShown: false, gestureEnabled: false }}
       />
+      
+      {/* Additional Profile-related screens that can be navigated to */}
+      <Stack.Screen
+        name="EditProfile"
+        component={ProfileScreen}
+        options={{ 
+          headerTitle: 'Edit Profile',
+          headerShown: true,
+          headerStyle: { backgroundColor: '#1a1a2e' },
+          headerTintColor: '#FFFFFF',
+        }}
+      />
     </Stack.Navigator>
   );
 };
 
-const styles = StyleSheet.create({
-  placeholderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  placeholderTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  placeholderSubtitle: {
-    fontSize: 16,
-    color: '#CCCCCC',
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 22,
-  },
-  comingSoon: {
-    fontSize: 14,
-    color: '#7b20a1',
-    fontWeight: '600',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#7b20a1',
-    backgroundColor: 'rgba(123, 32, 161, 0.1)',
-  },
-});
-
-export default LinkMeNavigator;
+export default LinkMeNavigator; 

@@ -82,13 +82,38 @@ const FoodScreen = () => {
     </Animatable.View>
   );
 
-
+  const renderListFooter = () => (
+    <View style={styles.listFooter}>
+      <Animatable.View 
+        animation="fadeInUp" 
+        duration={800}
+        style={styles.vendorCtaContainer}
+      >
+        <TouchableOpacity 
+          style={styles.vendorCtaButton}
+          onPress={() => navigation.navigate('OnboardingNavigator')}
+          activeOpacity={0.9}
+        >
+          <View style={styles.vendorCtaContent}>
+            <View style={styles.vendorCtaIconContainer}>
+              <Ionicons name="storefront" size={28} color="#FFF" />
+            </View>
+            <View style={styles.vendorCtaTextContainer}>
+              <Text style={styles.vendorCtaTitle}>Want to Partner with Us?</Text>
+              
+            </View>
+            <View style={styles.vendorCtaArrow}>
+              <Ionicons name="arrow-forward" size={24} color="#FFF" />
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Animatable.View>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#fe5722" />
-      
-
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
@@ -107,19 +132,6 @@ const FoodScreen = () => {
             </TouchableOpacity>
           )}
         </View>
-      </View>
-
-      {/* Quick Actions */}
-      <View style={styles.quickActionsContainer}>
-        <TouchableOpacity 
-          style={styles.quickActionButton}
-          onPress={() => navigation.navigate('MyOrders')}
-        >
-          <View style={styles.quickActionIcon}>
-            <Ionicons name="receipt-outline" size={20} color="#A7C4A0" />
-          </View>
-          <Text style={styles.quickActionText}>My Orders</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Content */}
@@ -162,6 +174,8 @@ const FoodScreen = () => {
               <Text style={styles.clearSearchText}>Clear Search</Text>
             </TouchableOpacity>
           )}
+          {/* Show Vendor CTA even when no vendors */}
+          {searchQuery.length === 0 && renderListFooter()}
         </View>
       ) : (
         <FlatList
@@ -179,8 +193,24 @@ const FoodScreen = () => {
             />
           }
           ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ListFooterComponent={renderListFooter}
         />
       )}
+
+      {/* My Orders FAB */}
+      <Animatable.View
+        animation="bounceIn"
+        duration={1000}
+        delay={500}
+      >
+        <TouchableOpacity 
+          style={styles.myOrdersFab}
+          onPress={() => navigation.navigate('MyOrders')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="receipt" size={24} color="#FFF" />
+        </TouchableOpacity>
+      </Animatable.View>
 
       {/* Floating Cart Button */}
       {cart.length > 0 && (
@@ -218,25 +248,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'ivory',
   },
-  
-  // Header Styles
-  headerContainer: {
-    backgroundColor: '#fe5722',
-    paddingTop: 10,
-    paddingBottom: 15,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
-    shadowColor: '#fe5722',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
- 
 
   // Search Bar Styles
   searchContainer: {
@@ -275,48 +286,94 @@ const styles = StyleSheet.create({
     padding: 5,
   },
 
-  // Quick Actions Styles
-  quickActionsContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 15,
-  },
-  quickActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 12,
-    paddingHorizontal: 15,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#F5F5F5',
-  },
-  quickActionIcon: {
-    width: 35,
-    height: 35,
-    borderRadius: 8,
-    backgroundColor: '#FFF3F0',
+  // My Orders FAB Styles
+  myOrdersFab: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#A7C4A0',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    shadowColor: '#A7C4A0',
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 10,
   },
-  quickActionText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fe5722',
+
+  // List Footer Styles
+  listFooter: {
+    paddingTop: 30,
+    paddingBottom: 40,
+  },
+
+  // Vendor CTA Styles
+  vendorCtaContainer: {
+    marginHorizontal: 4,
+  },
+  vendorCtaButton: {
+    backgroundColor: '#fe5722',
+    borderRadius: 20,
+    shadowColor: '#fe5722',
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 12,
+    overflow: 'hidden',
+  },
+  vendorCtaContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    position: 'relative',
+  },
+  vendorCtaIconContainer: {
+    width: 55,
+    height: 55,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 18,
+  },
+  vendorCtaTextContainer: {
+    flex: 1,
+  },
+  vendorCtaTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 6,
+  },
+  vendorCtaSubtitle: {
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '500',
+    lineHeight: 10,
+  },
+  vendorCtaArrow: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   // List Styles
   listContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 100,
+    paddingBottom: 100, // Space for FAB
   },
   separator: {
     height: 12,
@@ -336,7 +393,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 4,
     borderWidth: 1,
-    borderColor: '#fe5722',
+    borderColor: '#F0F0F0',
   },
   cardContent: {
     flexDirection: 'row',
@@ -530,7 +587,7 @@ const styles = StyleSheet.create({
   // Floating Cart Styles
   floatingCart: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 100, // Positioned above the FAB
     left: 20,
     right: 20,
     backgroundColor: '#fe5722',
@@ -538,11 +595,11 @@ const styles = StyleSheet.create({
     shadowColor: '#fe5722',
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: 6,
     },
     shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 8,
+    shadowRadius: 12,
+    elevation: 10,
   },
   cartButton: {
     flexDirection: 'row',
@@ -583,6 +640,5 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
-
 
 export default FoodScreen;

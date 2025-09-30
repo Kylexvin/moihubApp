@@ -37,6 +37,8 @@ import EchemNavigator from './navigation/EchemNavigator';
 import ServicesStackNavigator from './navigation/ServicesStackNavigator';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+import OnboardingNavigator from './navigation/OnboardingNavigator';
+
 
 const isExpoGo = Constants?.appOwnership === 'expo';
 const messaging = !isExpoGo ? require('@react-native-firebase/messaging').default : null;
@@ -251,7 +253,7 @@ useEffect(() => {
             <Stack.Screen name="Admin" component={AdminNavigator} />
             <Stack.Screen name="Eshop" component={EshopOwnerNavigator} />
             <Stack.Screen name="ServicesStack" component={ServicesStackNavigator} />
-
+            <Stack.Screen name="OnboardingNavigator" component={OnboardingNavigator} /> 
             <Stack.Screen
               name="EditProduct"
               component={EditProductScreen}
