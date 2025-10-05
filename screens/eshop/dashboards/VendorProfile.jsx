@@ -13,6 +13,7 @@ import {
   Dimensions,
   StatusBar,
   Animated,
+  Switch
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -267,6 +268,78 @@ const Button = React.memo(({
   );
 });
 
+// Shop Status Toggle Component
+const ShopStatusToggle = React.memo(({ isActive, onToggle, loading }) => {
+  const [isEnabled, setIsEnabled] = useState(isActive);
+
+  useEffect(() => {
+    setIsEnabled(isActive);
+  }, [isActive]);
+
+  const handleToggle = useCallback(async () => {
+    try {
+      await onToggle(!isEnabled);
+      setIsEnabled(!isEnabled);
+    } catch (error) {
+      // Revert if failed
+      setIsEnabled(isEnabled);
+    }
+  }, [isEnabled, onToggle]);
+
+  return (
+    <View style={styles.statusToggleContainer}>
+      <View style={styles.statusToggleHeader}>
+        <Ionicons 
+          name={isEnabled ? "checkmark-circle" : "close-circle"} 
+          size={24} 
+          color={isEnabled ? COLORS.success : COLORS.danger} 
+        />
+        <Text style={styles.statusToggleTitle}>
+          Shop Status
+        </Text>
+      </View>
+      
+      <View style={styles.statusToggleContent}>
+        <View style={styles.statusTextContainer}>
+          <Text style={styles.statusLabel}>
+            {isEnabled ? 'Shop is OPEN' : 'Shop is CLOSED'}
+          </Text>
+          <Text style={styles.statusDescription}>
+            {isEnabled 
+              ? 'Accepting new orders from customers' 
+              : 'Not accepting new orders - customers cannot place orders'
+            }
+          </Text>
+        </View>
+        
+        <TouchableOpacity
+          style={[
+            styles.toggleButton,
+            isEnabled ? styles.toggleButtonActive : styles.toggleButtonInactive,
+            loading && styles.toggleButtonDisabled
+          ]}
+          onPress={handleToggle}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator 
+              size="small" 
+              color={isEnabled ? COLORS.success : COLORS.danger} 
+            />
+          ) : (
+            <Text style={[
+              styles.toggleButtonText,
+              isEnabled ? styles.toggleButtonTextActive : styles.toggleButtonTextInactive
+            ]}>
+              {isEnabled ? 'OPEN' : 'CLOSED'}
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+
 // Main Component
 const VendorProfile = () => {
   const [profile, setProfile] = useState({
@@ -275,9 +348,11 @@ const VendorProfile = () => {
     address: '',
     phoneNumber: '',
     category: '',
+    isActive: true,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [togglingStatus, setTogglingStatus] = useState(false);
   const [originalProfile, setOriginalProfile] = useState({});
   
   const { errors, validateField, validateForm, setErrors } = useFormValidation(profile);
@@ -308,6 +383,7 @@ const VendorProfile = () => {
           address: shop.address || '',
           phoneNumber: shop.phoneNumber || '',
           category: shop.category?.name || '',
+          isActive: shop.isActive || false,
         };
         setProfile(profileData);
         setOriginalProfile(profileData);
@@ -321,6 +397,35 @@ const VendorProfile = () => {
       );
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const handleToggleShopStatus = useCallback(async (newStatus) => {
+    try {
+      setTogglingStatus(true);
+      const response = await axios.patch('https://moihub.onrender.com/api/eshop/vendor/toggle-shop-status');
+      
+      if (response.data.success) {
+        setProfile(prev => ({ ...prev, isActive: response.data.data.isActive }));
+        Alert.alert(
+          'Success',
+          response.data.message,
+          [{ text: 'OK', style: 'default' }]
+        );
+      } else {
+        Alert.alert('Error', response.data.message || 'Failed to update shop status.');
+        throw new Error(response.data.message);
+      }
+    } catch (error) {
+      console.error('Error toggling shop status:', error);
+      Alert.alert(
+        'Error',
+        error.response?.data?.message || 'Failed to update shop status. Please try again.',
+        [{ text: 'OK' }]
+      );
+      throw error;
+    } finally {
+      setTogglingStatus(false);
     }
   }, []);
 
@@ -427,6 +532,17 @@ const VendorProfile = () => {
               <Text style={styles.headerSubtitle}>
                 Manage your shop information and settings
               </Text>
+            </View>
+          </View>
+
+          {/* Shop Status Toggle Card */}
+          <View style={styles.cardContainer}>
+            <View style={styles.card}>
+              <ShopStatusToggle 
+                isActive={profile.isActive}
+                onToggle={handleToggleShopStatus}
+                loading={togglingStatus}
+              />
             </View>
           </View>
 
@@ -543,6 +659,13 @@ const VendorProfile = () => {
               </View>
               
               <View style={styles.infoItem}>
+                <Ionicons name="pause-circle" size={20} color={COLORS.danger} />
+                <Text style={styles.infoText}>
+                  When shop is closed, customers cannot place orders
+                </Text>
+              </View>
+              
+              <View style={styles.infoItem}>
                 <Ionicons name="shield-checkmark" size={20} color={COLORS.success} />
                 <Text style={styles.infoText}>
                   Your information is secure and encrypted
@@ -618,7 +741,36 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: SPACING.sm,
   },
-  
+    toggleButton: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 20,
+    minWidth: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+  },
+  toggleButtonActive: {
+    backgroundColor: 'rgba(39, 174, 96, 0.1)',
+    borderColor: COLORS.success,
+  },
+  toggleButtonInactive: {
+    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+    borderColor: COLORS.danger,
+  },
+  toggleButtonDisabled: {
+    opacity: 0.6,
+  },
+  toggleButtonText: {
+    fontSize: TYPOGRAPHY.caption,
+    fontWeight: 'bold',
+  },
+  toggleButtonTextActive: {
+    color: COLORS.success,
+  },
+  toggleButtonTextInactive: {
+    color: COLORS.danger,
+  },
   // Card Styles
   cardContainer: {
     padding: SPACING.lg,

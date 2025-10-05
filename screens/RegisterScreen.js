@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import Icon from 'react-native-vector-icons/FontAwesome';
-// import * as AuthSession from 'expo-auth-session';
-// import * as Google from 'expo-auth-session/providers/google';
 
 import { 
   View, 
@@ -14,7 +12,8 @@ import {
   ScrollView,
   Animated,
   Dimensions,
-  Image
+  Image,
+  Linking
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 
@@ -30,6 +29,9 @@ const RegisterScreen = ({ navigation }) => {
   
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { register, loading, error } = useAuth();
 
   // Animation values
@@ -37,7 +39,7 @@ const RegisterScreen = ({ navigation }) => {
   const slideAnim = useState(new Animated.Value(50))[0];
   
   // Google Sign-in coming soon flag
-  const GOOGLE_SIGNIN_ENABLED = false; // Set to true when ready to enable
+  const GOOGLE_SIGNIN_ENABLED = false;
 
   useEffect(() => {
     // Entrance animation
@@ -62,9 +64,35 @@ const RegisterScreen = ({ navigation }) => {
     });
   };
 
+  const getPasswordStrength = (password) => {
+    if (!password) return { strength: 0, text: '', color: '#666' };
+    
+    let strength = 0;
+    if (password.length >= 8) strength++;
+    if (password.length >= 12) strength++;
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++;
+    if (/\d/.test(password)) strength++;
+    if (/[^a-zA-Z0-9]/.test(password)) strength++;
+    
+    if (strength <= 2) return { strength, text: 'Weak', color: '#FF6B6B' };
+    if (strength <= 3) return { strength, text: 'Fair', color: '#FFB74D' };
+    if (strength <= 4) return { strength, text: 'Good', color: '#81C784' };
+    return { strength, text: 'Strong', color: '#00C896' };
+  };
+
   const validateForm = () => {
     if (!formData.username || !formData.email || !formData.password || !formData.confirmPassword) {
       Alert.alert('Error', 'Please fill in all fields');
+      return false;
+    }
+    
+    if (formData.username.length < 3) {
+      Alert.alert('Error', 'Username must be at least 3 characters long');
+      return false;
+    }
+    
+    if (formData.password.length < 8) {
+      Alert.alert('Error', 'Password must be at least 8 characters long');
       return false;
     }
     
@@ -77,6 +105,11 @@ const RegisterScreen = ({ navigation }) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       Alert.alert('Error', 'Please enter a valid email address');
+      return false;
+    }
+    
+    if (!agreedToTerms) {
+      Alert.alert('Error', 'Please agree to the Terms of Service and Privacy Policy');
       return false;
     }
     
@@ -108,6 +141,16 @@ const RegisterScreen = ({ navigation }) => {
       'Google Sign-in will be available in a future update. For now, please use traditional registration.',
       [{ text: 'OK', style: 'default' }]
     );
+  };
+
+  const openTerms = (e) => {
+    if (e) e.stopPropagation();
+    Linking.openURL('https://moihub-silk.vercel.app/learnmore');
+  };
+
+  const openPrivacy = (e) => {
+    if (e) e.stopPropagation();
+    Linking.openURL('https://moihub-silk.vercel.app/learnmore');
   };
 
   return (
@@ -193,6 +236,9 @@ const RegisterScreen = ({ navigation }) => {
                 onChangeText={(value) => handleChange('username', value)}
                 autoCapitalize="none"
               />
+              {formData.username && formData.username.length < 3 ? (
+                <Text style={styles.errorText}>Username must be at least 3 characters</Text>
+              ) : null}
             </View>
 
             <View style={styles.inputContainer}>
@@ -210,27 +256,95 @@ const RegisterScreen = ({ navigation }) => {
 
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Create a password"
-                placeholderTextColor="#88A99B"
-                value={formData.password}
-                onChangeText={(value) => handleChange('password', value)}
-                secureTextEntry
-              />
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={[styles.input, styles.passwordInput]}
+                  placeholder="Create a password"
+                  placeholderTextColor="#88A99B"
+                  value={formData.password}
+                  onChangeText={(value) => handleChange('password', value)}
+                  secureTextEntry={!showPassword}
+                />
+                <TouchableOpacity 
+                  style={styles.eyeIcon}
+                  onPress={() => setShowPassword(!showPassword)}
+                >
+                  <Icon name={showPassword ? "eye" : "eye-slash"} size={20} color="#88A99B" />
+                </TouchableOpacity>
+              </View>
+              {formData.password ? (
+                <View style={styles.strengthContainer}>
+                  <View style={styles.strengthBars}>
+                    {[1, 2, 3, 4, 5].map((bar) => (
+                      <View
+                        key={bar}
+                        style={[
+                          styles.strengthBar,
+                          bar <= getPasswordStrength(formData.password).strength && {
+                            backgroundColor: getPasswordStrength(formData.password).color
+                          }
+                        ]}
+                      />
+                    ))}
+                  </View>
+                  <Text style={[styles.strengthText, { color: getPasswordStrength(formData.password).color }]}>
+                    {getPasswordStrength(formData.password).text}
+                  </Text>
+                </View>
+              ) : null}
+              {formData.password && formData.password.length < 8 ? (
+                <Text style={styles.errorText}>Password must be at least 8 characters</Text>
+              ) : null}
             </View>
 
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Confirm Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Confirm your password"
-                placeholderTextColor="#88A99B"
-                value={formData.confirmPassword}
-                onChangeText={(value) => handleChange('confirmPassword', value)}
-                secureTextEntry
-              />
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={[styles.input, styles.passwordInput]}
+                  placeholder="Confirm your password"
+                  placeholderTextColor="#88A99B"
+                  value={formData.confirmPassword}
+                  onChangeText={(value) => handleChange('confirmPassword', value)}
+                  secureTextEntry={!showConfirmPassword}
+                />
+                <TouchableOpacity 
+                  style={styles.eyeIcon}
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  <Icon name={showConfirmPassword ? "eye" : "eye-slash"} size={20} color="#88A99B" />
+                </TouchableOpacity>
+              </View>
+              {formData.confirmPassword && formData.password !== formData.confirmPassword ? (
+                <Text style={styles.errorText}>Passwords do not match</Text>
+              ) : null}
             </View>
+
+            <TouchableOpacity 
+              style={styles.termsContainer}
+              onPress={() => setAgreedToTerms(!agreedToTerms)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
+                {agreedToTerms && <Icon name="check" size={14} color="#093028" />}
+              </View>
+              <Text style={styles.termsText}>
+                By agreeing, you have accepted our{' '}
+                <Text 
+                  style={styles.termsLink}
+                  onPress={openTerms}
+                >
+                  Terms of Service
+                </Text>
+                {' '}and{' '}
+                <Text 
+                  style={styles.termsLink}
+                  onPress={openPrivacy}
+                >
+                  Privacy Policy
+                </Text>
+              </Text>
+            </TouchableOpacity>
 
             <TouchableOpacity 
               style={[styles.button, (loading || isRedirecting) && styles.buttonDisabled]}
@@ -400,6 +514,77 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     fontSize: 16,
     color: '#E0FFF5',
+  },
+  passwordContainer: {
+    position: 'relative',
+  },
+  passwordInput: {
+    paddingRight: 50,
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 15,
+    top: 15,
+    padding: 5,
+  },
+  strengthContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 10,
+  },
+  strengthBars: {
+    flexDirection: 'row',
+    gap: 4,
+    flex: 1,
+  },
+  strengthBar: {
+    flex: 1,
+    height: 4,
+    backgroundColor: '#0F5443',
+    borderRadius: 2,
+  },
+  strengthText: {
+    fontSize: 12,
+    fontWeight: '600',
+    minWidth: 50,
+  },
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 12,
+    marginTop: 6,
+  },
+  termsContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: '#0F5443',
+    borderRadius: 4,
+    marginRight: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 84, 67, 0.3)',
+  },
+  checkboxChecked: {
+    backgroundColor: '#00C896',
+    borderColor: '#00C896',
+  },
+  termsText: {
+    flex: 1,
+    color: '#88A99B',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  termsLink: {
+    color: '#2DFFC3',
+    textDecorationLine: 'underline',
+    fontWeight: '600',
   },
   button: {
     backgroundColor: '#00C896',

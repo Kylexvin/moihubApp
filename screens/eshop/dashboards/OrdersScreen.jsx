@@ -325,7 +325,7 @@ const OrdersScreen = ({ navigation }) => {
                 <Text style={styles.orderInfoValue}>{selectedOrder.contactNumber}</Text>
               </View>
               <View style={styles.orderInfoRow}>
-                <Text style={styles.orderInfoLabel}>Address:</Text>
+                <Text style={styles.orderInfoLabel}>Message info</Text>
                 <Text style={styles.orderInfoValue}>{selectedOrder.shippingAddress}</Text>
               </View>
             </View>

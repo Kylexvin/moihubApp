@@ -41,49 +41,32 @@ const ProfileScreen = () => {
     );
   };
 
-  const rolesWithDashboard = ['admin', 'writer', 'vendor', 'shopowner'];
+  const rolesWithDashboard = ['vendor', 'shopowner'];
   const showDashboardCard = currentUser && rolesWithDashboard.includes(currentUser.role);
 
-const getDashboardInfo = (role) => {
-  switch (role) {
-    case 'admin':
-      return {
-        title: 'ADMIN CONTROL',
-        subtitle: 'Access Admin Dashboard',
-        icon: '⚡',
-        route: 'Admin' 
-      };
-    case 'writer':
-      return {
-        title: 'WRITER STUDIO',
-        subtitle: 'Access Writer Dashboard',
-        icon: '✍️',
-        route: 'BlogManagement'
-      };
-    case 'vendor':
-      return {
-        title: 'VENDOR PORTAL',
-        subtitle: 'Access Vendor Dashboard',
-        icon: '📦',
-        route: 'VendorDashboard'
-      };
-    case 'shopowner':
-  return {
-    title: 'SHOP MANAGER',
-    subtitle: 'Access Shop Dashboard',
-    icon: '🏪',
-    route: 'Eshop'
+  const getDashboardInfo = (role) => {
+    switch (role) {
+      case 'vendor':
+        return {
+          title: 'VENDOR PORTAL',
+          subtitle: 'Access Vendor Dashboard',
+          icon: '📦',
+          route: 'VendorDashboard'
+        };
+      case 'shopowner':
+        return {
+          title: 'SHOP MANAGER',
+          subtitle: 'Access Shop Dashboard',
+          icon: '🏪',
+          route: 'Eshop'
+        };
+      default:
+        return null;
+    }
   };
-
-    default:
-      return null;
-  }
-};
 
   const getRoleColor = (role) => {
     switch (role) {
-      case 'admin': return '#ff3366';
-      case 'writer': return '#00d4ff';
       case 'vendor': return '#9c27b0';
       case 'shopowner': return '#4caf50';
       default: return '#6c7ce7';
@@ -225,6 +208,7 @@ const getDashboardInfo = (role) => {
 };
 
 const styles = StyleSheet.create({
+
   container: {
     flex: 1,
     backgroundColor: '#0a0a0a',

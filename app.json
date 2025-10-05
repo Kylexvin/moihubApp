@@ -3,7 +3,6 @@
     "name": "MoiHub",
     "slug": "moihubapp",
     "version": "1.0.0",
-    "sdkVersion": "53.0.0",
     "orientation": "portrait",
     "icon": "./assets/appicon.png",
     "userInterfaceStyle": "light",
@@ -12,7 +11,9 @@
       "resizeMode": "contain",
       "image": "./assets/moihublogo.png"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "bundleIdentifier": "com.kylexvin.moihub",
       "supportsTablet": true,
@@ -32,7 +33,9 @@
         "ACCESS_NETWORK_STATE",
         "WAKE_LOCK",
         "FOREGROUND_SERVICE",
-        "com.google.android.c2dm.permission.RECEIVE"
+        "com.google.android.c2dm.permission.RECEIVE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "googleServicesFile": "./android/app/google-services.json",
       "adaptiveIcon": {
@@ -43,47 +46,58 @@
         {
           "action": "VIEW",
           "data": [
-            { "scheme": "https", "host": "wa.me" },
-            { "scheme": "https", "host": "api.whatsapp.com" },
-            { "scheme": "whatsapp" }
+            {
+              "scheme": "https",
+              "host": "wa.me"
+            },
+            {
+              "scheme": "https",
+              "host": "api.whatsapp.com"
+            },
+            {
+              "scheme": "whatsapp"
+            }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
     "web": {
       "favicon": "./assets/moihublogo.png"
     },
-"plugins": [
-  "expo-audio",
-  "expo-web-browser",
-  [
-    "expo-notifications",
-    {
-      "icon": "./assets/ic_stat_notification.png",
-      "color": "#005f4b"
-    }
-  ],
-  "@react-native-firebase/app",
-  "@react-native-firebase/messaging",
-  [
-    "expo-build-properties",
-    {
-      "android": {
-        "minSdkVersion": 21
-      }
-    }
-  ]
-],
-
+    "plugins": [
+      "expo-audio",
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/ic_stat_notification.png",
+          "color": "#005f4b"
+        }
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 21
+          }
+        }
+      ]
+    ],
     "scheme": "moihubapp",
     "updates": {
       "fallbackToCacheTimeout": 0
     },
     "extra": {
       "eas": {
-        "projectId": "f91d711b-81b0-48e2-9926-0b09b22e357f"
+        "projectId": "2fe67dfd-7c68-4c43-a61f-5fb4ce28cc1d"
       }
-    }
+    },
+    "owner": "kylexvinny"
   }
 }

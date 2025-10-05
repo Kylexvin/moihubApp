@@ -19,6 +19,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
  
@@ -183,7 +184,7 @@ const CartScreen = ({ navigation }) => {
       
       Alert.alert(
         'Order Placed Successfully! 🎉',
-        'Your order has been submitted. The shop owner will contact you shortly to confirm details and arrange delivery.',
+        'Your order has been submitted. The shop owner will contact you shortly.',
         [
           {
             text: 'Track Orders',
@@ -395,12 +396,12 @@ const CartScreen = ({ navigation }) => {
           {/* Delivery Address */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Icon name="location-on" size={20} color="#6ee7b7" />
-              <Text style={styles.sectionTitle}>Delivery Address</Text>
+              <Ionicons name="chatbubble-outline" size={20} color="#6ee7b7" />
+              <Text style={styles.sectionTitle}>Your inquiry message</Text>
             </View>
             <TextInput
               style={styles.textInput}
-              placeholder="Enter your where to be delivered"
+              placeholder="Enter your message"
               placeholderTextColor="#94a3b8"
               value={shippingAddress}
               onChangeText={setShippingAddress}
@@ -414,7 +415,7 @@ const CartScreen = ({ navigation }) => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Icon name="phone" size={20} color="#6ee7b7" />
-              <Text style={styles.sectionTitle}>Contact Number</Text>
+              <Text style={styles.sectionTitle}>Your Contact Number</Text>
             </View>
             <TextInput
               style={styles.textInput}
@@ -452,7 +453,7 @@ const CartScreen = ({ navigation }) => {
               <Text style={styles.infoTitle}>What happens next?</Text>
               <Text style={styles.infoText}>
                 • Shop owners will contact you to confirm your order{'\n'}
-                • Payment and delivery details will be arranged directly{'\n'}
+                • Payment and may be delivery details will be arranged directly{'\n'}
                 • Track your orders in the "Orders" section
               </Text>
             </View>
@@ -471,7 +472,7 @@ const CartScreen = ({ navigation }) => {
             {placingOrder ? (
               <>
                 <ActivityIndicator size={20} color="#fff" />
-                <Text style={styles.placeOrderText}>Placing Order...</Text>
+                <Text style={styles.placeOrderText}>Placing Inquiry...</Text>
               </>
             ) : (
               <>

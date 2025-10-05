@@ -806,7 +806,7 @@ const handleDirectWhatsApp = () => {
                       style={styles.highlightButton}
                       onPress={handleInquirePress}
                     >
-                      <Text style={styles.highlightButtonText}>Inquire</Text>
+                      <Text style={styles.highlightButtonText}>Check out</Text>
                       {iconsLoaded ? (
                         <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
                       ) : (

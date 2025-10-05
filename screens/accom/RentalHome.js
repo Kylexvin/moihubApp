@@ -487,7 +487,7 @@ const RentalHome = ({ navigation }) => {
               <TextInput
                 style={styles.filterInput}
                 placeholder="Enter location (e.g., Stage, Chebarus)"
-                value={filters.location} placeholderTextColor="#397739ff"
+                value={filters.location}
                 onChangeText={(text) => setFilters({ ...filters, location: text })}
               />
             </View>
@@ -523,7 +523,7 @@ const RentalHome = ({ navigation }) => {
                 <TextInput
                   style={styles.priceInput}
                   placeholder="Min Price"
-                  value={filters.minPrice} placeholderTextColor="#397739ff"
+                  value={filters.minPrice}
                   onChangeText={(text) => setFilters({ ...filters, minPrice: text })}
                   keyboardType="numeric"
                 />
@@ -531,7 +531,7 @@ const RentalHome = ({ navigation }) => {
                 <TextInput
                   style={styles.priceInput}
                   placeholder="Max Price"
-                  value={filters.maxPrice} placeholderTextColor="#397739ff"
+                  value={filters.maxPrice}
                   onChangeText={(text) => setFilters({ ...filters, maxPrice: text })}
                   keyboardType="numeric"
                 />
@@ -628,7 +628,7 @@ const RentalHome = ({ navigation }) => {
           <TextInput
             style={styles.searchInput}
             placeholder="Search by location, name, or type..."
-            value={searchQuery} placeholderTextColor="#333833ff"
+            value={searchQuery}
             onChangeText={handleSearch}
             returnKeyType="search"
           />
@@ -830,23 +830,20 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 80,
   },
-rentalCard: {
-  backgroundColor: '#ffffffff',
-  borderRadius: 12,
-  borderColor: 'white',
-  borderWidth: 2, // solid border
-  padding: 16,
-  marginBottom: 16,
-  shadowColor: '#22775dff',
-  shadowOffset: {
-    width: 0,
-    height: 2,
+  rentalCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
-  shadowOpacity: 0.1,
-  shadowRadius: 3.84,
-  elevation: 5,
-},
-
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',

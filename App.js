@@ -3,7 +3,7 @@ import 'react-native-get-random-values';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { StatusBar, Platform, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -26,10 +26,7 @@ import MessageStackNavigator from './navigation/MessageStackNavigator';
 import EshopNavigator from './navigation/EshopNavigator';
 import LinkMeNavigator from './navigation/LinkMeNavigator';
 import MySchoolNavigator from './navigation/MySchoolNavigator';
-import BlogsNavigator from './navigation/BlogsNavigator';
-import AdminNavigator from './navigation/AdminNavigator';
-import WriterNavigator from './navigation/WriterNavigator';
-import OAuthDebug from './screens/OAuthDebug';
+import BlogsNavigator from './navigation/BlogsNavigator'; 
 import EshopOwnerNavigator from './navigation/EshopOwnerNavigator';
 import EditProductScreen from './screens/eshop/dashboards/EditProductScreen';
 import FoodVendorNavigator from './navigation/FoodVendorNavigator';
@@ -38,25 +35,27 @@ import ServicesStackNavigator from './navigation/ServicesStackNavigator';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import OnboardingNavigator from './navigation/OnboardingNavigator';
-
+import { handleNotificationNavigation } from './utils/notificationHandler';
 
 const isExpoGo = Constants?.appOwnership === 'expo';
 const messaging = !isExpoGo ? require('@react-native-firebase/messaging').default : null;
 
+// Navigation ref for notification handling
+const navigationRef = createNavigationContainerRef();
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
-    shouldPlaySound: true,
+    shouldPlaySound: false, // Changed to false
     shouldSetBadge: false,
   }),
 });
+
 if (messaging) {
   messaging().setBackgroundMessageHandler(async remoteMessage => {
     console.log('Background FCM message:', remoteMessage);
   });
 }
-
 
 const Stack = createNativeStackNavigator();
 
@@ -64,7 +63,7 @@ const MyTheme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
-    background: '#093028', // Changed from 'ivory' to match your app background
+    background: '#093028',
     card: '#093028',
     text: '#E0FFF5',
     border: 'transparent',
@@ -95,17 +94,17 @@ function AppNavigator() {
   const [appState, setAppState] = useState('splash');
   const [firstLaunch, setFirstLaunch] = useState(null);
 
- useEffect(() => {
+  useEffect(() => {
     const configureAudio = async () => {
       try {
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: false,
-          interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+          interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DUCK_OTHERS,
           playsInSilentModeIOS: true,
-          shouldDuckAndroid: false,
-          interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
+          shouldDuckAndroid: true,
+          interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DUCK_OTHERS,
           playThroughEarpieceAndroid: false,
-          staysActiveInBackground: true,
+          staysActiveInBackground: false,
         });
         console.log('Audio mode configured successfully');
       } catch (e) {
@@ -116,70 +115,60 @@ function AppNavigator() {
     configureAudio();
   }, []);
 
-useEffect(() => {
-  if (!messaging) return;
+  useEffect(() => {
+    if (!messaging) return;
 
-  const unsubscribe = messaging().onMessage(async remoteMessage => {
-    console.log('Foreground FCM message:', remoteMessage);
+    const unsubscribe = messaging().onMessage(async remoteMessage => {
+      console.log('Foreground FCM message:', remoteMessage);
 
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: remoteMessage.notification?.title || 'MoiHub',
-        body: remoteMessage.notification?.body || '',
-        data: remoteMessage.data,
-      },
-      trigger: null,
-    });
-  });
-
-  return unsubscribe;
-}, []);
-
-
-useEffect(() => {
-  const unsubscribe = Notifications.addNotificationResponseReceivedListener(async response => {
-    console.log('Notification tapped:', response);
-
-    try {
-      const { sound } = await Audio.Sound.createAsync(
-        require('./assets/sounds/moihub_sound.mp3')
-      );
-      await sound.playAsync();
-    } catch (error) {
-      console.error('Error playing sound after tap:', error);
-    }
-
-    // Handle navigation here if needed
-  });
-
-  return () => unsubscribe.remove();
-}, []);
-
-
-
-useEffect(() => {
-  const subscription = Notifications.addNotificationReceivedListener(async notification => {
-    console.log('Foreground Local notification:', notification);
-
-    try {
-      const { sound } = await Audio.Sound.createAsync(
-        require('./assets/sounds/moihub_sound.mp3'),
-        { shouldPlay: true }
-      );
-      
-      await sound.playAsync();
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.didJustFinish) {
-          sound.unloadAsync();
-        }
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: remoteMessage.notification?.title || 'MoiHub',
+          body: remoteMessage.notification?.body || '',
+          data: remoteMessage.data,
+        },
+        trigger: null,
       });
-    } catch (error) {
-      console.error('Error playing notification sound:', error);
-    }
-  });
+    });
 
-  return () => subscription.remove();
-}, []);
+    return unsubscribe;
+  }, []);
+
+  // Handle notification tap
+  useEffect(() => {
+    const unsubscribe = Notifications.addNotificationResponseReceivedListener(response => {
+      console.log('Notification tapped:', response);
+      
+      const data = response.notification.request.content.data;
+      
+      // Wait for navigation to be ready, then handle
+      if (navigationRef.isReady()) {
+        handleNotificationNavigation(navigationRef, data);
+      } else {
+        // Queue navigation for when ready
+        const checkReady = setInterval(() => {
+          if (navigationRef.isReady()) {
+            clearInterval(checkReady);
+            handleNotificationNavigation(navigationRef, data);
+          }
+        }, 100);
+        
+        // Clear interval after 5 seconds if still not ready
+        setTimeout(() => clearInterval(checkReady), 5000);
+      }
+    });
+
+    return () => unsubscribe.remove();
+  }, []);
+
+  // Handle foreground notifications (removed sound playing)
+  useEffect(() => {
+    const subscription = Notifications.addNotificationReceivedListener(notification => {
+      console.log('Foreground Local notification:', notification);
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     const checkFirstLaunch = async () => {
@@ -194,16 +183,6 @@ useEffect(() => {
 
     checkFirstLaunch();
   }, []);
-
-useEffect(() => {
-  return () => {
-    // Clean up any sound instances when component unmounts
-    Audio.Sound.unloadAsync().catch(error => {
-      console.log('Error unloading sounds:', error);
-    });
-  };
-}, []);
-
 
   const handleSplashComplete = () => {
     if (firstLaunch === null) return;
@@ -250,7 +229,6 @@ useEffect(() => {
             <Stack.Screen name="LinkMe" component={LinkMeNavigator} />
             <Stack.Screen name="MySchoolNavigator" component={MySchoolNavigator} />
             <Stack.Screen name="BlogsNavigator" component={BlogsNavigator} />
-            <Stack.Screen name="Admin" component={AdminNavigator} />
             <Stack.Screen name="Eshop" component={EshopOwnerNavigator} />
             <Stack.Screen name="ServicesStack" component={ServicesStackNavigator} />
             <Stack.Screen name="OnboardingNavigator" component={OnboardingNavigator} /> 
@@ -260,18 +238,15 @@ useEffect(() => {
               options={{ title: 'Edit Product' }}
             />
             <Stack.Screen
-    name="Echem"
-    component={EchemNavigator}
-    options={{ headerShown: false }}
-  />
-
+              name="Echem"
+              component={EchemNavigator}
+              options={{ headerShown: false }}
+            />
             <Stack.Screen name="VendorDashboard" component={FoodVendorNavigator} />
-            <Stack.Screen name="BlogManagement" component={WriterNavigator} /> 
-          </>
+          </>    
         ) : (
           <Stack.Screen name="Auth" component={AuthStackNavigator} />
         )}
-        <Stack.Screen name="OAuthDebug" component={OAuthDebug} />
       </Stack.Navigator>
     </CartProvider>
   );
@@ -296,7 +271,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={{ flex: 1, backgroundColor: '#093028' }}>
-        <NavigationContainer theme={MyTheme}>
+        <NavigationContainer ref={navigationRef} theme={MyTheme}>
           <StatusBar
             barStyle="light-content"
             backgroundColor="#093028"

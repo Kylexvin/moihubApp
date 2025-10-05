@@ -11,11 +11,12 @@ import {
   Dimensions,
   Image
 } from 'react-native';
+import Icon from 'react-native-vector-icons/FontAwesome';
 import { useAuth } from '../context/AuthContext';
 import { Linking } from 'react-native';
 
 import { requestNotificationPermission } from '../utils/notifications';
-import axios from 'axios'; // Add this import
+import axios from 'axios';
 import Constants from 'expo-constants';
 
 const isExpoGo = Constants?.appOwnership === 'expo';
@@ -26,18 +27,20 @@ const { width } = Dimensions.get('window');
 const LoginScreen = ({ navigation }) => {
   const [emailOrUsername, setEmailOrUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [feedback, setFeedback] = useState('');
   
-  const { login, loading, error, currentUser } = useAuth(); // Get currentUser from useAuth
+  const { login, loading, error, currentUser } = useAuth();
   
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
   const slideAnim = useState(new Animated.Value(50))[0];
 
   useEffect(() => {
-  requestNotificationPermission();
-}, []);
+    requestNotificationPermission();
+  }, []);
+
   useEffect(() => {
     // Entrance animation
     Animated.parallel([
@@ -54,56 +57,54 @@ const LoginScreen = ({ navigation }) => {
     ]).start();
   }, []);
 
-const handleLogin = async () => {
-  if (!emailOrUsername || !password) {
-    Alert.alert('Error', 'Please fill in all fields');
-    return;
-  }
-
-  try {
-    setIsRedirecting(true);
-    setFeedback('Logging in...');
-
-    // Perform login
-    const user = await login(emailOrUsername, password);
-
-    // Ensure Firebase Messaging is available (not in Expo Go)
-    if (!messaging) {
-      Alert.alert('Error', 'Push notifications are not supported on this device.');
-      setIsRedirecting(false);
+  const handleLogin = async () => {
+    if (!emailOrUsername || !password) {
+      Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
-    // Request notification permission and get FCM token
-    const fcmToken = await messaging().getToken(); // null if denied
-    if (!fcmToken) {
-      Alert.alert(
-        'Permission Required',
-        'Push notifications are required to use this app. Please enable notifications in your settings.'
-      );
+    try {
+      setIsRedirecting(true);
+      setFeedback('Logging in...');
+
+      // Perform login
+      const user = await login(emailOrUsername, password);
+
+      // Ensure Firebase Messaging is available (not in Expo Go)
+      if (!messaging) {
+        Alert.alert('Error', 'Push notifications are not supported on this device.');
+        setIsRedirecting(false);
+        return;
+      }
+
+      // Request notification permission and get FCM token
+      const fcmToken = await messaging().getToken();
+      if (!fcmToken) {
+        Alert.alert(
+          'Permission Required',
+          'Push notifications are required to use this app. Please enable notifications in your settings.'
+        );
+        setIsRedirecting(false);
+        return;
+      }
+
+      // Update FCM token in backend
+      await axios.post('/api/auth/update-push-token', {
+        userId: user._id,
+        fcmToken,
+      });
+
+      setFeedback('Login successful! Redirecting...');
+
+    } catch (err) {
       setIsRedirecting(false);
-      return; // Stop login flow
+      setFeedback('');
+
+      const errorMessage =
+        err.response?.data?.message || err.message || 'Please check your credentials and try again';
+      Alert.alert('Login Failed', errorMessage);
     }
-
-    // Update FCM token in backend
-    await axios.post('/api/auth/update-push-token', {
-      userId: user._id,
-      fcmToken,
-    });
-
-    setFeedback('Login successful! Redirecting...');
-
-  } catch (err) {
-    setIsRedirecting(false);
-    setFeedback('');
-
-    const errorMessage =
-      err.response?.data?.message || err.message || 'Please check your credentials and try again';
-    Alert.alert('Login Failed', errorMessage);
-  }
-};
-
-
+  };
 
   const handleGoogleSignIn = () => {
     Alert.alert(
@@ -136,27 +137,6 @@ const handleLogin = async () => {
         <Text style={styles.title}>MoiHub</Text>
         <Text style={styles.subtitle}>Sign in to continue</Text>
 
-        {/* Social Sign-In Section */}
-        {/* <View style={styles.socialSection}>
-          <TouchableOpacity 
-            style={styles.googleButtonDisabled}
-            onPress={handleGoogleSignIn}
-          >
-            <Icon name="google" size={24} color="#666" style={styles.icon} />
-            <View style={styles.googleButtonContent}>
-              <Text style={styles.googleButtonTextDisabled}>Continue with Google</Text>
-              <Text style={styles.comingSoonText}>Coming Soon</Text>
-            </View>
-          </TouchableOpacity>
-        </View> */}
-
-        {/* Divider */}
-        {/* <View style={styles.dividerContainer}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>OR</Text>
-          <View style={styles.dividerLine} />
-        </View> */}
-
         {/* Traditional Login Form */}
         <View style={styles.form}>
           <View style={styles.inputContainer}>
@@ -173,14 +153,22 @@ const handleLogin = async () => {
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your password"
-              placeholderTextColor="#88A99B"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={[styles.input, styles.passwordInput]}
+                placeholder="Enter your password"
+                placeholderTextColor="#88A99B"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity 
+                style={styles.eyeIcon}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Icon name={showPassword ? "eye" : "eye-slash"} size={20} color="#88A99B" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <TouchableOpacity 
@@ -217,7 +205,6 @@ const handleLogin = async () => {
     </View>
   );
 };
-
 
 const styles = StyleSheet.create({
   container: {
@@ -271,53 +258,6 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     textAlign: 'center',
   },
-  socialSection: {
-    marginBottom: 20,
-  },
-  googleButtonDisabled: {
-    backgroundColor: '#f5f5f5',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 10,
-    opacity: 0.6,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  icon: {
-    marginRight: 12,
-  },
-  googleButtonContent: {
-    alignItems: 'center',
-  },
-  googleButtonTextDisabled: {
-    color: '#666',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  comingSoonText: {
-    color: '#999',
-    fontSize: 12,
-    fontStyle: 'italic',
-    marginTop: 2,
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#0F5443',
-  },
-  dividerText: {
-    color: '#88A99B',
-    paddingHorizontal: 15,
-    fontSize: 14,
-  },
   form: {
     width: '100%',
   },
@@ -339,6 +279,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     fontSize: 16,
     color: '#E0FFF5',
+  },
+  passwordContainer: {
+    position: 'relative',
+  },
+  passwordInput: {
+    paddingRight: 50,
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 15,
+    top: 15,
+    padding: 5,
   },
   forgotPasswordContainer: {
     alignSelf: 'flex-end',

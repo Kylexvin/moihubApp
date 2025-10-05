@@ -143,7 +143,7 @@ const handleServicePress = (service) => {
       navigation.navigate('BlogsNavigator');
       break;
     case 'Mavo Bingwa Bundles':
-      WebBrowser.openBrowserAsync('https://bingwastore.co.ke/1/mavobingwa');
+      WebBrowser.openBrowserAsync('https://mvobingwa.godaddysites.com/');
        break;
 
     default:
