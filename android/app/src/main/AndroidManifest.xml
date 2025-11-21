@@ -34,14 +34,6 @@
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="moihubapp"/>
       </intent-filter>
-      <intent-filter data-generated="true">
-        <action android:name="android.intent.action.VIEW"/>
-        <data android:scheme="https" android:host="wa.me"/>
-        <data android:scheme="https" android:host="api.whatsapp.com"/>
-        <data android:scheme="whatsapp"/>
-        <category android:name="android.intent.category.BROWSABLE"/>
-        <category android:name="android.intent.category.DEFAULT"/>
-      </intent-filter>
-    </activity>
+          </activity>
   </application>
 </manifest>

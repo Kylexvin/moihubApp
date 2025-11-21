@@ -153,6 +153,52 @@ const BlogDetailsScreen = ({ route, navigation }) => {
     return 'Just now';
   };
 
+  const renderContentBlock = (block, index) => {
+    switch (block.type) {
+      case 'header':
+        return (
+          <Text key={block._id || index} style={styles.headerText}>
+            {block.text}
+          </Text>
+        );
+      
+      case 'paragraph':
+        return (
+          <Text key={block._id || index} style={styles.contentText}>
+            {block.text}
+          </Text>
+        );
+      
+      case 'image':
+        return (
+          <View key={block._id || index} style={styles.imageBlock}>
+            <Image source={{ uri: block.src }} style={styles.contentImage} />
+            {block.caption && (
+              <Text style={styles.imageCaption}>{block.caption}</Text>
+            )}
+          </View>
+        );
+      
+      case 'list':
+        return (
+          <View key={block._id || index} style={styles.listBlock}>
+            {block.items?.map((item, itemIndex) => (
+              <Text key={itemIndex} style={styles.listItem}>
+                • {item}
+              </Text>
+            ))}
+          </View>
+        );
+      
+      default:
+        return (
+          <Text key={block._id || index} style={styles.contentText}>
+            {block.text}
+          </Text>
+        );
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -238,11 +284,7 @@ const BlogDetailsScreen = ({ route, navigation }) => {
 
           {/* Article Content */}
           <View style={styles.articleContent}>
-            {blog.content?.map((block, index) => (
-              <Text key={block._id || index} style={styles.contentText}>
-                {block.text}
-              </Text>
-            ))}
+            {blog.content?.map((block, index) => renderContentBlock(block, index))}
           </View>
 
           {/* Comments Section */}
@@ -511,12 +553,48 @@ const styles = StyleSheet.create({
   articleContent: {
     marginBottom: 32,
   },
+  // Content block styles
+  headerText: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 24,
+    marginBottom: 12,
+    lineHeight: 28,
+  },
   contentText: {
     fontSize: 16,
     lineHeight: 26,
     color: '#333',
     marginBottom: 16,
     textAlign: 'justify',
+  },
+  imageBlock: {
+    marginVertical: 16,
+    alignItems: 'center',
+  },
+  contentImage: {
+    width: width - 40,
+    height: 200,
+    borderRadius: 8,
+    resizeMode: 'cover',
+  },
+  imageCaption: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  listBlock: {
+    marginVertical: 12,
+    paddingLeft: 16,
+  },
+  listItem: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#333',
+    marginBottom: 8,
   },
   commentSection: {
     borderTopWidth: 1,

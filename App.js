@@ -251,7 +251,7 @@ function AppNavigator() {
     </CartProvider>
   );
 }
-
+       
 export default function App() {
   const baseURL = Platform.OS === 'ios'
     ? 'http://localhost:5000'

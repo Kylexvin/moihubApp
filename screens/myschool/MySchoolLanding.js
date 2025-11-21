@@ -11,47 +11,20 @@ import {
   Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import * as WebBrowser from 'expo-web-browser';
 
 const { width, height } = Dimensions.get('window');
 
 const MySchoolLanding = ({ navigation }) => {
   const [blogs, setBlogs] = useState([]);
 
-  useEffect(() => {
-    setBlogs([
-      {
-        id: 1,
-        title: 'Unit Registration Guide',
-        excerpt: 'Step-by-step registration process for the new semester',
-        date: '2024-06-15',
-        category: 'Academic',
-        readTime: '5 min read'
-      },
-      {
-        id: 2,
-        title: 'Academic Calendar 2024/2025',
-        excerpt: 'Important dates and deadlines you need to know',
-        date: '2024-06-10',
-        category: 'Calendar',
-        readTime: '3 min read'
-      },
-      {
-        id: 3,
-        title: 'E-Learning Updates',
-        excerpt: 'New Musomi platform features and improvements',
-        date: '2024-06-08',
-        category: 'Platform',
-        readTime: '4 min read'
-      }
-    ]);
-  }, []);
 
   const mainServices = [
     { 
       name: 'Student Portal', 
       description: 'Access your academic records, grades, and student services',
       icon: 'school', 
-      screen: 'Portal',
+      url: 'https://portal.mu.ac.ke/',
       color: '#2E7D32',
       bgColor: '#E8F5E8',
       featured: true,
@@ -61,39 +34,37 @@ const MySchoolLanding = ({ navigation }) => {
       name: 'Admissions', 
       description: 'Student admissions and enrollment information. Download admission letters.',
       icon: 'assignment-ind', 
-      screen: 'Admissions',
+      url: 'https://admissions.mu.ac.ke/',
       color: '#7B1FA2',
       bgColor: '#F3E5F5',
       featured: true,
       available: true
     },
-
     { 
       name: 'Musomi Learning', 
       description: 'Interactive e-learning platform with courses and resources',
       icon: 'menu-book', 
-      screen: 'Musomi',
+      url: 'https://elearning.mu.ac.ke/',
       color: '#1565C0',
       bgColor: '#E3F2FD',
       featured: true,
       available: true
     },
-{ 
-  name: 'HEF/HELB Loans', 
-  description: 'Access government-funded student loans and application portal',
-  icon: 'account-balance-wallet',  // Suggestion: Material Icon
-  screen: 'HEFLoan',
-  color: '#37C015',
-  bgColor: '#E8F5E9',
-  featured: true,
-  available: true
-},
-
+    { 
+      name: 'HEF/HELB Loans', 
+      description: 'Access government-funded student loans and application portal',
+      icon: 'account-balance-wallet',
+      url: 'https://portal.hef.co.ke/auth/signin',
+      color: '#37C015',
+      bgColor: '#E8F5E9',
+      featured: true,
+      available: true
+    },
     { 
       name: 'Moi University Website', 
       description: 'Official university website and announcements',
       icon: 'language', 
-      screen: 'MoiWebsite',
+      url: 'https://www.mu.ac.ke/',
       color: '#F57C00',
       bgColor: '#FFF3E0',
       featured: false,
@@ -135,16 +106,18 @@ const MySchoolLanding = ({ navigation }) => {
     }
   ];
 
-  const handleServicePress = (service) => {
-    if (service.available && service.screen) {
-      navigation.navigate(service.screen);
+  const handleServicePress = async (service) => {
+    if (service.available && service.url) {
+      try {
+        await WebBrowser.openBrowserAsync(service.url);
+      } catch (error) {
+        Alert.alert('Error', `Cannot open ${service.name}`);
+        console.log('WebBrowser error:', error);
+      }
     }
   };
 
-  const handleBlogPress = (blog) => {
-    // You can add navigation to a blog detail screen here if needed
-    console.log('Blog pressed:', blog.title);
-  };
+
 
   const copyToClipboard = (text, name) => {
     Clipboard.setString(text);
@@ -274,7 +247,7 @@ const MySchoolLanding = ({ navigation }) => {
               styles.quickToolCard,
               !service.available && styles.disabledCard
             ]}
-            onPress={() => handleServicePress(service)}
+            onPress={() => service.available && navigation.navigate(service.screen)}
             disabled={!service.available}
             activeOpacity={service.available ? 0.7 : 1}
           >

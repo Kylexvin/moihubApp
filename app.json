@@ -2,7 +2,7 @@
   "expo": {
     "name": "MoiHub",
     "slug": "moihubapp",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/appicon.png",
     "userInterfaceStyle": "light",
@@ -23,7 +23,7 @@
     },
     "android": {
       "package": "com.kylexvin.moihub",
-      "versionCode": 1,
+      "versionCode": 3,
       "permissions": [
         "NOTIFICATIONS",
         "CAMERA",
@@ -41,29 +41,7 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/appicon.png",
         "backgroundColor": "#f2f5f4ff"
-      },
-      "intentFilters": [
-        {
-          "action": "VIEW",
-          "data": [
-            {
-              "scheme": "https",
-              "host": "wa.me"
-            },
-            {
-              "scheme": "https",
-              "host": "api.whatsapp.com"
-            },
-            {
-              "scheme": "whatsapp"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        }
-      ]
+      }
     },
     "web": {
       "favicon": "./assets/moihublogo.png"
