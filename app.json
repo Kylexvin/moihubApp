@@ -65,7 +65,8 @@
             "minSdkVersion": 21
           }
         }
-      ]
+      ],
+      "expo-sqlite"
     ],
     "scheme": "moihubapp",
     "updates": {
