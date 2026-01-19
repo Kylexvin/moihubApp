@@ -9,6 +9,7 @@ const Stack = createStackNavigator();
 const MessageStackNavigator = () => {
   return (
     <Stack.Navigator
+      initialRouteName="ChatList"
       screenOptions={{
         headerShown: false,
         gestureEnabled: true,

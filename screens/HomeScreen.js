@@ -1102,7 +1102,7 @@ const renderAdItem = ({ item }) => (
 };
 
 
-//  existing styles remain the same
+
 const styles = StyleSheet.create({
 
   container: {

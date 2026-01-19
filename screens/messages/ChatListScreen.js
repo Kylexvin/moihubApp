@@ -11,12 +11,12 @@ import {
   Alert,
   RefreshControl,
   Animated,
+  ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useAuth } from '../../context/AuthContext';
 import io from 'socket.io-client';
 import Svg, { Path } from 'react-native-svg';
-
 
 const ChatListScreen = ({ navigation }) => {
   const [conversations, setConversations] = useState([]);
@@ -29,6 +29,9 @@ const ChatListScreen = ({ navigation }) => {
   const [connectionState, setConnectionState] = useState('disconnected');
   const [onlineUsers, setOnlineUsers] = useState(new Set());
   const [typingUsers, setTypingUsers] = useState({});
+  
+  // New state for tabs
+  const [activeTab, setActiveTab] = useState('all'); // 'all', 'linkme', 'system'
 
   const { currentUser, token, logout, isAuthenticated } = useAuth();
   
@@ -79,6 +82,11 @@ const ChatListScreen = ({ navigation }) => {
       updateConversationWithNewMessage(message);
     });
 
+    socketConnection.on('new_system_message', (message) => {
+      console.log('Received new system message:', message);
+      updateConversationWithNewMessage(message);
+    });
+
     socketConnection.on('conversation_updated', (updatedConversation) => {
       console.log('Conversation updated:', updatedConversation);
       setConversations(prevConversations => {
@@ -109,32 +117,31 @@ const ChatListScreen = ({ navigation }) => {
       }));
     });
 
-   socketConnection.on('message_read', ({ conversationId, messageId, userId }) => {
-  console.log('Message read:', conversationId, messageId, userId);
+    socketConnection.on('message_read', ({ conversationId, messageId, userId }) => {
+      console.log('Message read:', conversationId, messageId, userId);
 
-  setConversations(prev =>
-    prev.map(conv => {
-      if (conv._id !== conversationId) return conv;
+      setConversations(prev =>
+        prev.map(conv => {
+          if (conv._id !== conversationId) return conv;
 
-      if (!conv.lastMessage || conv.lastMessage._id !== messageId) return conv;
+          if (!conv.lastMessage || conv.lastMessage._id !== messageId) return conv;
 
-      const alreadyRead = conv.lastMessage.readBy?.some(rb => rb.user === userId);
-      if (alreadyRead) return conv;
+          const alreadyRead = conv.lastMessage.readBy?.some(rb => rb.user === userId);
+          if (alreadyRead) return conv;
 
-      return {
-        ...conv,
-        lastMessage: {
-          ...conv.lastMessage,
-          readBy: [
-            ...(conv.lastMessage.readBy || []),
-            { user: userId, readAt: new Date() }
-          ]
-        }
-      };
-    })
-  );
+          return {
+            ...conv,
+            lastMessage: {
+              ...conv.lastMessage,
+              readBy: [
+                ...(conv.lastMessage.readBy || []),
+                { user: userId, readAt: new Date() }
+              ]
+            }
+          };
+        })
+      );
     });
-
 
     setSocket(socketConnection);
 
@@ -159,22 +166,42 @@ const ChatListScreen = ({ navigation }) => {
     }).start();
   }, [isAuthenticated, token, currentUser]);
 
-  // Search functionality
+  // Filter conversations based on active tab and search
   useEffect(() => {
+    let filtered = conversations;
+    
+    // First filter by tab
+    if (activeTab === 'linkme') {
+      filtered = filtered.filter(conv => conv.chatType === 'linkme');
+    } else if (activeTab === 'system') {
+      filtered = filtered.filter(conv => conv.chatType === 'system');
+    }
+    // 'all' tab shows everything
+    
+    // Then filter by search query
     if (searchQuery.trim()) {
-      const filtered = conversations.filter(conv => {
+      filtered = filtered.filter(conv => {
         const otherUser = getOtherUser(conv);
+        const isSystem = conv.chatType === 'system';
+        
+        if (isSystem) {
+          // For system messages, search in content and metadata
+          return (
+            conv.lastMessage?.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            conv.lastMessage?.metadata?.title?.toLowerCase().includes(searchQuery.toLowerCase())
+          );
+        }
+        
         return (
           otherUser?.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
           otherUser?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
           conv.lastMessage?.content?.toLowerCase().includes(searchQuery.toLowerCase())
         );
       });
-      setFilteredConversations(filtered);
-    } else {
-      setFilteredConversations(conversations);
     }
-  }, [searchQuery, conversations]);
+    
+    setFilteredConversations(filtered);
+  }, [searchQuery, conversations, activeTab]);
 
   const handleAuthError = () => {
     Alert.alert('Session Expired', 'Please log in again.', [
@@ -207,8 +234,11 @@ const ChatListScreen = ({ navigation }) => {
           }
           
           if (!Array.isArray(conv.participants) || conv.participants.length === 0) {
-            console.warn('Conversation missing participants:', conv);
-            return false;
+            // System conversations might not have participants array
+            if (conv.chatType !== 'system') {
+              console.warn('Non-system conversation missing participants:', conv);
+              return false;
+            }
           }
           
           return true;
@@ -272,39 +302,48 @@ const ChatListScreen = ({ navigation }) => {
   };
 
   // Fixed getOtherUser function with better error handling
-const getOtherUser = (conversation) => {
-  const rawUserId = currentUser?._id || currentUser?.userId;
-  if (!rawUserId || !Array.isArray(conversation?.participants)) {
-    console.warn('Missing currentUser or participants:', currentUser, conversation?.participants);
-    return defaultUnknownUser();
-  }
-
-  const currentUserId = rawUserId.toString();
-
-  for (const participant of conversation.participants) {
-    const participantId = participant?._id?.toString();
-    if (participantId && participantId !== currentUserId) {
+  const getOtherUser = (conversation) => {
+    const rawUserId = currentUser?._id || currentUser?.userId;
+    
+    // For system conversations, return system user info
+    if (conversation?.chatType === 'system') {
       return {
-        _id: participant._id,
-        username: participant.username || 'Unknown User',
-        email: participant.email || '',
-        profilePicture: participant.profilePicture || null
+        _id: '000000000000000000000000',
+        username: 'MoiHub',
+        profilePicture: '/avatars/moihub-system.png',
+        isSystem: true
       };
     }
-  }
+    
+    if (!rawUserId || !Array.isArray(conversation?.participants)) {
+      console.warn('Missing currentUser or participants:', currentUser, conversation?.participants);
+      return defaultUnknownUser();
+    }
 
-  console.warn('No other user found, fallback triggered');
-  return defaultUnknownUser();
-};
+    const currentUserId = rawUserId.toString();
 
+    for (const participant of conversation.participants) {
+      const participantId = participant?._id?.toString();
+      if (participantId && participantId !== currentUserId) {
+        return {
+          _id: participant._id,
+          username: participant.username || 'Unknown User',
+          email: participant.email || '',
+          profilePicture: participant.profilePicture || null
+        };
+      }
+    }
 
-const defaultUnknownUser = () => ({
-  _id: 'unknown',
-  username: 'Unknown User',
-  email: '',
-  profilePicture: null
-});
+    console.warn('No other user found, fallback triggered');
+    return defaultUnknownUser();
+  };
 
+  const defaultUnknownUser = () => ({
+    _id: 'unknown',
+    username: 'Unknown User',
+    email: '',
+    profilePicture: null
+  });
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
@@ -361,21 +400,14 @@ const defaultUnknownUser = () => ({
     const isOnline = isUserOnline(otherUser?._id);
     const typingIndicator = getTypingIndicator(item._id);
     const isLinkMe = item.chatType === 'linkme';
-
-    // Debug logging
-    console.log('Rendering conversation item:', {
-      conversationId: item._id,
-      otherUser: otherUser?.username,
-      isOnline,
-      unreadCount: item.unreadCount,
-      participants: item.participants?.map(p => p.username)
-    });
+    const isSystem = item.chatType === 'system';
 
     return (
       <Animated.View
         style={[
           styles.conversationItem,
           isLinkMe && styles.linkMeItem,
+          isSystem && styles.systemItem,
           { opacity: fadeAnim }
         ]}
       >
@@ -385,47 +417,70 @@ const defaultUnknownUser = () => ({
           activeOpacity={0.7}
         >
           <View style={styles.avatarContainer}>
-  <View style={[styles.avatar, isLinkMe && styles.linkMeAvatar]}>
-    <Text style={[styles.avatarText, isLinkMe && styles.linkMeAvatarText]}>
-      {otherUser?.username?.charAt(0)?.toUpperCase() || '?'}
-    </Text>
+            <View style={[
+              styles.avatar, 
+              isLinkMe && styles.linkMeAvatar,
+              isSystem && styles.systemAvatar
+            ]}>
+              {isSystem ? (
+                <Icon name="notifications" size={22} color="#1E90FF" />
+              ) : (
+                <Text style={[
+                  styles.avatarText, 
+                  isLinkMe && styles.linkMeAvatarText,
+                  isSystem && styles.systemAvatarText
+                ]}>
+                  {otherUser?.username?.charAt(0)?.toUpperCase() || '?'}
+                </Text>
+              )}
 
-    {/* 💘 Small emoji badge for LinkMe */}
-    {isLinkMe && (
-      <Text style={{
-        position: 'absolute',
-        bottom: -6,
-        right: -6,
-        fontSize: 14,
-        backgroundColor: 'white',
-        borderRadius: 10,
-        paddingHorizontal: 2,
-        paddingVertical: 0,
-        color: 'purple',
-        overflow: 'hidden',
-      }}>
-        💘
-      </Text>
-    )}
-  </View>
+              {/* 💘 Small emoji badge for LinkMe */}
+              {isLinkMe && (
+                <Text style={{
+                  position: 'absolute',
+                  bottom: -6,
+                  right: -6,
+                  fontSize: 14,
+                  backgroundColor: 'white',
+                  borderRadius: 10,
+                  paddingHorizontal: 2,
+                  paddingVertical: 0,
+                  color: 'purple',
+                  overflow: 'hidden',
+                }}>
+                  💘
+                </Text>
+              )}
+            </View>
 
-  {isOnline && (
-    <View style={styles.onlineIndicator} />
-  )}
-</View>
-
+            {!isSystem && isOnline && (
+              <View style={styles.onlineIndicator} />
+            )}
+          </View>
 
           <View style={styles.conversationInfo}>
             <View style={styles.conversationHeader}>
-              <Text style={[styles.username, isLinkMe && styles.linkMeUsername]}>
+              <Text style={[
+                styles.username, 
+                isLinkMe && styles.linkMeUsername,
+                isSystem && styles.systemUsername
+              ]}>
                 {otherUser?.username || 'Unknown User'}
+                {isSystem && ' (System)'}
               </Text>
               <View style={styles.rightSection}>
-                <Text style={styles.timestamp}>
+                <Text style={[
+                  styles.timestamp,
+                  isSystem && styles.systemTimestamp
+                ]}>
                   {formatTime(item.lastMessageAt)}
                 </Text>
                 {item.unreadCount > 0 && (
-                  <View style={[styles.unreadBadge, isLinkMe && styles.linkMeUnreadBadge]}>
+                  <View style={[
+                    styles.unreadBadge, 
+                    isLinkMe && styles.linkMeUnreadBadge,
+                    isSystem && styles.systemUnreadBadge
+                  ]}>
                     <Text style={styles.unreadText}>
                       {item.unreadCount > 99 ? '99+' : item.unreadCount}
                     </Text>
@@ -435,7 +490,10 @@ const defaultUnknownUser = () => ({
             </View>
 
             <View style={styles.lastMessageContainer}>
-              <Text style={styles.lastMessage}>
+              <Text style={[
+                styles.lastMessage,
+                isSystem && styles.systemLastMessage
+              ]}>
                 {typingIndicator || truncateMessage(item.lastMessage?.content)}
               </Text>
               {connectionState !== 'connected' && (
@@ -458,7 +516,6 @@ const defaultUnknownUser = () => ({
             {connectionState === 'connected' ? 'Online' : 'Offline'}
           </Text>
         </View>
-       
       </View>
     </View>
   );
@@ -481,15 +538,74 @@ const defaultUnknownUser = () => ({
     </View>
   );
 
-  const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <Icon name="chat-bubble-outline" size={64} color="#ccc" />
-      <Text style={styles.emptyTitle}>No conversations yet</Text>
-      <Text style={styles.emptySubtitle}>
-        Start a new conversation by tapping the + button
-      </Text>
+  const renderTabs = () => (
+    <View style={styles.tabsContainer}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'all' && styles.activeTab]}
+          onPress={() => setActiveTab('all')}
+        >
+          <Text style={[styles.tabText, activeTab === 'all' && styles.activeTabText]}>
+            All
+          </Text>
+          {activeTab === 'all' && <View style={styles.tabIndicator} />}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'linkme' && styles.activeTab]}
+          onPress={() => setActiveTab('linkme')}
+        >
+          <View style={styles.tabWithIcon}>
+            <Text style={[styles.tabText, activeTab === 'linkme' && styles.activeTabText]}>
+              LinkMe
+            </Text>
+            <Text style={styles.linkmeIcon}>💘</Text>
+          </View>
+          {activeTab === 'linkme' && <View style={[styles.tabIndicator, styles.linkmeIndicator]} />}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'system' && styles.activeTab]}
+          onPress={() => setActiveTab('system')}
+        >
+          <View style={styles.tabWithIcon}>
+            <Text style={[styles.tabText, activeTab === 'system' && styles.activeTabText]}>
+              System
+            </Text>
+            <Icon name="notifications" size={16} color={activeTab === 'system' ? '#1E90FF' : '#666'} />
+          </View>
+          {activeTab === 'system' && <View style={[styles.tabIndicator, styles.systemIndicator]} />}
+        </TouchableOpacity>
+      </ScrollView>
     </View>
   );
+
+  const renderEmptyState = () => {
+    let message = 'No conversations yet';
+    let subMessage = 'Start a new conversation by tapping the + button';
+    
+    if (activeTab === 'linkme') {
+      message = 'No LinkMe conversations';
+      subMessage = 'You don\'t have any LinkMe matches yet';
+    } else if (activeTab === 'system') {
+      message = 'No system notifications';
+      subMessage = 'System announcements will appear here';
+    }
+
+    return (
+      <View style={styles.emptyContainer}>
+        {activeTab === 'system' ? (
+          <Icon name="notifications-none" size={64} color="#ccc" />
+        ) : activeTab === 'linkme' ? (
+          <Text style={{ fontSize: 64 }}>💘</Text>
+        ) : (
+          <Icon name="chat-bubble-outline" size={64} color="#ccc" />
+        )}
+        <Text style={styles.emptyTitle}>{message}</Text>
+        <Text style={styles.emptySubtitle}>{subMessage}</Text>
+      </View>
+    );
+  };
 
   if (loading) {
     return (
@@ -505,44 +621,39 @@ const defaultUnknownUser = () => ({
 
   return (
     <SafeAreaView style={styles.container}>
-       {/* SVG Futuristic Background */}
-          <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 0 }}>
-            <Svg
-              height="100%"
-              width="100%"
-              viewBox="0 0 100 100"
-              preserveAspectRatio="xMidYMid slice"
-            >
-             <Path
-        d="
-          M12 18 C15 12, 25 12, 28 18
-          M62 14 C65 10, 75 10, 78 14
+      {/* SVG Futuristic Background */}
+      <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 0 }}>
+        <Svg
+          height="100%"
+          width="100%"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="xMidYMid slice"
+        >
+          <Path
+            d="
+              M12 18 C15 12, 25 12, 28 18
+              M62 14 C65 10, 75 10, 78 14
+              M20 80 C22 85, 28 85, 30 80
+              M70 82 C72 87, 78 87, 80 82
+              M34 34 Q40 28, 46 34
+              M60 60 Q66 66, 72 60
+              M25 65 C30 58, 40 58, 45 65
+              M10 45 C15 52, 25 52, 30 45
+              M58 26 Q64 20, 70 26
+              M42 78 Q48 72, 54 78
+              M5 5 C8 3, 12 3, 15 5
+              M85 95 C88 93, 92 93, 95 95
+            "
+            stroke="#1E90FF22"
+            strokeWidth="0.35"
+            fill="none"
+          />
+        </Svg>
+      </View>
       
-          M20 80 C22 85, 28 85, 30 80
-          M70 82 C72 87, 78 87, 80 82
-      
-          M34 34 Q40 28, 46 34
-          M60 60 Q66 66, 72 60
-      
-          M25 65 C30 58, 40 58, 45 65
-          M10 45 C15 52, 25 52, 30 45
-      
-          M58 26 Q64 20, 70 26
-          M42 78 Q48 72, 54 78
-      
-          M5 5 C8 3, 12 3, 15 5
-          M85 95 C88 93, 92 93, 95 95
-        "
-        stroke="#1E90FF22"
-        strokeWidth="0.35"
-        fill="none"
-      />
-      
-      
-            </Svg>
-          </View>
       {renderHeader()}
       {renderSearchBar()}
+      {renderTabs()}
       
       <FlatList
         data={filteredConversations}
@@ -637,11 +748,62 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF',
   },
+
+  // ============ NEW TABS STYLES ============
+  tabsContainer: {
+    backgroundColor: '#083028',
+    borderBottomWidth: 1,
+    borderBottomColor: '#2A2A2A',
+    paddingVertical: 8,
+  },
+  tab: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    marginHorizontal: 6,
+    borderRadius: 20,
+  },
+  activeTab: {
+    backgroundColor: '#2E7D2E',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#AAAAAA',
+  },
+  activeTabText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
+  tabWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  linkmeIcon: {
+    fontSize: 14,
+    marginLeft: 4,
+  },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: -8,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: '#4CAF50',
+    borderRadius: 1.5,
+  },
+  linkmeIndicator: {
+    backgroundColor: '#FF4081',
+  },
+  systemIndicator: {
+    backgroundColor: '#2196F3',
+  },
+  // ========================================
+
   conversationItem: {
     backgroundColor: '#174f3a', // Clean white for other messages
     borderBottomLeftRadius: 6, // Tail effect
     borderWidth: 1,
-    borderColor: '#E8E8ED',
+    borderColor: '#2E7D2E',
     marginHorizontal: 16,
     marginVertical: 4,
     borderRadius: 12,
@@ -657,8 +819,17 @@ const styles = StyleSheet.create({
   linkMeItem: {
     backgroundColor: '#230c3a',
     borderLeftWidth: 4,
-    borderLeftColor: 'red',
+    borderLeftColor: '#FF4081',
+    borderColor: '#4CAF50',
   },
+  // ============ NEW SYSTEM ITEM STYLES ============
+  systemItem: {
+    backgroundColor: '#0d2b52',
+    borderLeftWidth: 4,
+    borderLeftColor: '#2196F3',
+    borderColor: '#2196F3',
+  },
+  // ================================================
   conversationTouchable: {
     flexDirection: 'row',
     padding: 12,
@@ -679,6 +850,13 @@ const styles = StyleSheet.create({
   linkMeAvatar: {
     backgroundColor: '#4CAF50',
   },
+  // ============ NEW SYSTEM AVATAR STYLES ============
+  systemAvatar: {
+    backgroundColor: '#0d2b52',
+    borderWidth: 2,
+    borderColor: '#2196F3',
+  },
+  // ================================================
   avatarText: {
     color: 'white',
     fontSize: 18,
@@ -687,6 +865,11 @@ const styles = StyleSheet.create({
   linkMeAvatarText: {
     color: '#FFF',
   },
+  // ============ NEW SYSTEM AVATAR TEXT ============
+  systemAvatarText: {
+    color: '#2196F3',
+  },
+  // ===============================================
   onlineIndicator: {
     position: 'absolute',
     bottom: 2,
@@ -716,6 +899,11 @@ const styles = StyleSheet.create({
   linkMeUsername: {
     color: '#66BB6A',
   },
+  // ============ NEW SYSTEM USERNAME STYLES ============
+  systemUsername: {
+    color: '#2196F3',
+  },
+  // ====================================================
   rightSection: {
     alignItems: 'flex-end',
     gap: 4,
@@ -724,6 +912,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#888888',
   },
+  // ============ NEW SYSTEM TIMESTAMP ============
+  systemTimestamp: {
+    color: '#64B5F6',
+  },
+  // ==============================================
   unreadBadge: {
     backgroundColor: '#4CAF50',
     borderRadius: 10,
@@ -736,6 +929,11 @@ const styles = StyleSheet.create({
   linkMeUnreadBadge: {
     backgroundColor: '#66BB6A',
   },
+  // ============ NEW SYSTEM UNREAD BADGE ============
+  systemUnreadBadge: {
+    backgroundColor: '#2196F3',
+  },
+  // ================================================
   unreadText: {
     color: 'white',
     fontSize: 10,
@@ -751,6 +949,12 @@ const styles = StyleSheet.create({
     color: '#AAAAAA',
     flex: 1,
   },
+  // ============ NEW SYSTEM LAST MESSAGE ============
+  systemLastMessage: {
+    color: '#90CAF9',
+    fontStyle: 'italic',
+  },
+  // ================================================
   pendingIcon: {
     marginLeft: 4,
   },
@@ -807,3 +1011,4 @@ const styles = StyleSheet.create({
 });
 
 export default ChatListScreen;
+

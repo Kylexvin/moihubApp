@@ -2,6 +2,7 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar, View } from 'react-native';
+import { getFocusedRouteNameFromRoute } from '@react-navigation/native'; // Add this import
 
 import HomeScreen from '../screens/HomeScreen';
 import ServicesStackNavigator from './ServicesStackNavigator';
@@ -55,7 +56,28 @@ const MainTabNavigator = () => {
           })}
         />
 
-        <Tab.Screen name="Messages" component={MessageStackNavigator} />
+        <Tab.Screen 
+          name="Messages" 
+          component={MessageStackNavigator}
+          options={({ route }) => {
+            // Get the current route name from the MessageStackNavigator
+            const routeName = getFocusedRouteNameFromRoute(route) ?? 'ChatList';
+            
+            // Hide tab bar for ChatScreen and NewChatScreen, keep it for ChatList
+            const hideTabBarRoutes = ['ChatScreen', 'NewChatScreen'];
+            
+            return {
+              tabBarStyle: hideTabBarRoutes.includes(routeName) 
+                ? { display: 'none' } 
+                : {
+                    paddingVertical: 5,
+                    height: 60,
+                    backgroundColor: '#093028',
+                  },
+            };
+          }}
+        />
+        
         <Tab.Screen name="Profile" component={ProfileScreen} />
       </Tab.Navigator>
     </View>
