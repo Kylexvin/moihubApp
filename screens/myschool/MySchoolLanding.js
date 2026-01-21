@@ -9,74 +9,123 @@ import {
   StatusBar,
   Clipboard,
   Alert,
+  RefreshControl,
+  ActivityIndicator
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
+import Theme from '../theme/Theme';
+import DataService from '../../services/DataService';
+import ServiceTrackingService from '../../services/ServiceTrackingService';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
+const { Colors, Gradients, Typography, Spacing, BorderRadius, Components } = Theme;
 
 const MySchoolLanding = ({ navigation }) => {
   const [blogs, setBlogs] = useState([]);
-
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastClickTime, setLastClickTime] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const mainServices = [
     { 
+      id: "student_portal",
       name: 'Student Portal', 
       description: 'Access your academic records, grades, and student services',
       icon: 'school', 
       url: 'https://portal.mu.ac.ke/',
-      color: '#2E7D32',
-      bgColor: '#E8F5E8',
+      color: Colors.success,
+      bgColor: Colors.success + '20',
       featured: true,
-      available: true
+      available: true,
+      category: 'uni'
     },
     { 
+      id: "admissions",
       name: 'Admissions', 
       description: 'Student admissions and enrollment information. Download admission letters.',
-      icon: 'assignment-ind', 
+      icon: 'document-text', 
       url: 'https://admissions.mu.ac.ke/',
-      color: '#7B1FA2',
-      bgColor: '#F3E5F5',
+      color: Colors.accent,
+      bgColor: Colors.accent + '20',
       featured: true,
-      available: true
+      available: true,
+      category: 'uni'
     },
     { 
+      id: "musomi",
       name: 'Musomi Learning', 
       description: 'Interactive e-learning platform with courses and resources',
-      icon: 'menu-book', 
+      icon: 'library', 
       url: 'https://elearning.mu.ac.ke/',
-      color: '#1565C0',
-      bgColor: '#E3F2FD',
+      color: Colors.info,
+      bgColor: Colors.info + '20',
       featured: true,
-      available: true
+      available: true,
+      category: 'uni'
     },
     { 
+      id: "helf",
       name: 'HEF/HELB Loans', 
       description: 'Access government-funded student loans and application portal',
-      icon: 'account-balance-wallet',
+      icon: 'cash',
       url: 'https://portal.hef.co.ke/auth/signin',
-      color: '#37C015',
-      bgColor: '#E8F5E9',
+      color: Colors.success,
+      bgColor: Colors.success + '20',
       featured: true,
-      available: true
+      available: true,
+      category: 'uni'
     },
     { 
+      id: "website",
       name: 'Moi University Website', 
       description: 'Official university website and announcements',
-      icon: 'language', 
+      icon: 'globe', 
       url: 'https://www.mu.ac.ke/',
-      color: '#F57C00',
-      bgColor: '#FFF3E0',
+      color: Colors.warning,
+      bgColor: Colors.warning + '20',
       featured: false,
-      available: true
+      available: true,
+      category: 'uni'
     }
   ];
 
   const quickServices = [
-    { name: 'Organizations and Societies', icon: 'business', screen: 'Organizations', available: true, color: '#9C27B0' },
-    { name: 'Past Papers', status: 'Coming Soon', icon: 'description', available: false, color: '#4CAF50' },
-    { name: 'Exam Schedule', status: 'Coming Soon', icon: 'event', available: false, color: '#FF9800' },
-    { name: 'Library', status: 'Coming Soon', icon: 'local-library', available: false, color: '#2196F3' },
+    { 
+      id: "organizations",
+      name: 'Organizations and Societies', 
+      icon: 'people', 
+      screen: 'Organizations', 
+      available: true, 
+      color: Colors.accent 
+    },
+    { 
+      id: "past_papers",
+      name: 'Past Papers', 
+      status: 'Coming Soon', 
+      icon: 'documents', 
+      available: false, 
+      color: Colors.success 
+    },
+    { 
+      id: "exam_schedule",
+      name: 'Exam Schedule', 
+      status: 'Coming Soon', 
+      icon: 'calendar', 
+      available: false, 
+      color: Colors.warning 
+    },
+    { 
+      id: "library",
+      name: 'Library', 
+      status: 'Coming Soon', 
+      icon: 'book', 
+      available: false, 
+      color: Colors.info 
+    },
   ];
 
   const whatsappAiNumbers = [
@@ -84,31 +133,41 @@ const MySchoolLanding = ({ navigation }) => {
       name: 'ChatGPT',
       number: '+1 800 242 8478',
       description: 'General AI assistant for questions and help',
-      icon: 'chat',
+      icon: 'chatbubble',
       color: '#10A37F',
-      bgColor: '#E8F7F4'
+      bgColor: '#10A37F20'
     },
     {
       name: 'Perplexity',
       number: '+1 833 436 3285',
       description: 'Research and information assistant',
       icon: 'search',
-      color: '#5A67D8',
-      bgColor: '#EDF2F7'
+      color: Colors.accent,
+      bgColor: Colors.accent + '20'
     },
     {
       name: 'August AI',
       number: '+91 87380 30604',
       description: 'Specialized health and wellness assistant',
-      icon: 'local-hospital',
-      color: '#E53E3E',
-      bgColor: '#FED7D7'
+      icon: 'medkit',
+      color: Colors.danger,
+      bgColor: Colors.danger + '20'
     }
   ];
 
   const handleServicePress = async (service) => {
     if (service.available && service.url) {
       try {
+        // Track service usage
+        if (service.id) {
+          setLastClickTime(Date.now());
+          await ServiceTrackingService.trackServiceUsage(
+            service.id,
+            service.name,
+            service.category || 'uni'
+          );
+        }
+        
         await WebBrowser.openBrowserAsync(service.url);
       } catch (error) {
         Alert.alert('Error', `Cannot open ${service.name}`);
@@ -117,34 +176,64 @@ const MySchoolLanding = ({ navigation }) => {
     }
   };
 
+  const handleQuickServicePress = async (service) => {
+    if (service.available && service.screen) {
+      // Track service usage
+      if (service.id) {
+        setLastClickTime(Date.now());
+        await ServiceTrackingService.trackServiceUsage(
+          service.id,
+          service.name,
+          'uni'
+        );
+      }
+      
+      navigation.navigate(service.screen);
+    }
+  };
 
-
-  const copyToClipboard = (text, name) => {
+  const copyToClipboard = async (text, name) => {
     Clipboard.setString(text);
     Alert.alert(
       'Copied!',
       `${name} number copied to clipboard`,
       [{ text: 'OK', style: 'default' }]
     );
+    
+    // Track the copy action
+    await DataService.trackUserAction(
+      'anonymous',
+      'copy_ai_number',
+      'MySchoolLanding',
+      { ai_name: name }
+    );
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    // You can add data refresh logic here
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1000);
   };
 
   const renderHeader = () => (
-    <View style={styles.header}>
-      <View style={styles.headerContent}>
-        <View>
-          <Text style={styles.welcomeText}>Welcome back!</Text>
-          <Text style={styles.headerTitle}>MySchool Dashboard</Text>
-        </View>
-        <TouchableOpacity style={styles.profileIcon}>
-          <Icon name="account-circle" size={40} color="#2E7D32" />
-        </TouchableOpacity>
+    <View style={styles.headerContainer}>
+      <View>
+        
       </View>
+      
     </View>
   );
 
   const renderFeaturedServices = () => (
-    <View style={styles.featuredSection}>
-      <Text style={styles.sectionTitle}>Quick Access</Text>
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Quick Access</Text>
+        <TouchableOpacity>
+          <Text style={styles.seeAllText}>See All</Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.featuredGrid}>
         {mainServices.filter(service => service.featured).map((service, index) => (
           <TouchableOpacity
@@ -155,9 +244,9 @@ const MySchoolLanding = ({ navigation }) => {
           >
             <View style={styles.featuredCardHeader}>
               <View style={[styles.featuredIcon, { backgroundColor: service.color }]}>
-                <Icon name={service.icon} size={28} color="#FFFFFF" />
+                <Ionicons name={service.icon} size={28} color="#FFFFFF" />
               </View>
-              <Icon name="arrow-forward" size={20} color={service.color} />
+              <Ionicons name="arrow-forward" size={20} color={service.color} />
             </View>
             <View style={styles.featuredCardContent}>
               <Text style={styles.featuredCardTitle}>{service.name}</Text>
@@ -170,11 +259,11 @@ const MySchoolLanding = ({ navigation }) => {
   );
 
   const renderWhatsAppAiSection = () => (
-    <View style={styles.whatsappSection}>
+    <View style={styles.section}>
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>AI Assistants</Text>
         <View style={styles.whatsappBadge}>
-          <Icon name="chat" size={14} color="#25D366" />
+          <Ionicons name="logo-whatsapp" size={14} color="#25D366" />
           <Text style={styles.whatsappBadgeText}>WhatsApp</Text>
         </View>
       </View>
@@ -190,10 +279,10 @@ const MySchoolLanding = ({ navigation }) => {
           >
             <View style={styles.aiCardHeader}>
               <View style={[styles.aiIcon, { backgroundColor: ai.color }]}>
-                <Icon name={ai.icon} size={20} color="#FFFFFF" />
+                <Ionicons name={ai.icon} size={20} color="#FFFFFF" />
               </View>
               <View style={styles.copyIconContainer}>
-                <Icon name="content-copy" size={16} color={ai.color} />
+                <Ionicons name="copy" size={16} color={ai.color} />
               </View>
             </View>
             
@@ -211,7 +300,7 @@ const MySchoolLanding = ({ navigation }) => {
       </View>
       
       <View style={styles.aiDisclaimer}>
-        <Icon name="info-outline" size={16} color="#6B7280" />
+        <Ionicons name="information-circle" size={16} color={Colors.textSecondary} />
         <Text style={styles.disclaimerText}>
           These are third-party AI services. Data charges may apply.
         </Text>
@@ -220,8 +309,14 @@ const MySchoolLanding = ({ navigation }) => {
   );
 
   const renderAllServices = () => (
-    <View style={styles.servicesSection}>
-      <Text style={styles.sectionTitle}>All Services</Text>
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>All Services</Text>
+        <TouchableOpacity>
+          <Text style={styles.seeAllText}>View All</Text>
+        </TouchableOpacity>
+      </View>
+      
       <View style={styles.servicesGrid}>
         {mainServices.map((service, index) => (
           <TouchableOpacity
@@ -231,14 +326,18 @@ const MySchoolLanding = ({ navigation }) => {
             activeOpacity={0.7}
           >
             <View style={[styles.serviceIcon, { backgroundColor: service.bgColor }]}>
-              <Icon name={service.icon} size={24} color={service.color} />
+              <Ionicons name={service.icon} size={24} color={service.color} />
             </View>
             <Text style={styles.serviceName}>{service.name}</Text>
           </TouchableOpacity>
         ))}
       </View>
-      
-      <Text style={styles.subsectionTitle}>Quick Tools</Text>
+    </View>
+  );
+
+  const renderQuickTools = () => (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Quick Tools</Text>
       <View style={styles.quickToolsGrid}>
         {quickServices.map((service, index) => (
           <TouchableOpacity
@@ -247,19 +346,22 @@ const MySchoolLanding = ({ navigation }) => {
               styles.quickToolCard,
               !service.available && styles.disabledCard
             ]}
-            onPress={() => service.available && navigation.navigate(service.screen)}
+            onPress={() => service.available && handleQuickServicePress(service)}
             disabled={!service.available}
             activeOpacity={service.available ? 0.7 : 1}
           >
-            <View style={[styles.quickToolIcon, { backgroundColor: `${service.color}15` }]}>
-              <Icon 
+            <View style={[styles.quickToolIcon, { backgroundColor: service.color + '20' }]}>
+              <Ionicons 
                 name={service.icon} 
                 size={20} 
-                color={service.available ? service.color : '#9E9E9E'} 
+                color={service.available ? service.color : Colors.textSecondary} 
               />
             </View>
             <View style={styles.quickToolContent}>
-              <Text style={[styles.quickToolName, !service.available && styles.disabledText]}>
+              <Text style={[
+                styles.quickToolName, 
+                !service.available && styles.disabledText
+              ]}>
                 {service.name}
               </Text>
               {service.status && (
@@ -267,7 +369,7 @@ const MySchoolLanding = ({ navigation }) => {
               )}
             </View>
             {service.available && (
-              <Icon name="chevron-right" size={16} color="#C4C4C4" />
+              <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
             )}
           </TouchableOpacity>
         ))}
@@ -276,113 +378,109 @@ const MySchoolLanding = ({ navigation }) => {
   );
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8F9FA" />
-      {renderHeader()}
+    <SafeAreaView style={styles.safeArea}>
+      <LinearGradient colors={Gradients.primary} style={StyleSheet.absoluteFill} />
+      
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
+      
       <ScrollView 
-        style={styles.content} 
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Colors.primary}
+            colors={[Colors.primary]}
+          />
+        }
         contentContainerStyle={styles.scrollContent}
       >
+        {renderHeader()}
         {renderFeaturedServices()}
         {renderWhatsAppAiSection()}
         {renderAllServices()}
+        {renderQuickTools()}
+        
+        {/* Footer Space */}
+        <View style={styles.footerSpace} />
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: Colors.background,
+  },
+  scrollContent: {
+    paddingBottom: Spacing.xl,
   },
   
-  // Header Styles
-  header: {
-    backgroundColor: '#FFFFFF',
-    paddingTop: 20,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 5,
+
+  welcomeText: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.xs,
   },
-  headerContent: {
+  headerTitle: {
+    ...Typography.h1,
+    color: Colors.text,
+  },
+  profileIcon: {
+    backgroundColor: Colors.primaryLight,
+    borderRadius: BorderRadius.round,
+    padding: Spacing.xs,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  
+  // Section Styles
+  section: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.xl,
+  },
+  sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  welcomeText: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginTop: 4,
-  },
-  profileIcon: {
-    backgroundColor: '#E8F5E8',
-    borderRadius: 20,
-    padding: 4,
-  },
-  
-  // Content Styles
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 32,
-  },
-  
-  // Featured Services Section
-  featuredSection: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 16,
+    marginBottom: Spacing.md,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 16,
+    ...Typography.h3,
+    color: Colors.text,
   },
+  seeAllText: {
+    ...Typography.caption,
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  sectionSubtitle: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.lg,
+    lineHeight: 18,
+  },
+  
+  // Featured Services
   featuredGrid: {
-    gap: 16,
+    gap: Spacing.md,
   },
   featuredCard: {
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 4,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    ...Components.card,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
   },
   featuredCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: Spacing.md,
   },
   featuredIcon: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: BorderRadius.round,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -390,301 +488,181 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   featuredCardTitle: {
+    ...Typography.h3,
+    color: Colors.text,
     fontSize: 18,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 8,
+    marginBottom: Spacing.xs,
   },
   featuredCardDescription: {
-    fontSize: 14,
-    color: '#6B7280',
-    lineHeight: 20,
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    lineHeight: 18,
   },
-
-  // WhatsApp AI Section Styles
-  whatsappSection: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
+  
+  // WhatsApp AI Section
   whatsappBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E8F7F4',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
+    backgroundColor: '#25D36620',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.sm,
+    gap: Spacing.xs,
   },
   whatsappBadgeText: {
     fontSize: 12,
     color: '#25D366',
     fontWeight: '600',
   },
-  sectionSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 20,
-    lineHeight: 20,
-  },
   aiNumbersGrid: {
-    gap: 12,
+    gap: Spacing.md,
   },
   aiNumberCard: {
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
+    ...Components.card,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
   },
   aiCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   aiIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.round,
     justifyContent: 'center',
     alignItems: 'center',
   },
   copyIconContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    padding: 8,
-    borderRadius: 12,
+    backgroundColor: Colors.card,
+    padding: Spacing.xs,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
   },
   aiCardContent: {
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
   },
   aiName: {
-    fontSize: 16,
+    ...Typography.bodySmall,
+    color: Colors.text,
     fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 4,
+    marginBottom: Spacing.xs,
   },
   aiNumber: {
-    fontSize: 15,
+    ...Typography.bodySmall,
+    color: Colors.text,
     fontWeight: '600',
-    color: '#374151',
-    marginBottom: 6,
+    marginBottom: Spacing.xs,
     fontFamily: 'monospace',
   },
   aiDescription: {
-    fontSize: 13,
-    color: '#6B7280',
-    lineHeight: 18,
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    lineHeight: 16,
   },
   tapToCopyHint: {
     alignItems: 'center',
-    marginTop: 4,
+    paddingTop: Spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: Colors.cardBorder,
   },
   tapToCopyText: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    fontWeight: '500',
+    ...Typography.caption,
+    color: Colors.textTertiary,
+    fontSize: 11,
   },
   aiDisclaimer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 16,
-    paddingTop: 16,
+    marginTop: Spacing.lg,
+    paddingTop: Spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    gap: 8,
+    borderTopColor: Colors.cardBorder,
+    gap: Spacing.sm,
   },
   disclaimerText: {
-    fontSize: 12,
-    color: '#6B7280',
+    ...Typography.caption,
+    color: Colors.textSecondary,
     flex: 1,
     lineHeight: 16,
+    fontSize: 11,
   },
   
-  // Services Section
-  servicesSection: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-  },
+  // All Services
   servicesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: 32,
   },
   serviceCard: {
-    width: (width - 52) / 2,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 12,
+    width: (width - Spacing.lg * 2 - Spacing.sm) / 2,
+    ...Components.card,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
   },
   serviceIcon: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: BorderRadius.round,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: Spacing.sm,
   },
   serviceName: {
-    fontSize: 14,
+    ...Typography.caption,
+    color: Colors.text,
     fontWeight: '600',
-    color: '#1F2937',
     textAlign: 'center',
+    fontSize: 12,
   },
   
   // Quick Tools
-  subsectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 12,
-  },
   quickToolsGrid: {
-    gap: 8,
+    gap: Spacing.sm,
   },
   quickToolCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
+    ...Components.card,
+    padding: Spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
   },
   disabledCard: {
     opacity: 0.6,
   },
   quickToolIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.round,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: Spacing.sm,
   },
   quickToolContent: {
     flex: 1,
   },
   quickToolName: {
-    fontSize: 14,
+    ...Typography.bodySmall,
+    color: Colors.text,
     fontWeight: '600',
-    color: '#1F2937',
   },
   disabledText: {
-    color: '#9E9E9E',
+    color: Colors.textSecondary,
   },
   comingSoonText: {
-    fontSize: 12,
-    color: '#F57C00',
+    ...Typography.caption,
+    color: Colors.warning,
     fontWeight: '500',
     marginTop: 2,
+    fontSize: 11,
   },
   
-  // Updates Section
-  updatesSection: {
-    paddingTop: 8,
-    paddingBottom: 16,
-  },
-  seeAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  seeAllText: {
-    fontSize: 14,
-    color: '#2E7D32',
-    fontWeight: '600',
-  },
-  updatesScrollContent: {
-    paddingHorizontal: 20,
-    gap: 16,
-  },
-  updateCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    width: width * 0.8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  updateHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  updateCategory: {
-    backgroundColor: '#E8F5E8',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  updateCategoryText: {
-    fontSize: 12,
-    color: '#2E7D32',
-    fontWeight: '600',
-  },
-  updateDate: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    fontWeight: '500',
-  },
-  updateTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 8,
-    lineHeight: 22,
-  },
-  updateExcerpt: {
-    fontSize: 14,
-    color: '#6B7280',
-    lineHeight: 20,
-    marginBottom: 16,
-  },  
-  updateFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  readTime: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    fontWeight: '500',
+  // Footer Space
+  footerSpace: {
+    height: Spacing.xl,
   },
 });
 

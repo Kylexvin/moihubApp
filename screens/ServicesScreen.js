@@ -20,7 +20,7 @@ const ServicesScreen = () => {
   const [activeTab, setActiveTab] = useState('All');
   const [reorderedServices, setReorderedServices] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showMostUsed, setShowMostUsed] = useState(false);
+  const [showSmartSort, setShowSmartSort] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastClickTime, setLastClickTime] = useState(null);
 
@@ -45,7 +45,6 @@ const ServicesScreen = () => {
     try {
       // Get recommended order based on usage
       const recommendedOrder = await ServiceTrackingService.getRecommendedServiceOrder(category);
-      console.log('Recommended Order:', recommendedOrder);
       
       if (recommendedOrder && recommendedOrder.length > 0) {
         // Create a map for quick lookup
@@ -72,14 +71,11 @@ const ServicesScreen = () => {
             return originalServices.indexOf(a) - originalServices.indexOf(b);
           });
         
-        console.log('Sorted Services:', sortedServices.map(s => ({ id: s.id, title: s.title })));
         return sortedServices;
       } else {
-        console.log('No usage data, using original order');
         return originalServices.filter(service => category === 'All' || service.category === category);
       }
     } catch (error) {
-      console.error('Error reordering services:', error);
       return originalServices.filter(service => category === 'All' || service.category === category);
     }
   }, [activeTab]);
@@ -91,7 +87,6 @@ const ServicesScreen = () => {
       const sortedServices = await reorderServices(activeTab);
       setReorderedServices(sortedServices);
     } catch (error) {
-      console.error('Error loading reordered services:', error);
       setReorderedServices(originalServices.filter(service => 
         activeTab === 'All' || service.category === activeTab
       ));
@@ -123,7 +118,7 @@ const ServicesScreen = () => {
     if (lastClickTime) {
       const timer = setTimeout(() => {
         loadReorderedServices();
-      }, 500); // Small delay to ensure tracking is complete
+      }, 500);
       
       return () => clearTimeout(timer);
     }
@@ -168,38 +163,20 @@ const ServicesScreen = () => {
     });
   }, [searchQuery, activeTab, reorderedServices]);
 
-  // Function to toggle between most used and default view
-  const toggleView = async () => {
-    if (showMostUsed) {
+  // Function to toggle between smart sort and default view
+  const toggleSort = async () => {
+    if (showSmartSort) {
       // Switch back to default view
-      setShowMostUsed(false);
+      setShowSmartSort(false);
       setReorderedServices(originalServices.filter(service => 
         activeTab === 'All' || service.category === activeTab
       ));
     } else {
-      // Switch to most used view
-      setShowMostUsed(true);
+      // Switch to smart sort view
+      setShowSmartSort(true);
       const sortedServices = await reorderServices(activeTab);
       setReorderedServices(sortedServices);
     }
-  };
-
-  // Debug function to view service usage data
-  const debugServiceUsage = async () => {
-    console.log('=== DEBUG SERVICE USAGE ===');
-    const stats = await ServiceTrackingService.getServiceStats();
-    console.log('Service Stats:', stats);
-    
-    const usage = await ServiceTrackingService.getServiceUsage();
-    console.log('Service Usage:', usage.map(u => ({ 
-      id: u.id, 
-      title: u.title, 
-      clicks: u.clickCount,
-      lastClicked: new Date(u.lastClicked).toLocaleTimeString()
-    })));
-    
-    const recommendedOrder = await ServiceTrackingService.getRecommendedServiceOrder(activeTab);
-    console.log('Recommended Order for', activeTab, ':', recommendedOrder);
   };
 
   const onRefresh = useCallback(() => {
@@ -210,7 +187,7 @@ const ServicesScreen = () => {
   // Get popularity rank for a service
   const getPopularityRank = (serviceId) => {
     const index = reorderedServices.findIndex(s => s.id === serviceId);
-    return index + 1; // Convert to 1-based rank
+    return index + 1;
   };
 
   return (
@@ -230,25 +207,27 @@ const ServicesScreen = () => {
       >
         <View style={styles.headerContainer}>
           <Text style={styles.headerText}>MoiHub Services</Text>
-          <View style={styles.headerButtons}>
-            <TouchableOpacity onPress={debugServiceUsage} style={styles.debugButton}>
-              <Ionicons name="bug" size={18} color="#50c878" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={toggleView} style={styles.viewToggle}>
-              <Text style={styles.viewToggleText}>
-                {showMostUsed ? 'Default' : 'Smart'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity onPress={toggleSort} style={styles.sortToggle}>
+            <Ionicons 
+              name={showSmartSort ? "sparkles" : "sparkles-outline"} 
+              size={18} 
+              color="#50c878" 
+            />
+            <Text style={styles.sortToggleText}>
+              {showSmartSort ? 'Smart' : 'Smart'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Info Banner */}
-        <View style={styles.infoBanner}>
-          <Ionicons name="sparkles" size={14} color="#50c878" />
-          <Text style={styles.infoText}>
-            {showMostUsed ? 'Services sorted by your usage' : 'Tap "Smart" to sort by usage'}
-          </Text>
-        </View>
+        {showSmartSort && (
+          <View style={styles.infoBanner}>
+            <Ionicons name="sparkles" size={14} color="#50c878" />
+            <Text style={styles.infoText}>
+              Services sorted by your usage patterns
+            </Text>
+          </View>
+        )}
 
         {/* Featured Section */}
         <View style={styles.featuredStaticGrid}>
@@ -301,13 +280,13 @@ const ServicesScreen = () => {
           ))}
         </ScrollView>
 
-        {/* Most Used Indicator */}
-        {showMostUsed && (
-          <View style={styles.mostUsedBanner}>
+        {/* Smart Sort Indicator */}
+        {showSmartSort && (
+          <View style={styles.sortIndicator}>
             <Ionicons name="trending-up" size={16} color="#50c878" />
-            <Text style={styles.mostUsedText}>
+            <Text style={styles.sortIndicatorText}>
               {activeTab === 'All' 
-                ? 'Showing most used services' 
+                ? 'Most used services' 
                 : `Most used in ${activeTab}`}
             </Text>
           </View>
@@ -317,14 +296,14 @@ const ServicesScreen = () => {
         {isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#50c878" />
-            <Text style={styles.loadingText}>Personalizing your services...</Text>
+            <Text style={styles.loadingText}>Loading services...</Text>
           </View>
         ) : (
           /* Main Services Grid */
           <View style={styles.grid}>
             {filteredServices.map((service, idx) => {
               const rank = getPopularityRank(service.id);
-              const isTopThree = rank <= 3 && showMostUsed;
+              const isTopThree = rank <= 3 && showSmartSort;
               
               return (
                 <TouchableOpacity 
@@ -343,7 +322,7 @@ const ServicesScreen = () => {
                   
                   {/* Popularity indicator */}
                   <View style={styles.cardHeader}>
-                    {showMostUsed && (
+                    {showSmartSort && isTopThree && (
                       <View style={[
                         styles.rankBadge,
                         rank === 1 && styles.rankBadgeGold,
@@ -351,7 +330,7 @@ const ServicesScreen = () => {
                         rank === 3 && styles.rankBadgeBronze
                       ]}>
                         <Text style={styles.rankBadgeText}>
-                          {rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank}
+                          {rank}
                         </Text>
                       </View>
                     )}
@@ -361,36 +340,11 @@ const ServicesScreen = () => {
                     <Ionicons name={service.icon} size={24} color={service.color} />
                   </View>
                   <Text style={styles.cardTitle}>{service.title}</Text>
-                  
-                  {/* Usage indicator (small dot that shows if used) */}
-                  <View style={styles.usageIndicator} />
                 </TouchableOpacity>
               );
             })}
           </View>
         )}
-        
-        {/* Reset Order Button (for testing) */}
-        <TouchableOpacity 
-          style={styles.resetButton}
-          onPress={async () => {
-            await ServiceTrackingService.clearServiceUsage();
-            loadReorderedServices();
-          }}
-        >
-          <Ionicons name="refresh" size={16} color="#888" />
-          <Text style={styles.resetButtonText}> Reset Usage Data</Text>
-        </TouchableOpacity>
-        
-        {/* Usage Stats Preview */}
-        <TouchableOpacity 
-          style={styles.statsPreview}
-          onPress={debugServiceUsage}
-        >
-          <Text style={styles.statsPreviewText}>
-            {showMostUsed ? '👍 Smart sorting is ON' : '💡 Tap "Smart" to sort by usage'}
-          </Text>
-        </TouchableOpacity>
       </ScrollView>
       
       <WhatsAppFAB />
@@ -414,32 +368,21 @@ const styles = StyleSheet.create({
     color: '#fff',
     flex: 1
   },
-  headerButtons: {
+  sortToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8
-  },
-  viewToggle: {
-    backgroundColor: 'rgba(80, 200, 120, 0.2)',
+    backgroundColor: 'rgba(80, 200, 120, 0.15)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 15,
     borderWidth: 1,
     borderColor: '#50c878',
-    minWidth: 60,
-    alignItems: 'center'
+    gap: 4
   },
-  viewToggleText: {
+  sortToggleText: {
     color: '#50c878',
     fontSize: 12,
     fontWeight: '600'
-  },
-  debugButton: {
-    padding: 6,
-    backgroundColor: 'rgba(80, 200, 120, 0.1)',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#50c878'
   },
   infoBanner: {
     flexDirection: 'row',
@@ -535,22 +478,20 @@ const styles = StyleSheet.create({
   activeChipText: { 
     color: '#000' 
   },
-  mostUsedBanner: {
+  sortIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 127, 80, 0.1)',
+    backgroundColor: 'rgba(80, 200, 120, 0.08)',
     marginHorizontal: 20,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
     marginBottom: 15,
-    borderLeftWidth: 3,
-    borderLeftColor: '#ff7f50'
   },
-  mostUsedText: {
-    color: '#ff7f50',
+  sortIndicatorText: {
+    color: '#50c878',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
     marginLeft: 8
   },
   loadingContainer: {
@@ -582,9 +523,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.05)'
   },
   topServiceCard: {
-    borderColor: 'rgba(255, 127, 80, 0.3)',
+    borderColor: 'rgba(80, 200, 120, 0.3)',
     borderWidth: 1.5,
-    backgroundColor: 'rgba(255, 127, 80, 0.05)'
+    backgroundColor: 'rgba(80, 200, 120, 0.05)'
   },
   cardHeader: {
     position: 'absolute',
@@ -594,9 +535,9 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   rankBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -604,16 +545,16 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.2)'
   },
   rankBadgeGold: {
-    backgroundColor: 'rgba(255, 215, 0, 0.2)',
-    borderColor: 'rgba(255, 215, 0, 0.5)'
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    borderColor: 'rgba(255, 215, 0, 0.4)'
   },
   rankBadgeSilver: {
-    backgroundColor: 'rgba(192, 192, 192, 0.2)',
-    borderColor: 'rgba(192, 192, 192, 0.5)'
+    backgroundColor: 'rgba(192, 192, 192, 0.15)',
+    borderColor: 'rgba(192, 192, 192, 0.4)'
   },
   rankBadgeBronze: {
-    backgroundColor: 'rgba(205, 127, 50, 0.2)',
-    borderColor: 'rgba(205, 127, 50, 0.5)'
+    backgroundColor: 'rgba(205, 127, 50, 0.15)',
+    borderColor: 'rgba(205, 127, 50, 0.4)'
   },
   rankBadgeText: {
     color: '#fff',
@@ -647,49 +588,6 @@ const styles = StyleSheet.create({
     color: '#000', 
     fontSize: 8, 
     fontWeight: '900' 
-  },
-  usageIndicator: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#50c878',
-    opacity: 0.7
-  },
-  resetButton: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    marginHorizontal: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)'
-  },
-  resetButtonText: {
-    color: '#888',
-    fontSize: 12
-  },
-  statsPreview: {
-    backgroundColor: 'rgba(80, 200, 120, 0.05)',
-    marginHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 5,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(80, 200, 120, 0.1)'
-  },
-  statsPreviewText: {
-    color: '#50c878',
-    fontSize: 12,
-    fontWeight: '500'
   }
 });
 
