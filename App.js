@@ -36,6 +36,7 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import OnboardingNavigator from './navigation/OnboardingNavigator';
 import { handleNotificationNavigation } from './utils/notificationHandler';
+import ProviderProfile from './screens/localservices/ProviderProfile';
 
 const isExpoGo = Constants?.appOwnership === 'expo';
 const messaging = !isExpoGo ? require('@react-native-firebase/messaging').default : null;
@@ -232,6 +233,7 @@ function AppNavigator() {
             <Stack.Screen name="Eshop" component={EshopOwnerNavigator} />
             <Stack.Screen name="ServicesStack" component={ServicesStackNavigator} />
             <Stack.Screen name="OnboardingNavigator" component={OnboardingNavigator} /> 
+            
             <Stack.Screen
               name="EditProduct"
               component={EditProductScreen}
