@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Theme from './theme/Theme';
+import localServicesDB from '../services/LocalServicesDatabase'; 
 
 const { width, height } = Dimensions.get('window');
 const { Colors, Gradients, Typography, Spacing, BorderRadius, Components, Shadows } = Theme;
@@ -49,362 +50,112 @@ const LocalServices = ({ navigation }) => {
     CATEGORY_METADATA: 'local_services_metadata',
   };
 
-  // Enhanced category icon mapping with fallback system
-  const getCategoryIcon = (categoryName) => {
-    const iconMapping = {
-      // Transport & Mobility
-      'matatu': 'bus',
-      'bus': 'bus',
-      'minibus': 'bus',
-      'psv': 'bus',
-      'shuttle': 'bus',
-      'commuter': 'bus',
-      'motorbike': 'bicycle',
-      'motorcycle': 'bicycle',
-      'boda': 'bicycle',
-      'bike': 'bicycle',
-      'bicycle': 'bicycle',
-      'car': 'car-sport',
-      'transport': 'car',
-      'tuktuk': 'car',
-      'taxi': 'taxi',
-      'uber': 'car',
-      'bolt': 'car',
-      'delivery': 'cube',
-      'logistics': 'cube',
-      'courier': 'cube',
-      'shipping': 'cube',
-      
-      // Food & Beverage
-      'cake': 'cake', // Specific cake icon
-      'food': 'restaurant',
-      'restaurant': 'restaurant',
-      'cafe': 'cafe',
-      'coffee': 'cafe',
-      'tea': 'cafe',
-      'bakery': 'bread',
-      'butchery': 'restaurant',
-      'grocery': 'cart',
-      'supermarket': 'storefront',
-      'market': 'storefront',
-      'vegetable': 'leaf',
-      'fruit': 'nutrition',
-      'gas': 'flame',
-      'fuel': 'flame',
-      'posho': 'leaf',
-      'mill': 'leaf',
-      'agriculture': 'leaf',
-      'poshomill': 'leaf',
-      
-      // Beauty & Personal Care
-      'salon': 'cut',
-      'saloon': 'cut',
-      'kinyozi': 'cut',
-      'barber': 'cut',
-      'beauty': 'sparkles',
-      'spa': 'water',
-      'massage': 'hand-left',
-      'wellness': 'medkit',
-      'fitness': 'barbell',
-      'gym': 'fitness',
-      'yoga': 'body',
-      'therapy': 'medkit',
-      
-      // Cleaning & Maintenance
-      'laundry': 'shirt',
-      'cleaning': 'brush',
-      'clean': 'brush',
-      'mama': 'woman',
-      'fua': 'shirt',
-      'wash': 'water',
-      'dryclean': 'shirt',
-      'maintenance': 'build',
-      'repair': 'construct',
-      
-      // Technical Services
-      'electronic': 'phone-portrait',
-      'electronics': 'phone-portrait',
-      'phone': 'phone-portrait',
-      'computer': 'laptop',
-      'laptop': 'laptop',
-      'cyber': 'desktop',
-      'cafe': 'desktop',
-      'plumb': 'hammer',
-      'plumbing': 'hammer',
-      'electric': 'flash',
-      'electrical': 'flash',
-      'carpenter': 'hammer',
-      'capentry': 'hammer',
-      'woodwork': 'hammer',
-      'mechanic': 'settings',
-      'technician': 'cog',
-      'install': 'build',
-      'installation': 'build',
-      'handyman': 'hammer',
-      
-      // Creative & Media
-      'photo': 'camera',
-      'photography': 'camera',
-      'camera': 'camera',
-      'event': 'calendar',
-      'events': 'calendar',
-      'media': 'videocam',
-      'video': 'videocam',
-      'film': 'film',
-      'design': 'color-palette',
-      'graphic': 'color-palette',
-      'artist': 'brush',
-      'music': 'musical-notes',
-      'dj': 'musical-notes',
-      
-      // Professional Services
-      'consult': 'briefcase',
-      'consultant': 'briefcase',
-      'legal': 'scale',
-      'lawyer': 'scale',
-      'account': 'calculator',
-      'accountant': 'calculator',
-      'finance': 'cash',
-      'financial': 'cash',
-      'bank': 'card',
-      'insurance': 'shield-checkmark',
-      'realestate': 'business',
-      'property': 'home',
-      'housing': 'home',
-      'rental': 'home',
-      
-      // Health & Medical
-      'pharma': 'medical',
-      'pharmacy': 'medical',
-      'medical': 'medkit',
-      'medicine': 'medkit',
-      'clinic': 'medkit',
-      'doctor': 'medkit',
-      'hospital': 'medkit',
-      'dentist': 'medkit',
-      'nurse': 'medkit',
-      'health': 'fitness',
-      
-      // Education & Learning
-      'tutor': 'school',
-      'tuition': 'school',
-      'training': 'school',
-      'education': 'school',
-      'school': 'school',
-      'university': 'school',
-      'college': 'school',
-      'institute': 'school',
-      'academy': 'school',
-      'learning': 'school',
-      'coaching': 'school',
-      
-      // Retail & Shopping
-      'shop': 'cart',
-      'store': 'storefront',
-      'mall': 'storefront',
-      'boutique': 'shirt',
-      'clothing': 'shirt',
-      'fashion': 'shirt',
-      'shoe': 'walk',
-      'jewelry': 'diamond',
-      
-      // Home Services
-      'home': 'home',
-      'house': 'home',
-      'garden': 'leaf',
-      'landscaping': 'leaf',
-      'security': 'shield',
-      'guard': 'shield',
-      'babysitter': 'person',
-      'nanny': 'person',
-      
-      // Default categories
-      'service': 'construct',
-      'business': 'business',
-      'other': 'help-circle',
-      'test': 'help-circle',
-    };
-
-    const name = categoryName.toLowerCase();
+  // Enhanced category icon mapping with fallback system - FIXED CAKE ICON
+// Enhanced category icon mapping
+const getCategoryIcon = (categoryName) => {
+  const name = categoryName.toLowerCase();
+  
+  // Simple mapping based on your categories
+  const iconMap = {
+    // Your existing categories
+    'best kinyozi': 'cut',
+    'cake': 'cake',
+    'capentry services': 'construct',
+    'cyber café': 'desktop',
+    'electronic repairs': 'build',
+    'gas deliveries services': 'flame',
+    'laundry services': 'shirt',
+    'mama fua': 'woman',
+    'matatu services': 'bus',
+    'motorbike services': 'bicycle',
+    'photoshoot services': 'camera',
+    'saloonist': 'cut',
+    'test': 'star',
+    'tuktuk services': 'car',
+    'poshomill': 'leaf',
     
-    // First, try exact matches
-    for (const [keyword, icon] of Object.entries(iconMapping)) {
-      if (name === keyword || name === `${keyword}s`) {
-        return icon;
-      }
-    }
-    
-    // Then try partial matches
-    for (const [keyword, icon] of Object.entries(iconMapping)) {
-      if (name.includes(keyword)) {
-        return icon;
-      }
-    }
-    
-    // Check for cake icon with fallback
-    if (name.includes('cake')) {
-      // Try to find cake icon in Ionicons, fallback to restaurant if not available
-      try {
-        // Check if cake icon exists in Ionicons
-        return 'cake'; // Ionicons has cake icon
-      } catch (error) {
-        return 'restaurant'; // Fallback icon
-      }
-    }
-    
-    // Default intelligent fallback based on category type
-    if (name.includes('repair') || name.includes('fix')) return 'construct';
-    if (name.includes('sell') || name.includes('retail')) return 'cart';
-    if (name.includes('teach') || name.includes('learn')) return 'school';
-    if (name.includes('health') || name.includes('care')) return 'medkit';
-    if (name.includes('art') || name.includes('creative')) return 'color-palette';
-    
-    return 'star'; // Premium default icon
+    // Default transport icons
+    'transport': 'car',
+    'boda boda': 'bicycle',
+    'boda': 'bicycle',
   };
+  
+  return iconMap[name] || 'star';
+};
 
-  // Enhanced color generator with better category matching
-  const getCategoryColor = (categoryName) => {
-    const colorMapping = {
-      // Transport - Green
-      'matatu': Colors.primaryDark || '#2D6A4F',
-      'bus': Colors.primaryDark || '#2D6A4F',
-      'psv': Colors.primaryDark || '#2D6A4F',
-      'motorbike': Colors.primary,
-      'motorcycle': Colors.primary,
-      'boda': Colors.primary,
-      'bike': Colors.primary,
-      'car': Colors.primary,
-      'transport': Colors.primary,
-      'taxi': Colors.primary,
-      'tuktuk': Colors.primary,
-      'delivery': Colors.primary,
-      
-      // Food & Cooking - Coral Orange
-      'cake': Colors.secondary,
-      'food': Colors.secondary,
-      'restaurant': Colors.secondary,
-      'cafe': Colors.secondary,
-      'grocery': Colors.secondary,
-      'bakery': Colors.secondary,
-      'supermarket': Colors.secondary,
-      'posho': Colors.secondary,
-      'poshomill': Colors.secondary,
-      
-      // Beauty & Personal Care - Purple
-      'beauty': Colors.accent,
-      'salon': Colors.accent,
-      'saloon': Colors.accent,
-      'kinyozi': Colors.accent,
-      'spa': Colors.accent,
-      'barber': Colors.accent,
-      'fitness': Colors.accent,
-      
-      // Repair & Technical - Blue
-      'repair': Colors.info,
-      'electronic': Colors.info,
-      'plumb': Colors.info,
-      'electric': Colors.info,
-      'mechanic': Colors.info,
-      'capentry': Colors.info,
-      'carpenter': Colors.info,
-      'cyber': Colors.info,
-      
-      // Cleaning & Laundry - Success Green
-      'cleaning': Colors.success,
-      'laundry': Colors.success,
-      'clean': Colors.success,
-      'mama': Colors.success,
-      'fua': Colors.success,
-      
-      // Health & Medical - Danger Red
-      'medical': Colors.danger,
-      'pharma': Colors.danger,
-      'clinic': Colors.danger,
-      'health': Colors.danger,
-      
-      // Education & Learning - Info Blue
-      'education': Colors.info,
-      'school': Colors.info,
-      'tutor': Colors.info,
-      'training': Colors.info,
-      
-      // Professional - Warning Amber
-      'consult': Colors.warning,
-      'legal': Colors.warning,
-      'account': Colors.warning,
-      'finance': Colors.warning,
-      
-      // Creative & Media - Purple
-      'photo': Colors.accent,
-      'photography': Colors.accent,
-      'design': Colors.accent,
-      'art': Colors.accent,
-      'music': Colors.accent,
-      
-      // Home Services - Warm Color
-      'home': Colors.warning,
-      'house': Colors.warning,
-      'garden': Colors.warning,
-      
-      // Gas & Fuel - Orange
-      'gas': Colors.warning,
-      'fuel': Colors.warning,
-    };
-
-    const name = categoryName.toLowerCase();
+// Enhanced color generator
+const getCategoryColor = (categoryName) => {
+  const name = categoryName.toLowerCase();
+  
+  const colorMap = {
+    // Transport - Green
+    'motorbike services': Colors.primary,
+    'matatu services': Colors.primaryDark || '#2D6A4F',
+    'tuktuk services': Colors.primary,
+    'transport': Colors.primary,
+    'boda boda': Colors.primary,
     
-    // Try exact or partial matches
-    for (const [keyword, color] of Object.entries(colorMapping)) {
-      if (name.includes(keyword)) {
-        return color;
-      }
-    }
+    // Food - Coral
+    'cake': Colors.secondary,
+    'poshomill': Colors.secondary,
+    'gas deliveries services': Colors.secondary,
     
-    // Intelligent color assignment based on category content
-    const words = name.split(' ');
-    for (const word of words) {
-      if (colorMapping[word]) {
-        return colorMapping[word];
-      }
-    }
+    // Beauty - Purple
+    'best kinyozi': Colors.accent,
+    'saloonist': Colors.accent,
+    'test': Colors.accent,
     
-    // Default colors based on category length (consistent hashing)
-    const defaultColors = [
-      Colors.primary,      // Green
-      Colors.secondary,    // Coral
-      Colors.accent,       // Purple
-      Colors.success,      // Success Green
-      Colors.warning,      // Amber
-      Colors.info,         // Blue
-      Colors.danger,       // Red
-    ];
+    // Services - Blue
+    'electronic repairs': Colors.info,
+    'capentry services': Colors.info,
+    'cyber café': Colors.info,
     
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-      hash = ((hash << 5) - hash) + name.charCodeAt(i);
-      hash = hash & hash;
-    }
+    // Cleaning - Success Green
+    'laundry services': Colors.success,
+    'mama fua': Colors.success,
     
-    return defaultColors[Math.abs(hash) % defaultColors.length];
+    // Media - Pink/Orange
+    'photoshoot services': Colors.warning,
   };
+  
+  return colorMap[name] || Colors.primary; // Default to primary color
+};
 
-  // Initialize category data
-  const initializeCategory = (category) => {
-    const categoryName = category.name.toLowerCase();
-    const isPinned = pinnedCategoryNames.some(pinnedName => 
-      categoryName.includes(pinnedName.toLowerCase()) ||
-      categoryName === pinnedName.toLowerCase()
-    );
+// Fixed initializeCategory function
+const initializeCategory = (category) => {
+  if (!category) return null;
+  
+  const categoryName = category.name || '';
+  const categoryId = category._id || category.id;
+  
+  // Determine if pinned (based on your pinnedCategoryNames)
+  const isPinned = pinnedCategoryNames.some(pinnedName => 
+    categoryName.toLowerCase().includes(pinnedName.toLowerCase())
+  );
+  
+  const icon = getCategoryIcon(categoryName);
+  const color = getCategoryColor(categoryName);
+  const bgColor = color + '20'; // 20 = 12% opacity
+  
+  return {
+    _id: categoryId,
+    id: categoryId, // Also include id for compatibility
+    name: categoryName,
+    description: category.description || '',
+    allowDashboard: category.allowDashboard || false,
+    allowBooking: category.allowBooking || false,
+    systemOnly: category.systemOnly || false,
+    createdAt: category.createdAt ? new Date(category.createdAt).getTime() : Date.now(),
+    updatedAt: category.updatedAt ? new Date(category.updatedAt).getTime() : Date.now(),
+    icon,
+    color,
+    bgColor,
+    isPinned,
     
-    return {
-      ...category,
-      icon: getCategoryIcon(category.name),
-      color: getCategoryColor(category.name),
-      bgColor: getCategoryColor(category.name) + '20', // 20 = 12% opacity
-      isPinned: isPinned,
-    };
+    // Add providerCount if available
+    providerCount: category.providerCount || 0
   };
-
+};
   useEffect(() => {
     initializeData();
     Animated.parallel([
@@ -425,39 +176,81 @@ const LocalServices = ({ navigation }) => {
     filterCategories();
   }, [searchQuery, categories]);
 
-  const initializeData = async () => {
+const initializeData = async () => {
+  try {
+    setLoading(true);
+    setError(null);
+    
+    console.log('🔄 Initializing services data...');
+    
+    // Initialize dedicated services database
+    await localServicesDB.init();
+    
+    // Try network first
     try {
-      setLoading(true);
-      setError(null);
+      console.log('🌐 Attempting to fetch from network...');
+      const freshCategories = await fetchFreshData();
       
-      const cachedData = await loadCachedData();
+      if (!freshCategories || freshCategories.length === 0) {
+        throw new Error('No categories received from API');
+      }
       
-      if (cachedData && cachedData.categories.length > 0) {
-        setCategories(cachedData.categories);
-        setIsOffline(false);
-        
-        if (!cachedData.isStale) {
-          setLoading(false);
-          return;
+      console.log(`📊 Setting ${freshCategories.length} categories`);
+      setCategories(freshCategories);
+      setIsOffline(false);
+      
+      // Save to SQLite (dedicated database)
+      console.log('💾 Saving to SQLite database...');
+      const saveSuccess = await localServicesDB.saveCategories(freshCategories);
+      
+      if (saveSuccess) {
+        console.log('✅ Categories saved to SQLite');
+      } else {
+        console.warn('⚠️ Failed to save categories to SQLite');
+      }
+      
+      // Also keep AsyncStorage as backup
+      console.log('💾 Caching to AsyncStorage...');
+      await cacheData(freshCategories);
+      
+    } catch (networkError) {
+      console.log('📶 Offline mode: Loading from SQLite...', networkError.message);
+      
+      // Load from dedicated SQLite database
+      const sqliteCategories = await localServicesDB.getCategories();
+      console.log(`📊 Found ${sqliteCategories.length} categories in SQLite`);
+      
+      if (sqliteCategories.length > 0) {
+        setCategories(sqliteCategories);
+        setIsOffline(true);
+        console.log('✅ Loaded categories from SQLite');
+      } else {
+        console.log('🔄 Falling back to AsyncStorage...');
+        // Fallback to AsyncStorage
+        const cachedData = await loadCachedData();
+        if (cachedData?.categories?.length > 0) {
+          console.log(`📊 Found ${cachedData.categories.length} categories in AsyncStorage`);
+          setCategories(cachedData.categories);
+          setIsOffline(true);
+        } else {
+          console.log('🔄 Loading default pinned categories...');
+          // Show default pinned categories from SQLite
+          const pinned = await localServicesDB.getPinnedCategories();
+          console.log(`📊 Found ${pinned.length} default pinned categories`);
+          setCategories(pinned);
+          setIsOffline(true);
+          setError('Using offline data. Connect for latest services.');
         }
       }
-      
-      await fetchFreshData();
-      
-    } catch (error) {
-      console.error('Error initializing data:', error);
-      
-      const cachedData = await loadCachedData();
-      if (cachedData && cachedData.categories.length > 0) {
-        setCategories(cachedData.categories);
-        setIsOffline(true);
-      } else {
-        setError('Failed to load services. Please check your connection.');
-      }
-    } finally {
-      setLoading(false);
     }
-  };
+  } catch (error) {
+    console.error('❌ Initialize error:', error);
+    setError('Failed to load services: ' + error.message);
+  } finally {
+    setLoading(false);
+    console.log('🏁 Data initialization complete');
+  }
+};
 
   const loadCachedData = async () => {
     try {
@@ -492,26 +285,48 @@ const LocalServices = ({ navigation }) => {
     }
   };
 
-  const fetchFreshData = async () => {
-    try {
-      const response = await axios.get('api/services/categories', {
-        timeout: 10000,
-      });
-      
-      const freshCategories = response.data.map(category => 
-        initializeCategory(category)
-      );
-      
-      setCategories(freshCategories);
-      setIsOffline(false);
-      
-      await cacheData(freshCategories);
-      
-    } catch (error) {
-      console.error('Error fetching fresh data:', error);
-      throw error;
+const fetchFreshData = async () => {
+  try {
+    console.log('🌐 Fetching fresh categories from API...');
+    
+    const response = await axios.get('/api/services/categories', {
+      timeout: 10000,
+      headers: {
+        'Cache-Control': 'no-cache'
+      }
+    });
+    
+    console.log('📥 API Response:', response.data);
+    
+    // Check response structure
+    let categoriesArray;
+    
+    if (Array.isArray(response.data)) {
+      categoriesArray = response.data;
+    } else if (response.data && Array.isArray(response.data.categories)) {
+      categoriesArray = response.data.categories;
+    } else {
+      throw new Error('Invalid response format from API');
     }
-  };
+    
+    if (!categoriesArray || categoriesArray.length === 0) {
+      console.warn('⚠️ API returned empty categories array');
+      return [];
+    }
+    
+    // Initialize each category and filter out nulls
+    const freshCategories = categoriesArray
+      .map(category => initializeCategory(category))
+      .filter(category => category !== null); // Filter out null categories
+    
+    console.log(`✅ Fetched ${freshCategories.length} categories`);
+    return freshCategories;
+    
+  } catch (error) {
+    console.error('❌ Error fetching fresh data:', error.message);
+    throw error;
+  }
+};
 
   const cacheData = async (categoriesToCache) => {
     try {
@@ -716,7 +531,7 @@ const LocalServices = ({ navigation }) => {
                 styles.featuredGridCard, 
                 { 
                   backgroundColor: category.bgColor,
-                  borderColor: category.color,
+                  borderWidth: 0, // FIXED: Remove border on pinned cards
                 }
               ]}
               onPress={() => handleCategoryPress(category)}
@@ -981,8 +796,6 @@ const LocalServices = ({ navigation }) => {
         <Ionicons name="sparkles" size={24} color={Colors.text} />
       </TouchableOpacity>
 
-
-
       {/* AI Chatbot Modal */}
       {renderAIChatbotModal()}
 
@@ -1000,6 +813,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: Colors.background,
+    paddingTop: 0, // FIXED: Remove space between status bar and screen
   },
   scrollContent: {
     paddingBottom: Spacing.xxxl,
@@ -1008,7 +822,7 @@ const styles = StyleSheet.create({
   // Header Styles
   headerContainer: {
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xl,
+    paddingTop: Spacing.xl + Spacing.md, // FIXED: Added extra padding to account for status bar
     paddingBottom: Spacing.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1122,7 +936,8 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     marginBottom: Spacing.sm,
     borderRadius: BorderRadius.lg,
-    borderWidth: 2,
+    borderWidth: 0, // FIXED: Remove border on pinned cards
+    overflow: 'hidden', // Added for better shadow rendering
   },
   featuredGridCardHeader: {
     flexDirection: 'row',
@@ -1252,21 +1067,6 @@ const styles = StyleSheet.create({
     bottom: 20,
     right: Spacing.lg,
     backgroundColor: Colors.accent,
-    width: 56,
-    height: 56,
-    borderRadius: BorderRadius.round,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Shadows.medium,
-    zIndex: 1000,
-  },
-  
-  // Add Service FAB
-  addFab: {
-    position: 'absolute',
-    bottom: Spacing.xl,
-    right: Spacing.lg,
-    backgroundColor: Colors.primary,
     width: 56,
     height: 56,
     borderRadius: BorderRadius.round,
