@@ -22,7 +22,7 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import Theme from '../theme/Theme';
 import axios from 'axios';
-import { useAuth } from '../../context/AuthContext'; // 🔥 IMPORTANT: Use your auth context
+import { useAuth } from '../../context/AuthContext';
 import ServicesTab from './components/ServicesTab';
 import ProductsTab from './components/ProductsTab';
 import ReviewsTab from './components/ReviewsTab';
@@ -33,7 +33,7 @@ const { Colors, Gradients, Typography, Spacing, BorderRadius, Components, Shadow
 
 const ProviderProfile = ({ route, navigation }) => {
   const { providerId } = route.params;
-  const { logout } = useAuth(); // 🔥 Get logout function from context
+  const { currentUser, logout, token } = useAuth();
   
   // State for API data
   const [overviewData, setOverviewData] = useState(null);
@@ -74,17 +74,14 @@ const ProviderProfile = ({ route, navigation }) => {
     });
   }, [navigation, headerOpacity]);
 
-  // Helper to handle API errors
   const handleApiError = (error, customMessage = 'Failed to load data') => {
     console.error('API Error:', error);
     
-    // Check for 401 Unauthorized
     if (error.response?.status === 401) {
       setSessionExpired(true);
       return 'session_expired';
     }
     
-    // Check for network errors
     if (!error.response) {
       return 'network_error';
     }
@@ -92,60 +89,71 @@ const ProviderProfile = ({ route, navigation }) => {
     return customMessage;
   };
 
-  // Fetch overview data
-  const fetchOverview = useCallback(async () => {
-    try {
-      setLoading(true);
-      setSessionExpired(false);
-      setError(null);
-      
-      // 🔥 Auth header is automatically set by AuthContext
-      const response = await axios.get(
-        `/api/services/providers/${providerId}/dashboard/overview`,
-        {
-          timeout: 10000
+ const fetchOverview = useCallback(async () => {
+  try {
+    console.log('Fetching overview for providerId:', providerId);
+    setLoading(true);
+    setSessionExpired(false);
+    setError(null);
+    
+    const response = await axios.get(
+      `/api/services/providers/${providerId}/dashboard/overview`,
+      {
+        timeout: 10000,
+        headers: {
+          'Authorization': `Bearer ${token}`,
         }
-      );
-      
-      setOverviewData(response.data);
-    } catch (error) {
-      const errorType = handleApiError(error, 'Failed to load provider information');
-      
-      if (errorType === 'session_expired') {
-        setError('Your session has expired. Please login again.');
-        // Show a modal instead of immediate logout
-        setTimeout(() => {
-          Alert.alert(
-            'Session Expired',
-            'Your session has expired. Please login again to continue.',
-            [
-              {
-                text: 'Login',
-                onPress: () => {
-                  logout();
-                  navigation.replace('Login');
-                }
-              },
-              {
-                text: 'Cancel',
-                style: 'cancel'
-              }
-            ]
-          );
-        }, 1000);
-      } else {
-        setError(errorType);
       }
-    } finally {
-      setLoading(false);
+    );
+    
+    console.log('Overview API response received:', {
+      hasData: !!response.data,
+      metadata: response.data?.metadata,
+      providerUserId: response.data?.metadata?.providerUserId
+    });
+    
+    setOverviewData(response.data);
+  } catch (error) {
+    console.error('Error fetching overview:', error);
+    const errorType = handleApiError(error, 'Failed to load provider information');
+    
+    if (errorType === 'session_expired') {
+      setError('Your session has expired. Please login again.');
+      setTimeout(() => {
+        Alert.alert(
+          'Session Expired',
+          'Your session has expired. Please login again to continue.',
+          [
+            {
+              text: 'Login',
+              onPress: () => {
+                logout();
+                navigation.replace('Login');
+              }
+            },
+            {
+              text: 'Cancel',
+              style: 'cancel'
+            }
+          ]
+        );
+      }, 1000);
+    } else {
+      setError(errorType);
     }
-  }, [providerId, logout, navigation]);
-
-  // Fetch services data
+  } finally {
+    setLoading(false);
+  }
+}, [providerId, logout, navigation, token]);
   const fetchServices = async () => {
     try {
       const response = await axios.get(
-        `/api/services/providers/${providerId}/dashboard/services`
+        `/api/services/providers/${providerId}/dashboard/services`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          }
+        }
       );
       
       const transformedServices = response.data.services?.map(service => ({
@@ -163,11 +171,15 @@ const ProviderProfile = ({ route, navigation }) => {
     }
   };
 
-  // Fetch products data
   const fetchProducts = async () => {
     try {
       const response = await axios.get(
-        `/api/services/providers/${providerId}/dashboard/products`
+        `/api/services/providers/${providerId}/dashboard/products`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          }
+        }
       );
       
       const transformedProducts = response.data.products?.map(product => ({
@@ -185,11 +197,15 @@ const ProviderProfile = ({ route, navigation }) => {
     }
   };
 
-  // Fetch reviews data
   const fetchReviews = async () => {
     try {
       const response = await axios.get(
-        `/api/services/providers/${providerId}/dashboard/reviews`
+        `/api/services/providers/${providerId}/dashboard/reviews`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          }
+        }
       );
       
       const transformedReviews = response.data.reviews?.map(review => ({
@@ -208,11 +224,15 @@ const ProviderProfile = ({ route, navigation }) => {
     }
   };
 
-  // Fetch info data
   const fetchInfo = async () => {
     try {
       const response = await axios.get(
-        `/api/services/providers/${providerId}/dashboard/info`
+        `/api/services/providers/${providerId}/dashboard/info`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          }
+        }
       );
       
       setInfoData(response.data);
@@ -221,7 +241,6 @@ const ProviderProfile = ({ route, navigation }) => {
     }
   };
 
-  // Load tab data when tab changes
   useEffect(() => {
     if (!overviewData) return;
     
@@ -236,7 +255,6 @@ const ProviderProfile = ({ route, navigation }) => {
     }
   }, [activeTab, overviewData]);
 
-  // Initial load
   useEffect(() => {
     fetchOverview();
   }, [fetchOverview]);
@@ -259,47 +277,87 @@ const ProviderProfile = ({ route, navigation }) => {
     setRefreshing(false);
   };
 
-  const handleBookNow = (service = null) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const providerName = overviewData?.header?.name || '';
-    const providerImage = overviewData?.header?.profileImage || '';
-    const providerRating = overviewData?.header?.rating || 0;
-    const providerLocation = overviewData?.header?.location || '';
+const handleInitiateChat = async (bookingDetails = null) => {
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  
+  try {
+    const providerUserId = overviewData?.metadata?.providerUserId;
     
-    if (service) {
-      navigation.navigate('BookingScreen', {
-        providerId,
-        providerName,
-        providerImage,
-        providerRating,
-        providerLocation,
-        serviceName: service.name,
-        servicePrice: service.price,
-        serviceDuration: service.duration,
-        serviceDescription: service.description,
-      });
-    } else {
-      navigation.navigate('BookingScreen', {
-        providerId,
-        providerName,
-        providerImage,
-        providerRating,
-        providerLocation,
-      });
+    if (!providerUserId) {
+      Alert.alert('Error', 'Could not start chat. Provider information is incomplete.');
+      return;
     }
-  };
-
-  const handleChat = async () => {
-    if (!overviewData?.header?.phone) return;
     
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const whatsappUrl = `https://wa.me/${overviewData.header.phone.replace('+', '')}?text=Hi ${encodeURIComponent(overviewData.header.name)}, I found you on MoiHub Services!`;
+    let chatTypeToUse = 'business';
+    let response;
     
     try {
-      await Linking.openURL(whatsappUrl);
+      response = await axios.post('/api/messages/conversations', {
+        participantId: providerUserId,
+        chatType: 'business',
+        context: bookingDetails ? 'service_booking' : 'general_inquiry',
+        bookingDetails: bookingDetails
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        }
+      });
     } catch (error) {
-      Alert.alert('Error', 'Could not open WhatsApp');
+      if (error.response?.status === 400 && error.response?.data?.message?.includes('Invalid chat type')) {
+        console.log('"business" chat type rejected, falling back to "normal"');
+        chatTypeToUse = 'normal';
+        
+        response = await axios.post('/api/messages/conversations', {
+          participantId: providerUserId,
+          chatType: 'normal',
+          context: bookingDetails ? 'service_booking' : 'general_inquiry',
+          bookingDetails: bookingDetails
+        }, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          }
+        });
+      } else {
+        throw error;
+      }
     }
+
+    const convo = response.data;
+    
+    // FIX: Make otherUser match NewChatScreen's structure exactly
+    const chatParams = {
+      conversationId: convo._id,
+      conversation: convo,
+      otherUser: {
+        _id: providerUserId,
+        username: overviewData?.header?.name || 'Provider', // NewChatScreen uses 'username'
+        email: '', // NewChatScreen sends email
+        name: overviewData?.header?.name || 'Provider',
+        // Add any other fields NewChatScreen sends
+      },
+      chatType: convo.chatType || chatTypeToUse
+    };
+    
+    if (bookingDetails) {
+      chatParams.initialMessage = 
+        `Hi! I'd like to book ${bookingDetails.serviceName} for ${bookingDetails.selectedDate} at ${bookingDetails.selectedTime}. Price: ${bookingDetails.servicePrice}. Duration: ${bookingDetails.serviceDuration}. ${bookingDetails.notes ? `Notes: ${bookingDetails.notes}` : ''}`;
+    }
+    
+    console.log('Navigating to Messages tab -> ChatScreen');
+    
+    navigation.navigate('Messages', {
+      screen: 'ChatScreen',
+      params: chatParams
+    });
+    
+  } catch (error) {
+    console.error('Error creating conversation:', error);
+    Alert.alert('Error', 'Could not start chat. Please try again.');
+  }
+};
+  const handleChat = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    handleInitiateChat(); // Creates a general inquiry chat
   };
 
   const handleCall = async () => {
@@ -320,7 +378,7 @@ const ProviderProfile = ({ route, navigation }) => {
     setIsSaved(!isSaved);
     Alert.alert(
       isSaved ? 'Removed from Saved' : 'Added to Saved', 
-      isSaved ? 'This spa has been removed from your saved places.' : 'This spa has been added to your saved places.'
+      isSaved ? 'This business has been removed from your saved places.' : 'This business has been added to your saved places.'
     );
   };
 
@@ -389,209 +447,169 @@ const ProviderProfile = ({ route, navigation }) => {
     return stars;
   };
 
-const renderHeader = () => {
-  if (!overviewData?.header) return null;
-  
-  const header = overviewData.header;
-  
-  return (
-    <View>
-      {/* Cover Image with Top Right Icons */}
-      <View style={styles.coverImageContainer}>
-        {header.coverImage ? (
-          <Image 
-            source={{ uri: header.coverImage }}
-            style={styles.coverImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={[styles.coverImage, { backgroundColor: Colors.primary }]} />
-        )}
-        
-        {/* Top Right Icons Container */}
-        <View style={styles.topRightIcons}>
-          <TouchableOpacity 
-            style={styles.topIconButton}
-            onPress={handleGetDirections}
-            activeOpacity={0.7}
-          >
-            <View style={styles.iconCircle}>
-              <Ionicons name="location" size={20} color={Colors.text} />
-            </View>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.topIconButton}
-            onPress={handleSave}
-            activeOpacity={0.7}
-          >
-            <View style={styles.iconCircle}>
-              <Ionicons 
-                name={isSaved ? "bookmark" : "bookmark-outline"} 
-                size={20} 
-                color={Colors.text} 
-              />
-            </View>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.topIconButton}
-            onPress={handleShare}
-            activeOpacity={0.7}
-          >
-            <View style={styles.iconCircle}>
-              <Ionicons name="share-outline" size={20} color={Colors.text} />
-            </View>
-          </TouchableOpacity>
-        </View>
-        
-        {/* Overlay Gradient */}
-        <LinearGradient
-          colors={['transparent', 'rgba(10,10,10,0.7)', Colors.background]}
-          style={styles.coverGradient}
-        />
-      </View>
-      
-      {/* Profile Info */}
-      <View style={styles.profileInfo}>
-        <View style={styles.profileImageContainer}>
-          {renderProfileImage(header)}
-        </View>
-        
-        <Text style={styles.businessName}>{header.name}</Text>
-        
-        {/* Rating and Reviews */}
-        <View style={styles.ratingContainer}>
-          <View style={styles.starsContainer}>
-            {renderStars(header.rating || 0)}
-          </View>
-          <Text style={styles.ratingText}>
-            {header.rating || 0} • ({overviewData.tabs?.reviews?.count || 0} reviews)
-          </Text>
-        </View>
-        
-        {/* Location */}
-        <View style={styles.locationRow}>
-          <Ionicons name="location" size={16} color={Colors.textSecondary} />
-          <Text style={styles.locationText}>{header.location}</Text>
-        </View>
-        
-        {/* Status */}
-        <View style={styles.statusBadge}>
-          <View style={[
-            styles.statusDot, 
-            { backgroundColor: header.status?.isOpen ? Colors.success : Colors.danger }
-          ]} />
-          <Text style={styles.statusText}>
-            {header.status?.display || 'Closed'}
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
-};
-
-// 🔥 NEW: Separate function to handle profile image
-const renderProfileImage = (header) => {
-  const imageUrl = header.profileImage || header.image || header.avatar || header.logo;
-  
-  console.log('Profile Image Debug:', {
-    url: imageUrl,
-    exists: !!imageUrl,
-    type: typeof imageUrl
-  });
-  
-  if (imageUrl) {
-    return (
-      <Image 
-        source={{ uri: imageUrl }}
-        style={styles.profileImage}
-        resizeMode="cover"
-        onError={(e) => {
-          console.log('Profile image loading error:', {
-            error: e.nativeEvent.error,
-            url: imageUrl,
-            headers: e.nativeEvent.responseHeaders
-          });
-        }}
-        onLoadStart={() => console.log('Profile image loading started...')}
-        onLoad={() => console.log('Profile image loaded successfully!')}
-        onLoadEnd={() => console.log('Profile image load ended')}
-      />
-    );
-  }
-  
-  // Fallback icon
-  return (
-    <View style={[styles.profileImage, { 
-      backgroundColor: Colors.card, 
-      justifyContent: 'center', 
-      alignItems: 'center' 
-    }]}>
-      <Ionicons name="business" size={40} color={Colors.textSecondary} />
-    </View>
-  );
-};
-
-  const renderActionButtons = () => {
-    if (!overviewData?.actions) return null;
+  const renderHeader = () => {
+    if (!overviewData?.header) return null;
     
-    const { primary } = overviewData.actions;
+    const header = overviewData.header;
     
     return (
-      <View style={styles.actionButtonsContainer}>
-        {/* Primary Actions */}
-        <View style={styles.primaryActions}>
-          {primary.map((action, index) => {
-            if (!action.enabled) return null;
+      <View>
+        <View style={styles.coverImageContainer}>
+          {header.coverImage ? (
+            <Image 
+              source={{ uri: header.coverImage }}
+              style={styles.coverImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.coverImage, { backgroundColor: Colors.primary }]} />
+          )}
+          
+          <View style={styles.topRightIcons}>
+            <TouchableOpacity 
+              style={styles.topIconButton}
+              onPress={handleGetDirections}
+              activeOpacity={0.7}
+            >
+              <View style={styles.iconCircle}>
+                <Ionicons name="location" size={20} color={Colors.text} />
+              </View>
+            </TouchableOpacity>
             
-            let buttonStyle = styles.actionButton;
-            let onPress = () => {};
-            
-            switch (action.type) {
-              case 'book_now':
-                buttonStyle = [styles.actionButton, styles.bookButton];
-                onPress = () => handleBookNow();
-                break;
-              case 'chat':
-                buttonStyle = [styles.actionButton, styles.chatButton];
-                onPress = handleChat;
-                break;
-              case 'call':
-                buttonStyle = [styles.actionButton, styles.callButton];
-                onPress = handleCall;
-                break;
-              default:
-                return null;
-            }
-            
-            return (
-              <TouchableOpacity 
-                key={index}
-                style={buttonStyle}
-                onPress={onPress}
-                activeOpacity={0.8}
-              >
+            <TouchableOpacity 
+              style={styles.topIconButton}
+              onPress={handleSave}
+              activeOpacity={0.7}
+            >
+              <View style={styles.iconCircle}>
                 <Ionicons 
-                  name={
-                    action.type === 'book_now' ? 'calendar' :
-                    action.type === 'chat' ? 'chatbubble' :
-                    'call'
-                  } 
+                  name={isSaved ? "bookmark" : "bookmark-outline"} 
                   size={20} 
                   color={Colors.text} 
                 />
-                <Text style={styles.actionButtonText}>{action.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.topIconButton}
+              onPress={handleShare}
+              activeOpacity={0.7}
+            >
+              <View style={styles.iconCircle}>
+                <Ionicons name="share-outline" size={20} color={Colors.text} />
+              </View>
+            </TouchableOpacity>
+          </View>
+          
+          <LinearGradient
+            colors={['transparent', 'rgba(10,10,10,0.7)', Colors.background]}
+            style={styles.coverGradient}
+          />
+        </View>
+        
+        <View style={styles.profileInfo}>
+          <View style={styles.profileImageContainer}>
+            {renderProfileImage(header)}
+          </View>
+          
+          <Text style={styles.businessName}>{header.name}</Text>
+          
+          <View style={styles.ratingContainer}>
+            <View style={styles.starsContainer}>
+              {renderStars(header.rating || 0)}
+            </View>
+            <Text style={styles.ratingText}>
+              {header.rating || 0} • ({overviewData.tabs?.reviews?.count || 0} reviews)
+            </Text>
+          </View>
+          
+          <View style={styles.locationRow}>
+            <Ionicons name="location" size={16} color={Colors.textSecondary} />
+            <Text style={styles.locationText}>{header.location}</Text>
+          </View>
+          
+          <View style={styles.statusBadge}>
+            <View style={[
+              styles.statusDot, 
+              { backgroundColor: header.status?.isOpen ? Colors.success : Colors.danger }
+            ]} />
+            <Text style={styles.statusText}>
+              {header.status?.display || 'Closed'}
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderProfileImage = (header) => {
+    const imageUrl = header.profileImage || header.image || header.avatar || header.logo;
+    
+    if (imageUrl) {
+      return (
+        <Image 
+          source={{ uri: imageUrl }}
+          style={styles.profileImage}
+          resizeMode="cover"
+        />
+      );
+    }
+    
+    return (
+      <View style={[styles.profileImage, { 
+        backgroundColor: Colors.card, 
+        justifyContent: 'center', 
+        alignItems: 'center' 
+      }]}>
+        <Ionicons name="business" size={40} color={Colors.textSecondary} />
+      </View>
+    );
+  };
+
+  const renderActionButtons = () => {
+    return (
+      <View style={styles.actionButtonsContainer}>
+        <View style={styles.primaryActions}>
+          {/* Chat Button */}
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.chatButton]}
+            onPress={handleChat}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="chatbubble" size={20} color={Colors.text} />
+            <Text style={styles.actionButtonText}>Chat</Text>
+          </TouchableOpacity>
+          
+          {/* Info Button */}
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.infoButton]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setActiveTab('info');
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="information-circle" size={20} color={Colors.text} />
+            <Text style={styles.actionButtonText}>Info</Text>
+          </TouchableOpacity>
+          
+          {/* Call Button */}
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.callButton]}
+            onPress={handleCall}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="call" size={20} color={Colors.text} />
+            <Text style={styles.actionButtonText}>Call</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
   };
 
   const renderTabs = () => {
-    if (!overviewData?.tabs) return null;
+    // Include all tabs: services, products, reviews, info
+    const tabs = ['services', 'products', 'reviews', 'info'];
     
     return (
       <View style={styles.tabsContainer}>
@@ -600,7 +618,7 @@ const renderProfileImage = (header) => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.tabsScrollContent}
         >
-          {['services', 'products', 'reviews', 'info'].map((tab) => {
+          {tabs.map((tab) => {
             const count = overviewData?.tabs?.[tab]?.count || 0;
             
             return (
@@ -635,19 +653,22 @@ const renderProfileImage = (header) => {
         return (
           <ServicesTab 
             servicesData={servicesData}
-            handleBookNow={handleBookNow}
-            overviewData={overviewData}
+            loading={loading}
+            providerId={providerId}
+            providerName={overviewData?.header?.name || ''}
+            onInitiateChat={handleInitiateChat}
           />
         );
       case 'products':
-        return (
-          <ProductsTab 
-            productsData={productsData}
-            addToCart={addToCart}
-            cart={cart}
-            overviewData={overviewData}
-          />
-        );
+  return (
+    <ProductsTab 
+      productsData={productsData}
+      addToCart={addToCart}
+      cart={cart}
+      overviewData={overviewData}
+      navigation={navigation} // ADD THIS
+    />
+  );
       case 'reviews':
         return (
           <ReviewsTab 
@@ -671,8 +692,10 @@ const renderProfileImage = (header) => {
         return (
           <ServicesTab 
             servicesData={servicesData}
-            handleBookNow={handleBookNow}
-            overviewData={overviewData}
+            loading={loading}
+            providerId={providerId}
+            providerName={overviewData?.header?.name || ''}
+            onInitiateChat={handleInitiateChat}
           />
         );
     }
@@ -769,7 +792,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   
-  // Header styles (same as before)...
+  // Header styles
   coverImageContainer: {
     position: 'relative',
   },
@@ -890,11 +913,11 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     gap: Spacing.sm,
   },
-  bookButton: {
-    backgroundColor: Colors.primary,
-  },
   chatButton: {
-    backgroundColor: '#25D366',
+    backgroundColor: '#25D366', // WhatsApp green
+  },
+  infoButton: {
+    backgroundColor: Colors.secondary,
   },
   callButton: {
     backgroundColor: Colors.success,
