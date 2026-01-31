@@ -35,19 +35,13 @@ const ProviderProfile = ({ route, navigation }) => {
   const { providerId } = route.params;
   const { currentUser, logout, token } = useAuth();
   
-  // State for API data
+  // State for overview data only
   const [overviewData, setOverviewData] = useState(null);
-  const [servicesData, setServicesData] = useState([]);
-  const [productsData, setProductsData] = useState([]);
-  const [reviewsData, setReviewsData] = useState([]);
-  const [infoData, setInfoData] = useState(null);
-  
   const [activeTab, setActiveTab] = useState('services');
   const [isSaved, setIsSaved] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [cart, setCart] = useState([]);
   const [sessionExpired, setSessionExpired] = useState(false);
   
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -89,171 +83,63 @@ const ProviderProfile = ({ route, navigation }) => {
     return customMessage;
   };
 
- const fetchOverview = useCallback(async () => {
-  try {
-    console.log('Fetching overview for providerId:', providerId);
-    setLoading(true);
-    setSessionExpired(false);
-    setError(null);
-    
-    const response = await axios.get(
-      `/api/services/providers/${providerId}/dashboard/overview`,
-      {
-        timeout: 10000,
-        headers: {
-          'Authorization': `Bearer ${token}`,
+  const fetchOverview = useCallback(async () => {
+    try {
+      console.log('Fetching overview for providerId:', providerId);
+      setLoading(true);
+      setSessionExpired(false);
+      setError(null);
+      
+      const response = await axios.get(
+        `/api/services/providers/${providerId}/dashboard/overview`,
+        {
+          timeout: 10000,
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          }
         }
-      }
-    );
-    
-    console.log('Overview API response received:', {
-      hasData: !!response.data,
-      metadata: response.data?.metadata,
-      providerUserId: response.data?.metadata?.providerUserId
-    });
-    
-    setOverviewData(response.data);
-  } catch (error) {
-    console.error('Error fetching overview:', error);
-    const errorType = handleApiError(error, 'Failed to load provider information');
-    
-    if (errorType === 'session_expired') {
-      setError('Your session has expired. Please login again.');
-      setTimeout(() => {
-        Alert.alert(
-          'Session Expired',
-          'Your session has expired. Please login again to continue.',
-          [
-            {
-              text: 'Login',
-              onPress: () => {
-                logout();
-                navigation.replace('Login');
+      );
+      
+      console.log('Overview API response received:', {
+        hasData: !!response.data,
+        metadata: response.data?.metadata,
+        providerUserId: response.data?.metadata?.providerUserId
+      });
+      
+      setOverviewData(response.data);
+      setError(null);
+    } catch (error) {
+      console.error('Error fetching overview:', error);
+      const errorType = handleApiError(error, 'Failed to load provider information');
+      
+      if (errorType === 'session_expired') {
+        setError('Your session has expired. Please login again.');
+        setTimeout(() => {
+          Alert.alert(
+            'Session Expired',
+            'Your session has expired. Please login again to continue.',
+            [
+              {
+                text: 'Login',
+                onPress: () => {
+                  logout();
+                  navigation.replace('Login');
+                }
+              },
+              {
+                text: 'Cancel',
+                style: 'cancel'
               }
-            },
-            {
-              text: 'Cancel',
-              style: 'cancel'
-            }
-          ]
-        );
-      }, 1000);
-    } else {
-      setError(errorType);
+            ]
+          );
+        }, 1000);
+      } else {
+        setError(errorType);
+      }
+    } finally {
+      setLoading(false);
     }
-  } finally {
-    setLoading(false);
-  }
-}, [providerId, logout, navigation, token]);
-  const fetchServices = async () => {
-    try {
-      const response = await axios.get(
-        `/api/services/providers/${providerId}/dashboard/services`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          }
-        }
-      );
-      
-      const transformedServices = response.data.services?.map(service => ({
-        id: service._id || service.id,
-        name: service.name,
-        duration: `${service.duration} mins`,
-        price: `KES ${service.price.toLocaleString()}`,
-        description: service.description,
-        category: service.category || 'Service'
-      })) || [];
-      
-      setServicesData(transformedServices);
-    } catch (error) {
-      handleApiError(error, 'Failed to load services');
-    }
-  };
-
-  const fetchProducts = async () => {
-    try {
-      const response = await axios.get(
-        `/api/services/providers/${providerId}/dashboard/products`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          }
-        }
-      );
-      
-      const transformedProducts = response.data.products?.map(product => ({
-        id: product._id || product.id,
-        name: product.name,
-        price: `KES ${product.price.toLocaleString()}`,
-        description: product.description,
-        inStock: product.inStock,
-        stockCount: product.stock
-      })) || [];
-      
-      setProductsData(transformedProducts);
-    } catch (error) {
-      handleApiError(error, 'Failed to load products');
-    }
-  };
-
-  const fetchReviews = async () => {
-    try {
-      const response = await axios.get(
-        `/api/services/providers/${providerId}/dashboard/reviews`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          }
-        }
-      );
-      
-      const transformedReviews = response.data.reviews?.map(review => ({
-        id: review._id || review.id,
-        rating: review.rating,
-        author: review.user?.name || 'Customer',
-        date: formatTimeAgo(review.createdAt),
-        comment: review.comment,
-        verified: review.verified || false,
-        service: review.service?.name
-      })) || [];
-      
-      setReviewsData(transformedReviews);
-    } catch (error) {
-      handleApiError(error, 'Failed to load reviews');
-    }
-  };
-
-  const fetchInfo = async () => {
-    try {
-      const response = await axios.get(
-        `/api/services/providers/${providerId}/dashboard/info`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          }
-        }
-      );
-      
-      setInfoData(response.data);
-    } catch (error) {
-      handleApiError(error, 'Failed to load provider info');
-    }
-  };
-
-  useEffect(() => {
-    if (!overviewData) return;
-    
-    if (activeTab === 'services' && servicesData.length === 0) {
-      fetchServices();
-    } else if (activeTab === 'products' && productsData.length === 0) {
-      fetchProducts();
-    } else if (activeTab === 'reviews' && reviewsData.length === 0) {
-      fetchReviews();
-    } else if (activeTab === 'info' && !infoData) {
-      fetchInfo();
-    }
-  }, [activeTab, overviewData]);
+  }, [providerId, logout, navigation, token]);
 
   useEffect(() => {
     fetchOverview();
@@ -263,53 +149,27 @@ const ProviderProfile = ({ route, navigation }) => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await fetchOverview();
-    
-    if (activeTab === 'services') {
-      await fetchServices();
-    } else if (activeTab === 'products') {
-      await fetchProducts();
-    } else if (activeTab === 'reviews') {
-      await fetchReviews();
-    } else if (activeTab === 'info') {
-      await fetchInfo();
-    }
-    
     setRefreshing(false);
   };
 
-const handleInitiateChat = async (bookingDetails = null) => {
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  
-  try {
-    const providerUserId = overviewData?.metadata?.providerUserId;
-    
-    if (!providerUserId) {
-      Alert.alert('Error', 'Could not start chat. Provider information is incomplete.');
-      return;
-    }
-    
-    let chatTypeToUse = 'business';
-    let response;
+  const handleInitiateChat = async (bookingDetails = null) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
     try {
-      response = await axios.post('/api/messages/conversations', {
-        participantId: providerUserId,
-        chatType: 'business',
-        context: bookingDetails ? 'service_booking' : 'general_inquiry',
-        bookingDetails: bookingDetails
-      }, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        }
-      });
-    } catch (error) {
-      if (error.response?.status === 400 && error.response?.data?.message?.includes('Invalid chat type')) {
-        console.log('"business" chat type rejected, falling back to "normal"');
-        chatTypeToUse = 'normal';
-        
+      const providerUserId = overviewData?.metadata?.providerUserId;
+      
+      if (!providerUserId) {
+        Alert.alert('Error', 'Could not start chat. Provider information is incomplete.');
+        return;
+      }
+      
+      let chatTypeToUse = 'business';
+      let response;
+      
+      try {
         response = await axios.post('/api/messages/conversations', {
           participantId: providerUserId,
-          chatType: 'normal',
+          chatType: 'business',
           context: bookingDetails ? 'service_booking' : 'general_inquiry',
           bookingDetails: bookingDetails
         }, {
@@ -317,47 +177,61 @@ const handleInitiateChat = async (bookingDetails = null) => {
             'Authorization': `Bearer ${token}`,
           }
         });
-      } else {
-        throw error;
+      } catch (error) {
+        if (error.response?.status === 400 && error.response?.data?.message?.includes('Invalid chat type')) {
+          console.log('"business" chat type rejected, falling back to "normal"');
+          chatTypeToUse = 'normal';
+          
+          response = await axios.post('/api/messages/conversations', {
+            participantId: providerUserId,
+            chatType: 'normal',
+            context: bookingDetails ? 'service_booking' : 'general_inquiry',
+            bookingDetails: bookingDetails
+          }, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            }
+          });
+        } else {
+          throw error;
+        }
       }
-    }
 
-    const convo = response.data;
-    
-    // FIX: Make otherUser match NewChatScreen's structure exactly
-    const chatParams = {
-      conversationId: convo._id,
-      conversation: convo,
-      otherUser: {
-        _id: providerUserId,
-        username: overviewData?.header?.name || 'Provider', // NewChatScreen uses 'username'
-        email: '', // NewChatScreen sends email
-        name: overviewData?.header?.name || 'Provider',
-        // Add any other fields NewChatScreen sends
-      },
-      chatType: convo.chatType || chatTypeToUse
-    };
-    
-    if (bookingDetails) {
-      chatParams.initialMessage = 
-        `Hi! I'd like to book ${bookingDetails.serviceName} for ${bookingDetails.selectedDate} at ${bookingDetails.selectedTime}. Price: ${bookingDetails.servicePrice}. Duration: ${bookingDetails.serviceDuration}. ${bookingDetails.notes ? `Notes: ${bookingDetails.notes}` : ''}`;
+      const convo = response.data;
+      
+      const chatParams = {
+        conversationId: convo._id,
+        conversation: convo,
+        otherUser: {
+          _id: providerUserId,
+          username: overviewData?.header?.name || 'Provider',
+          email: '',
+          name: overviewData?.header?.name || 'Provider',
+        },
+        chatType: convo.chatType || chatTypeToUse
+      };
+      
+      if (bookingDetails) {
+        chatParams.initialMessage = 
+          `Hi! I'd like to book ${bookingDetails.serviceName} for ${bookingDetails.selectedDate} at ${bookingDetails.selectedTime}. Price: ${bookingDetails.servicePrice}. Duration: ${bookingDetails.serviceDuration}. ${bookingDetails.notes ? `Notes: ${bookingDetails.notes}` : ''}`;
+      }
+      
+      console.log('Navigating to Messages tab -> ChatScreen');
+      
+      navigation.navigate('Messages', {
+        screen: 'ChatScreen',
+        params: chatParams
+      });
+      
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+      Alert.alert('Error', 'Could not start chat. Please try again.');
     }
-    
-    console.log('Navigating to Messages tab -> ChatScreen');
-    
-    navigation.navigate('Messages', {
-      screen: 'ChatScreen',
-      params: chatParams
-    });
-    
-  } catch (error) {
-    console.error('Error creating conversation:', error);
-    Alert.alert('Error', 'Could not start chat. Please try again.');
-  }
-};
+  };
+
   const handleChat = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    handleInitiateChat(); // Creates a general inquiry chat
+    handleInitiateChat();
   };
 
   const handleCall = async () => {
@@ -396,19 +270,13 @@ const handleInitiateChat = async (bookingDetails = null) => {
 
   const handleGetDirections = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (infoData?.coordinates) {
-      const { latitude, longitude } = infoData.coordinates;
+    if (overviewData?.info?.coordinates) {
+      const { latitude, longitude } = overviewData.info.coordinates;
       const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
       Linking.openURL(url);
     } else {
       Alert.alert('Location', 'Address: ' + (overviewData?.header?.location || 'Location not available'));
     }
-  };
-
-  const addToCart = (product) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setCart([...cart, product]);
-    Alert.alert('Added to Cart', `${product.name} has been added to your cart.`);
   };
 
   const formatTimeAgo = (dateString) => {
@@ -608,7 +476,6 @@ const handleInitiateChat = async (bookingDetails = null) => {
   };
 
   const renderTabs = () => {
-    // Include all tabs: services, products, reviews, info
     const tabs = ['services', 'products', 'reviews', 'info'];
     
     return (
@@ -647,59 +514,57 @@ const handleInitiateChat = async (bookingDetails = null) => {
     );
   };
 
-  const renderTabContent = () => {
-    switch (activeTab) {
-      case 'services':
-        return (
-          <ServicesTab 
-            servicesData={servicesData}
-            loading={loading}
-            providerId={providerId}
-            providerName={overviewData?.header?.name || ''}
-            onInitiateChat={handleInitiateChat}
-          />
-        );
-      case 'products':
-  return (
-    <ProductsTab 
-      productsData={productsData}
-      addToCart={addToCart}
-      cart={cart}
-      overviewData={overviewData}
-      navigation={navigation} // ADD THIS
-    />
-  );
-      case 'reviews':
-        return (
-          <ReviewsTab 
-            reviewsData={reviewsData}
-            overviewData={overviewData}
-            renderStars={renderStars}
-            formatTimeAgo={formatTimeAgo}
-          />
-        );
-      case 'info':
-        return (
-          <InfoTab 
-            infoData={infoData}
-            overviewData={overviewData}
-            handleGetDirections={handleGetDirections}
-            handleCall={handleCall}
-            handleChat={handleChat}
-          />
-        );
-      default:
-        return (
-          <ServicesTab 
-            servicesData={servicesData}
-            loading={loading}
-            providerId={providerId}
-            providerName={overviewData?.header?.name || ''}
-            onInitiateChat={handleInitiateChat}
-          />
-        );
-    }
+// In ProviderProfile.js, update renderTabContent:
+
+const renderTabContent = () => {
+  const commonProps = {
+    providerId,
+    providerName: overviewData?.header?.name || '',
+    providerUserId: overviewData?.metadata?.providerUserId,
+    token,
+    navigation,
+    onInitiateChat: handleInitiateChat,
+    overviewData,
+    renderStars,
+    formatTimeAgo,
   };
+
+  switch (activeTab) {
+    case 'services':
+      return <ServicesTab 
+        {...commonProps}
+        // ServicesTab fetches its own data
+      />;
+    case 'products':
+      return <ProductsTab 
+        {...commonProps}
+        // ProductsTab fetches its own data
+      />;
+    // In ProviderProfile.js renderTabContent():
+case 'reviews':
+  return <ReviewsTab 
+    providerId={providerId}
+    providerName={overviewData?.header?.name || ''}
+    token={token}
+    navigation={navigation}
+    renderStars={renderStars}
+    formatTimeAgo={formatTimeAgo}
+  />;
+    case 'info':
+  return (
+    <InfoTab 
+  providerId={providerId}
+  providerName={overviewData?.header?.name || ''}
+  token={token}
+  handleGetDirections={handleGetDirections}
+  handleCall={handleCall}
+  handleChat={handleChat}
+/>
+  );
+    default:
+      return <ServicesTab {...commonProps} />;
+  }
+};
 
   if (loading) {
     return (
@@ -782,6 +647,7 @@ const handleInitiateChat = async (bookingDetails = null) => {
     </SafeAreaView>
   );
 };
+
 
 const styles = StyleSheet.create({
   safeArea: {

@@ -1,5 +1,5 @@
 // screens/localservices/components/ProductsTab.js
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,26 +10,92 @@ import {
   ScrollView,
   Alert,
   Modal,
-  TextInput
+  TextInput,
+  ActivityIndicator,
+  RefreshControl
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import axios from 'axios';
 import Theme from '../../theme/Theme';
 
 const { width } = Dimensions.get('window');
-const { Colors, Typography, Spacing, BorderRadius } = Theme;
+const { Colors, Typography, Spacing, BorderRadius, Shadows } = Theme;
 
-const ProductsTab = ({ productsData, addToCart, cart, overviewData, navigation }) => {
+const ProductsTab = ({ providerId, token, navigation, overviewData }) => {
+  // Internal state
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+  const [cart, setCart] = useState([]);
   const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loadingCheckout, setLoadingCheckout] = useState(false);
+  
+  // Cart reference for callbacks
+  const cartRef = useRef([]);
+  cartRef.current = cart;
+
+  const fetchProducts = useCallback(async () => {
+    try {
+      setError(null);
+      
+      const response = await axios.get(
+        `/api/services/providers/${providerId}/dashboard/products`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          timeout: 10000
+        }
+      );
+      
+      const transformedProducts = response.data.products?.map(product => ({
+        id: product._id || product.id,
+        _id: product._id || product.id,
+        name: product.name,
+        price: product.price,
+        currency: product.currency || 'KES',
+        description: product.description,
+        inStock: product.inStock,
+        stock: product.stock || product.stockCount || 0,
+        image: product.image
+      })) || [];
+      
+      setProducts(transformedProducts);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      setError('Failed to load products. Please try again.');
+      
+      if (error.response?.status === 401) {
+        Alert.alert(
+          'Session Expired',
+          'Your session has expired. Please login again.',
+          [{ text: 'OK' }]
+        );
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [providerId, token]);
+
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    fetchProducts();
+  };
 
   // Calculate total cart price
   const getCartTotal = () => {
     return cart.reduce((total, item) => {
-      // Extract price number from string like "KES 1,500"
-      const priceStr = item.price ? item.price.replace(/[^0-9]/g, '') : '0';
-      return total + (parseInt(priceStr) || 0);
+      const price = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
+      return total + price;
     }, 0);
   };
 
@@ -49,18 +115,22 @@ const ProductsTab = ({ productsData, addToCart, cart, overviewData, navigation }
       return;
     }
     
-    addToCart(product);
+    setCart([...cart, product]);
+    Alert.alert('Added to Cart', `${product.name} has been added to your cart.`);
   };
 
   const handleRemoveFromCart = (productId) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const updatedCart = cart.filter(item => item.id !== productId && item._id !== productId);
-    // You need to pass a removeFromCart function from parent or manage state here
-    // For now, just show alert
-    Alert.alert('Remove Item', 'This would remove the item from cart. Add removeFromCart prop.');
+    setCart(updatedCart);
   };
 
   const handleViewCart = () => {
+    if (cart.length === 0) {
+      Alert.alert('Cart Empty', 'Your cart is empty. Add some products first.');
+      return;
+    }
+    
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setCheckoutModalVisible(true);
   };
@@ -82,8 +152,7 @@ const ProductsTab = ({ productsData, addToCart, cart, overviewData, navigation }
     setLoadingCheckout(true);
 
     try {
-      // Here you would make API call to submit order
-      // For now, simulate API call
+      // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       Alert.alert(
@@ -93,8 +162,7 @@ const ProductsTab = ({ productsData, addToCart, cart, overviewData, navigation }
           {
             text: 'OK',
             onPress: () => {
-              // Clear cart and close modal
-              // You need to pass clearCart function from parent
+              setCart([]);
               setCheckoutModalVisible(false);
               setPhoneNumber('');
               Alert.alert('Success', 'Thank you for your order!');
@@ -109,6 +177,54 @@ const ProductsTab = ({ productsData, addToCart, cart, overviewData, navigation }
     }
   };
 
+  // Skeleton Loading Component
+  const renderSkeleton = () => (
+    <View style={styles.skeletonContainer}>
+      {/* Cart Summary Skeleton */}
+      <View style={styles.skeletonCartSummary} />
+      
+      {/* Product Grid Skeleton */}
+      <View style={styles.skeletonProductsGrid}>
+        {[1, 2, 3, 4].map((i) => (
+          <View key={i} style={styles.skeletonProductCard}>
+            <View style={styles.skeletonProductImage} />
+            <View style={styles.skeletonProductInfo}>
+              <View style={styles.skeletonProductTitle} />
+              <View style={styles.skeletonProductDescription} />
+              <View style={styles.skeletonProductFooter}>
+                <View style={styles.skeletonProductPrice} />
+                <View style={styles.skeletonAddButton} />
+              </View>
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+
+  // Error Component
+  const renderError = () => (
+    <View style={styles.errorContainer}>
+      <ScrollView
+        contentContainerStyle={styles.errorScrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Colors.primary}
+            colors={[Colors.primary]}
+          />
+        }
+      >
+        <Ionicons name="alert-circle" size={48} color={Colors.danger} />
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchProducts}>
+          <Text style={styles.retryButtonText}>Try Again</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </View>
+  );
+
   const renderCartModal = () => (
     <Modal
       animationType="slide"
@@ -116,9 +232,9 @@ const ProductsTab = ({ productsData, addToCart, cart, overviewData, navigation }
       visible={checkoutModalVisible}
       onRequestClose={() => setCheckoutModalVisible(false)}
     >
+      {/* Modal content - SAME AS YOUR ORIGINAL */}
       <View style={styles.modalOverlay}>
         <View style={styles.modalContainer}>
-          {/* Modal Header */}
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Your Cart</Text>
             <TouchableOpacity 
@@ -129,7 +245,6 @@ const ProductsTab = ({ productsData, addToCart, cart, overviewData, navigation }
             </TouchableOpacity>
           </View>
 
-          {/* Cart Items */}
           <ScrollView style={styles.cartItemsContainer} showsVerticalScrollIndicator={false}>
             {cart.length === 0 ? (
               <View style={styles.emptyCart}>
@@ -153,7 +268,9 @@ const ProductsTab = ({ productsData, addToCart, cart, overviewData, navigation }
                       <Text style={styles.cartItemName} numberOfLines={1}>
                         {item.name}
                       </Text>
-                      <Text style={styles.cartItemPrice}>{item.price}</Text>
+                      <Text style={styles.cartItemPrice}>
+                        {item.currency || 'KES'} {typeof item.price === 'number' ? item.price.toLocaleString() : item.price}
+                      </Text>
                     </View>
                     
                     <TouchableOpacity 
@@ -165,7 +282,6 @@ const ProductsTab = ({ productsData, addToCart, cart, overviewData, navigation }
                   </View>
                 ))}
                 
-                {/* Phone Input */}
                 <View style={styles.phoneInputContainer}>
                   <Text style={styles.phoneLabel}>Your Phone Number *</Text>
                   <View style={styles.phoneInputWrapper}>
@@ -188,7 +304,6 @@ const ProductsTab = ({ productsData, addToCart, cart, overviewData, navigation }
             )}
           </ScrollView>
 
-          {/* Cart Footer */}
           {cart.length > 0 && (
             <View style={styles.cartFooter}>
               <View style={styles.cartTotalRow}>
@@ -207,7 +322,7 @@ const ProductsTab = ({ productsData, addToCart, cart, overviewData, navigation }
                 disabled={loadingCheckout}
               >
                 {loadingCheckout ? (
-                  <Text style={styles.checkoutButtonText}>Processing...</Text>
+                  <ActivityIndicator size="small" color={Colors.text} />
                 ) : (
                   <>
                     <Ionicons name="send" size={20} color={Colors.text} />
@@ -221,6 +336,14 @@ const ProductsTab = ({ productsData, addToCart, cart, overviewData, navigation }
       </View>
     </Modal>
   );
+
+  if (loading) {
+    return renderSkeleton();
+  }
+
+  if (error) {
+    return renderError();
+  }
 
   return (
     <View style={styles.container}>
@@ -244,7 +367,18 @@ const ProductsTab = ({ productsData, addToCart, cart, overviewData, navigation }
         </View>
       )}
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Colors.primary}
+            colors={[Colors.primary]}
+          />
+        }
+      >
         <View style={styles.tabContent}>
           <View style={styles.productsHeader}>
             <View>
@@ -253,7 +387,7 @@ const ProductsTab = ({ productsData, addToCart, cart, overviewData, navigation }
             </View>
           </View>
           
-          {productsData.length === 0 ? (
+          {products.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="cube-outline" size={48} color={Colors.textSecondary} />
               <Text style={styles.emptyStateText}>No products available</Text>
@@ -261,7 +395,7 @@ const ProductsTab = ({ productsData, addToCart, cart, overviewData, navigation }
             </View>
           ) : (
             <View style={styles.productsGrid}>
-              {productsData.map((product) => {
+              {products.map((product) => {
                 const isInStock = product.stock > 0;
                 
                 return (
@@ -294,7 +428,7 @@ const ProductsTab = ({ productsData, addToCart, cart, overviewData, navigation }
                       
                       <View style={styles.productFooter}>
                         <Text style={styles.productPrice}>
-                          {product.currency || 'KES'} {product.price?.toLocaleString?.() || product.price}
+                          {product.currency || 'KES'} {typeof product.price === 'number' ? product.price.toLocaleString() : product.price}
                         </Text>
                         
                         {/* Availability Badge */}
@@ -356,7 +490,7 @@ const ProductsTab = ({ productsData, addToCart, cart, overviewData, navigation }
             </View>
           )}
           
-          {productsData.length > 0 && (
+          {products.length > 0 && (
             <View style={styles.shoppingNote}>
               <Ionicons name="information-circle" size={16} color={Colors.textSecondary} />
               <Text style={styles.shoppingNoteText}>
@@ -373,7 +507,123 @@ const ProductsTab = ({ productsData, addToCart, cart, overviewData, navigation }
   );
 };
 
+// Add these skeleton styles to your existing styles
 const styles = StyleSheet.create({
+  // Skeleton Styles
+  skeletonContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    padding: Spacing.lg,
+  },
+  skeletonCartSummary: {
+    height: 50,
+    backgroundColor: Colors.card + '80',
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.lg,
+  },
+  skeletonProductsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.md,
+  },
+  skeletonProductCard: {
+    width: (width - Spacing.lg * 2 - Spacing.md) / 2,
+    backgroundColor: Colors.card + '80',
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+  },
+  skeletonProductImage: {
+    width: '100%',
+    height: 100,
+    backgroundColor: Colors.card + '60',
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.sm,
+  },
+  skeletonProductInfo: {
+    gap: Spacing.sm,
+  },
+  skeletonProductTitle: {
+    width: '70%',
+    height: 16,
+    backgroundColor: Colors.card + '60',
+    borderRadius: BorderRadius.sm,
+  },
+  skeletonProductDescription: {
+    width: '90%',
+    height: 12,
+    backgroundColor: Colors.card + '60',
+    borderRadius: BorderRadius.sm,
+  },
+  skeletonProductFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: Spacing.sm,
+  },
+  skeletonProductPrice: {
+    width: 60,
+    height: 16,
+    backgroundColor: Colors.card + '60',
+    borderRadius: BorderRadius.sm,
+  },
+  skeletonAddButton: {
+    width: 80,
+    height: 30,
+    backgroundColor: Colors.card + '60',
+    borderRadius: BorderRadius.sm,
+  },
+  // Error Styles
+  errorContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  errorScrollContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.lg,
+    minHeight: 300,
+  },
+  errorText: {
+    marginTop: Spacing.md,
+    ...Typography.body,
+    color: Colors.danger,
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: Spacing.md,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+  },
+  retryButtonText: {
+    ...Typography.button,
+    color: Colors.text,
+  },
+  // Keep all your original styles below (exactly as in your ProductsTab.js)
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  cartSummary: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.cardBorder,
+  },
+
+
+
   container: {
     flex: 1,
     backgroundColor: Colors.background,
