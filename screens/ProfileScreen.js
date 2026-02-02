@@ -41,7 +41,7 @@ const ProfileScreen = () => {
     );
   };
 
-  const rolesWithDashboard = ['vendor', 'shopowner'];
+ const rolesWithDashboard = ['vendor', 'shopowner', 'SERVICE_PROVIDER'];
   const showDashboardCard = currentUser && rolesWithDashboard.includes(currentUser.role);
 
   const getDashboardInfo = (role) => {
@@ -60,6 +60,14 @@ const ProfileScreen = () => {
           icon: '🏪',
           route: 'Eshop'
         };
+       // Keep your ProfileScreen.js exactly as it is:
+case 'SERVICE_PROVIDER':
+  return {
+    title: 'SERVICE PROVIDER',
+    subtitle: 'Manage Shop & Services',
+    icon: '🔧',
+    route: 'ServiceProviderDashboard' // This will now work!
+  };
       default:
         return null;
     }
@@ -70,6 +78,7 @@ const ProfileScreen = () => {
       case 'vendor': return '#9c27b0';
       case 'shopowner': return '#4caf50';
       default: return '#6c7ce7';
+      case 'SERVICE_PROVIDER': return '#2196f3';
     }
   };
 

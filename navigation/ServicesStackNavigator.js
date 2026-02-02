@@ -7,6 +7,7 @@ import LocalServices from '../screens/LocalServices';
 import CategoryProviders from '../screens/CategoryProviders';
 import EmergencyServices from '../screens/EmergencyServices';
 import ProviderProfile from '../screens/localservices/ProviderProfile';
+import ServiceProviderDashboard from '../screens/localservices/dashboard/ServiceProviderDashboard'; // ADD THIS
 
 const Stack = createStackNavigator();
 
@@ -43,6 +44,12 @@ const ServicesStackNavigator = () => {
       <Stack.Screen 
         name="ProviderProfile" 
         component={ProviderProfile}
+      />
+      
+      {/* ADD THIS SCREEN */}
+      <Stack.Screen 
+        name="ServiceProviderDashboard" 
+        component={ServiceProviderDashboard}
       />
     </Stack.Navigator>
   );

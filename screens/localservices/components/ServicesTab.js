@@ -1,4 +1,3 @@
-// screens/localservices/components/ServicesTab.js
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -9,12 +8,20 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
-  Dimensions
+  Dimensions,
+  Modal,
+  TextInput,
+  SafeAreaView,
+  Platform,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import axios from 'axios';
 import Theme from '../../theme/Theme';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const { width } = Dimensions.get('window');
 const { Colors, Typography, Spacing, BorderRadius, Shadows } = Theme;
@@ -30,6 +37,24 @@ const ServicesTab = ({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  
+  // Booking Modal State
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [selectedService, setSelectedService] = useState(null);
+  const [bookingDate, setBookingDate] = useState(new Date());
+  const [bookingTime, setBookingTime] = useState('14:30');
+  const [bookingNotes, setBookingNotes] = useState('');
+  const [numberOfPeople, setNumberOfPeople] = useState('1');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [isBooking, setIsBooking] = useState(false);
+  
+  // Inquiry Modal State
+  const [showInquiryModal, setShowInquiryModal] = useState(false);
+  const [inquiryType, setInquiryType] = useState(''); // 'service' or 'product'
+  const [inquiryMessage, setInquiryMessage] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [isSubmittingInquiry, setIsSubmittingInquiry] = useState(false);
 
   const fetchServices = useCallback(async () => {
     try {
@@ -50,9 +75,9 @@ const ServicesTab = ({
         name: service.name,
         duration: `${service.duration} mins`,
         price: `KES ${service.price?.toLocaleString?.() || service.price}`,
+        rawPrice: service.price,
         description: service.description,
         category: service.category || 'Service',
-        image: service.image
       })) || [];
       
       setServices(transformedServices);
@@ -85,26 +110,145 @@ const ServicesTab = ({
 
   const handleBookService = (service) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
-    // Navigate to booking screen
-    navigation.navigate('Booking', {
-      serviceId: service.id,
-      providerId,
-      providerName,
-    });
+    setSelectedService(service);
+    setBookingNotes('');
+    setNumberOfPeople('1');
+    setShowBookingModal(true);
   };
 
-  const handleQuickBook = (service) => {
+  const handleConfirmBooking = async () => {
+    if (!selectedService) return;
+    
+    try {
+      setIsBooking(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      
+      const formattedDate = bookingDate.toISOString().split('T')[0];
+      
+      const response = await axios.post('/api/services/bookings', {
+        providerId,
+        serviceId: selectedService.id,
+        date: formattedDate,
+        time: bookingTime,
+        notes: bookingNotes,
+        numberOfPeople: parseInt(numberOfPeople) || 1
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
+      });
+
+      if (response.data.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert(
+          'Booking Successful!',
+          `Your booking for ${selectedService.name} has been created. Booking ID: ${response.data.data.bookingReference}`,
+          [{ 
+            text: 'OK', 
+            onPress: () => {
+              setShowBookingModal(false);
+              // Navigate to bookings screen or refresh
+            }
+          }]
+        );
+      }
+    } catch (error) {
+      console.error('Booking error:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      
+      Alert.alert(
+        'Booking Failed',
+        error.response?.data?.message || 'Failed to create booking. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsBooking(false);
+    }
+  };
+
+  const handleInquiry = (service, type = 'service') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedService(service);
+    setInquiryType(type);
+    setInquiryMessage('');
+    setContactPhone('');
+    setShowInquiryModal(true);
+  };
+
+  const handleSubmitInquiry = async () => {
+    if (!inquiryMessage.trim()) {
+      Alert.alert('Error', 'Please enter your message');
+      return;
+    }
     
-    const bookingDetails = {
-      serviceId: service.id,
-      serviceName: service.name,
-      servicePrice: service.price,
-      serviceDuration: service.duration,
-    };
-    
-    onInitiateChat(bookingDetails);
+    if (!contactPhone.trim()) {
+      Alert.alert('Error', 'Please enter your contact phone number');
+      return;
+    }
+
+    try {
+      setIsSubmittingInquiry(true);
+      
+      const endpoint = inquiryType === 'service' 
+        ? '/api/services/questions/service'
+        : '/api/services/questions/product';
+      
+      const payload = {
+        providerId,
+        message: inquiryMessage,
+        customerPhone: contactPhone,
+        contactMethod: 'whatsapp'
+      };
+      
+      if (inquiryType === 'service') {
+        payload.serviceId = selectedService.id;
+      } else {
+        // For product inquiries, you'd need productId
+        Alert.alert('Info', 'Product inquiry requires product ID');
+        return;
+      }
+      
+      const response = await axios.post(endpoint, payload, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.data.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert(
+          'Message Sent!',
+          'Your inquiry has been sent to the provider.',
+          [{ 
+            text: 'OK', 
+            onPress: () => setShowInquiryModal(false)
+          }]
+        );
+      }
+    } catch (error) {
+      console.error('Inquiry error:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      
+      Alert.alert(
+        'Failed to Send',
+        error.response?.data?.message || 'Please try again later.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsSubmittingInquiry(false);
+    }
+  };
+
+  const formatDate = (date) => {
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
   };
 
   // Skeleton Loading Component
@@ -112,7 +256,6 @@ const ServicesTab = ({
     <View style={styles.skeletonContainer}>
       {[1, 2, 3].map((i) => (
         <View key={i} style={styles.skeletonCard}>
-          <View style={styles.skeletonImage} />
           <View style={styles.skeletonContent}>
             <View style={styles.skeletonTitle} />
             <View style={styles.skeletonDescription} />
@@ -124,6 +267,250 @@ const ServicesTab = ({
         </View>
       ))}
     </View>
+  );
+
+  // Booking Modal
+  const renderBookingModal = () => (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={showBookingModal}
+      onRequestClose={() => setShowBookingModal(false)}
+    >
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalContainer}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Book Service</Text>
+                <TouchableOpacity 
+                  onPress={() => setShowBookingModal(false)}
+                  style={styles.closeButton}
+                >
+                  <Ionicons name="close" size={24} color={Colors.text} />
+                </TouchableOpacity>
+              </View>
+              
+              {selectedService && (
+                <View style={styles.serviceSummary}>
+                  <Text style={styles.serviceName}>{selectedService.name}</Text>
+                  <Text style={styles.servicePrice}>KES {selectedService.rawPrice?.toLocaleString()}</Text>
+                  <Text style={styles.serviceDuration}>{selectedService.duration}</Text>
+                </View>
+              )}
+              
+              <ScrollView style={styles.bookingForm}>
+                {/* Date Picker */}
+                <TouchableOpacity 
+                  style={styles.inputField}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Ionicons name="calendar" size={20} color={Colors.textSecondary} />
+                  <Text style={styles.inputText}>
+                    {formatDate(bookingDate)}
+                  </Text>
+                </TouchableOpacity>
+                
+                {/* Time Picker */}
+                <TouchableOpacity 
+                  style={styles.inputField}
+                  onPress={() => setShowTimePicker(true)}
+                >
+                  <Ionicons name="time" size={20} color={Colors.textSecondary} />
+                  <Text style={styles.inputText}>{bookingTime}</Text>
+                </TouchableOpacity>
+                
+                {/* Number of People */}
+                <View style={styles.inputField}>
+                  <Ionicons name="people" size={20} color={Colors.textSecondary} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={numberOfPeople}
+                    onChangeText={setNumberOfPeople}
+                    placeholder="Number of people"
+                    keyboardType="number-pad"
+                    placeholderTextColor={Colors.textTertiary}
+                  />
+                </View>
+                
+                {/* Notes */}
+                <View style={[styles.inputField, { minHeight: 80 }]}>
+                  <Ionicons name="document-text" size={20} color={Colors.textSecondary} />
+                  <TextInput
+                    style={[styles.textInput, { flex: 1, textAlignVertical: 'top' }]}
+                    value={bookingNotes}
+                    onChangeText={setBookingNotes}
+                    placeholder="Any special requests or notes..."
+                    multiline
+                    numberOfLines={3}
+                    placeholderTextColor={Colors.textTertiary}
+                  />
+                </View>
+              </ScrollView>
+              
+              <View style={styles.modalFooter}>
+                <TouchableOpacity 
+                  style={[styles.cancelButton, { marginRight: Spacing.sm }]}
+                  onPress={() => setShowBookingModal(false)}
+                  disabled={isBooking}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.confirmButton, isBooking && styles.disabledButton]}
+                  onPress={handleConfirmBooking}
+                  disabled={isBooking}
+                >
+                  {isBooking ? (
+                    <ActivityIndicator size="small" color={Colors.text} />
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark" size={18} color={Colors.text} />
+                      <Text style={styles.confirmButtonText}>Confirm Booking</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
+        
+        {showDatePicker && (
+          <DateTimePicker
+            value={bookingDate}
+            mode="date"
+            display="default"
+            minimumDate={new Date()}
+            onChange={(event, selectedDate) => {
+              setShowDatePicker(false);
+              if (selectedDate) {
+                setBookingDate(selectedDate);
+              }
+            }}
+          />
+        )}
+        
+        {showTimePicker && (
+          <DateTimePicker
+            value={new Date(`2000-01-01T${bookingTime}`)}
+            mode="time"
+            display="default"
+            onChange={(event, selectedTime) => {
+              setShowTimePicker(false);
+              if (selectedTime) {
+                const hours = selectedTime.getHours().toString().padStart(2, '0');
+                const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
+                setBookingTime(`${hours}:${minutes}`);
+              }
+            }}
+          />
+        )}
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+
+  // Inquiry Modal
+  const renderInquiryModal = () => (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={showInquiryModal}
+      onRequestClose={() => setShowInquiryModal(false)}
+    >
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalContainer}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>
+                  {inquiryType === 'service' ? 'Ask About Service' : 'Ask About Product'}
+                </Text>
+                <TouchableOpacity 
+                  onPress={() => setShowInquiryModal(false)}
+                  style={styles.closeButton}
+                >
+                  <Ionicons name="close" size={24} color={Colors.text} />
+                </TouchableOpacity>
+              </View>
+              
+              {selectedService && (
+                <View style={styles.serviceSummary}>
+                  <Text style={styles.serviceName}>{selectedService.name}</Text>
+                </View>
+              )}
+              
+              <ScrollView style={styles.bookingForm}>
+                {/* Contact Phone */}
+                <View style={styles.inputField}>
+                  <Ionicons name="call" size={20} color={Colors.textSecondary} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={contactPhone}
+                    onChangeText={setContactPhone}
+                    placeholder="Your WhatsApp number (e.g., +254712345678)"
+                    keyboardType="phone-pad"
+                    placeholderTextColor={Colors.textTertiary}
+                  />
+                </View>
+                
+                {/* Message */}
+                <View style={[styles.inputField, { minHeight: 120 }]}>
+                  <Ionicons name="chatbubble" size={20} color={Colors.textSecondary} />
+                  <TextInput
+                    style={[styles.textInput, { flex: 1, textAlignVertical: 'top' }]}
+                    value={inquiryMessage}
+                    onChangeText={setInquiryMessage}
+                    placeholder={`What would you like to ask about ${selectedService?.name}?`}
+                    multiline
+                    numberOfLines={4}
+                    placeholderTextColor={Colors.textTertiary}
+                  />
+                </View>
+                
+                <View style={styles.infoNote}>
+                  <Ionicons name="information-circle" size={16} color={Colors.textSecondary} />
+                  <Text style={styles.infoNoteText}>
+                    Provider will contact you on WhatsApp with answers
+                  </Text>
+                </View>
+              </ScrollView>
+              
+              <View style={styles.modalFooter}>
+                <TouchableOpacity 
+                  style={[styles.cancelButton, { marginRight: Spacing.sm }]}
+                  onPress={() => setShowInquiryModal(false)}
+                  disabled={isSubmittingInquiry}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.confirmButton, isSubmittingInquiry && styles.disabledButton]}
+                  onPress={handleSubmitInquiry}
+                  disabled={isSubmittingInquiry}
+                >
+                  {isSubmittingInquiry ? (
+                    <ActivityIndicator size="small" color={Colors.text} />
+                  ) : (
+                    <>
+                      <Ionicons name="send" size={18} color={Colors.text} />
+                      <Text style={styles.confirmButtonText}>Send Message</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 
   if (loading) {
@@ -188,25 +575,13 @@ const ServicesTab = ({
             <View style={styles.servicesList}>
               {services.map((service) => (
                 <View key={service.id} style={styles.serviceCard}>
-                  {/* Service Image */}
-                  <View style={styles.serviceImageContainer}>
-                    {service.image ? (
-                      <Image 
-                        source={{ uri: service.image }}
-                        style={styles.serviceImage}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={styles.serviceImagePlaceholder}>
-                        <Ionicons name="construct" size={24} color={Colors.textSecondary} />
-                      </View>
-                    )}
-                  </View>
-                  
                   <View style={styles.serviceInfo}>
-                    <Text style={styles.serviceName} numberOfLines={1}>
-                      {service.name}
-                    </Text>
+                    <View style={styles.serviceHeader}>
+                      <Text style={styles.serviceName} numberOfLines={1}>
+                        {service.name}
+                      </Text>
+                      <Text style={styles.servicePrice}>{service.price}</Text>
+                    </View>
                     
                     {service.description ? (
                       <Text style={styles.serviceDescription} numberOfLines={2}>
@@ -220,34 +595,32 @@ const ServicesTab = ({
                         <Text style={styles.serviceDurationText}>{service.duration}</Text>
                       </View>
                       
-                      <View style={styles.serviceCategory}>
-                        <Ionicons name="pricetag" size={14} color={Colors.textSecondary} />
-                        <Text style={styles.serviceCategoryText}>{service.category}</Text>
-                      </View>
+                      {service.category && (
+                        <View style={styles.serviceCategory}>
+                          <Ionicons name="pricetag" size={14} color={Colors.textSecondary} />
+                          <Text style={styles.serviceCategoryText}>{service.category}</Text>
+                        </View>
+                      )}
                     </View>
                     
-                    <View style={styles.serviceFooter}>
-                      <Text style={styles.servicePrice}>{service.price}</Text>
+                    <View style={styles.serviceActions}>
+                      <TouchableOpacity 
+                        style={styles.inquiryButton}
+                        onPress={() => handleInquiry(service, 'service')}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="chatbubble" size={16} color={Colors.text} />
+                        <Text style={styles.inquiryButtonText}>Ask</Text>
+                      </TouchableOpacity>
                       
-                      <View style={styles.serviceActions}>
-                        <TouchableOpacity 
-                          style={styles.bookButton}
-                          onPress={() => handleBookService(service)}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="calendar" size={16} color={Colors.text} />
-                          <Text style={styles.bookButtonText}>Book</Text>
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity 
-                          style={styles.chatButton}
-                          onPress={() => handleQuickBook(service)}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="chatbubble" size={16} color={Colors.text} />
-                          <Text style={styles.chatButtonText}>Quick Chat</Text>
-                        </TouchableOpacity>
-                      </View>
+                      <TouchableOpacity 
+                        style={styles.bookButton}
+                        onPress={() => handleBookService(service)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="calendar" size={16} color={Colors.text} />
+                        <Text style={styles.bookButtonText}>Book Now</Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
                 </View>
@@ -259,12 +632,15 @@ const ServicesTab = ({
             <View style={styles.bookingNote}>
               <Ionicons name="information-circle" size={16} color={Colors.textSecondary} />
               <Text style={styles.bookingNoteText}>
-                Book services directly or chat with provider for inquiries
+                Tap "Ask" to inquire about a service or "Book Now" to make an appointment
               </Text>
             </View>
           )}
         </View>
       </ScrollView>
+      
+      {renderBookingModal()}
+      {renderInquiryModal()}
     </View>
   );
 };
@@ -289,13 +665,6 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.cardBorder,
-  },
-  skeletonImage: {
-    width: '100%',
-    height: 120,
-    backgroundColor: Colors.card + '80',
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.sm,
   },
   skeletonContent: {
     gap: Spacing.sm,
@@ -359,7 +728,7 @@ const styles = StyleSheet.create({
     ...Typography.button,
     color: Colors.text,
   },
-  // UI Styles (same as your original ServicesTab would have)
+  // Service List Styles
   tabContent: {
     padding: Spacing.lg,
   },
@@ -400,33 +769,27 @@ const styles = StyleSheet.create({
     borderColor: Colors.cardBorder,
     ...Shadows.small,
   },
-  serviceImageContainer: {
-    width: '100%',
-    height: 120,
-    borderRadius: BorderRadius.md,
-    overflow: 'hidden',
-    marginBottom: Spacing.md,
-    backgroundColor: Colors.card + '80',
-  },
-  serviceImage: {
-    width: '100%',
-    height: '100%',
-  },
-  serviceImagePlaceholder: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.card + '40',
-  },
   serviceInfo: {
     flex: 1,
+  },
+  serviceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: Spacing.sm,
   },
   serviceName: {
     ...Typography.body,
     color: Colors.text,
     fontWeight: '600',
-    marginBottom: Spacing.xs,
+    fontSize: 16,
+    flex: 1,
+    marginRight: Spacing.sm,
+  },
+  servicePrice: {
+    ...Typography.body,
+    color: Colors.primary,
+    fontWeight: '700',
     fontSize: 16,
   },
   serviceDescription: {
@@ -458,46 +821,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textSecondary,
   },
-  serviceFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  servicePrice: {
-    ...Typography.body,
-    color: Colors.primary,
-    fontWeight: '700',
-    fontSize: 16,
-  },
   serviceActions: {
     flexDirection: 'row',
     gap: Spacing.sm,
+  },
+  inquiryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    backgroundColor: Colors.secondary,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    flex: 1,
+    justifyContent: 'center',
+  },
+  inquiryButtonText: {
+    fontSize: 14,
+    color: Colors.text,
+    fontWeight: '600',
   },
   bookButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
     backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.md,
+    flex: 1,
+    justifyContent: 'center',
   },
   bookButtonText: {
-    fontSize: 12,
-    color: Colors.text,
-    fontWeight: '600',
-  },
-  chatButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    backgroundColor: Colors.secondary,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-  },
-  chatButtonText: {
-    fontSize: 12,
+    fontSize: 14,
     color: Colors.text,
     fontWeight: '600',
   },
@@ -515,6 +871,119 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textSecondary,
     fontStyle: 'italic',
+  },
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: Spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.cardBorder,
+  },
+  modalTitle: {
+    ...Typography.h3,
+    color: Colors.text,
+    flex: 1,
+  },
+  closeButton: {
+    padding: Spacing.xs,
+  },
+  serviceSummary: {
+    padding: Spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.cardBorder,
+    backgroundColor: Colors.card,
+  },
+  bookingForm: {
+    maxHeight: 400,
+    padding: Spacing.lg,
+  },
+  inputField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    gap: Spacing.md,
+  },
+  inputText: {
+    flex: 1,
+    ...Typography.body,
+    color: Colors.text,
+  },
+  textInput: {
+    flex: 1,
+    ...Typography.body,
+    color: Colors.text,
+    padding: 0,
+    margin: 0,
+  },
+  infoNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card + '40',
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginTop: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  infoNoteText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontStyle: 'italic',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    padding: Spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: Colors.cardBorder,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: Colors.card,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    ...Typography.button,
+    color: Colors.textSecondary,
+  },
+  confirmButton: {
+    flex: 1,
+    backgroundColor: Colors.primary,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+  },
+  confirmButtonText: {
+    ...Typography.button,
+    color: Colors.text,
+  },
+  disabledButton: {
+    opacity: 0.7,
   },
 });
 
