@@ -19,8 +19,12 @@ const VendorOnboardingScreen = () => {
   const navigation = useNavigation();
   const [selectedRole, setSelectedRole] = useState(null);
   const [loading, setLoading] = useState(false);
+  
+  // State for different categories
   const [categories, setCategories] = useState([]);
+  const [serviceCategories, setServiceCategories] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
+  const [loadingServiceCategories, setLoadingServiceCategories] = useState(false);
   
   // Food Vendor Form State
   const [vendorForm, setVendorForm] = useState({
@@ -38,10 +42,20 @@ const VendorOnboardingScreen = () => {
     phoneNumber: '',
   });
 
-  // Fetch categories when shop owner is selected
+  // Local Service Provider Form State
+  const [serviceProviderForm, setServiceProviderForm] = useState({
+    providerName: '',
+    category: '',
+    phoneNumber: '',
+    areasOfOperation: '',
+  });
+
+  // Fetch categories based on selected role
   useEffect(() => {
     if (selectedRole === 'shop_owner') {
       fetchCategories();
+    } else if (selectedRole === 'service_provider') {
+      fetchServiceCategories();
     }
   }, [selectedRole]);
 
@@ -57,6 +71,21 @@ const VendorOnboardingScreen = () => {
       Alert.alert('Error', 'Failed to load categories');
     } finally {
       setLoadingCategories(false);
+    }
+  };
+
+  const fetchServiceCategories = async () => {
+    setLoadingServiceCategories(true);
+    try {
+      const response = await axios.get('/api/services/categories');
+      if (response.data.categories) {
+        setServiceCategories(response.data.categories);
+      }
+    } catch (error) {
+      console.error('Error fetching service categories:', error);
+      Alert.alert('Error', 'Failed to load service categories');
+    } finally {
+      setLoadingServiceCategories(false);
     }
   };
 
@@ -130,6 +159,60 @@ const VendorOnboardingScreen = () => {
     }
   };
 
+  const handleServiceProviderApplication = async () => {
+    if (!serviceProviderForm.providerName || !serviceProviderForm.category || !serviceProviderForm.phoneNumber) {
+      Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await axios.post('/api/localservices/application/apply', {
+        providerName: serviceProviderForm.providerName,
+        category: serviceProviderForm.category,
+        phoneNumber: serviceProviderForm.phoneNumber,
+        areasOfOperation: serviceProviderForm.areasOfOperation 
+          ? serviceProviderForm.areasOfOperation.split(',').map(area => area.trim()).filter(area => area)
+          : [],
+      });
+
+      // Check if the selected category has dashboard access
+      const selectedCategory = serviceCategories.find(cat => cat._id === serviceProviderForm.category);
+      const hasDashboard = selectedCategory?.allowDashboard || false;
+
+      let message = 'Application submitted successfully. ';
+      
+      if (hasDashboard) {
+        message += 'This service includes a business dashboard. ';
+      }
+      
+      message += 'Please wait for admin approval.';
+
+      Alert.alert(
+        'Success!',
+        message,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              navigation.navigate('Main');
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      let errorMessage = 'Application failed';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.errors) {
+        errorMessage = error.response.data.errors.map(err => err.msg).join('\n');
+      }
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const renderRoleSelection = () => (
     <View style={styles.container}>
       <Text style={styles.title}>Choose Your Business Type</Text>
@@ -163,6 +246,20 @@ const VendorOnboardingScreen = () => {
             Own and manage your retail shop or store
           </Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.roleCard,
+            selectedRole === 'service_provider' && styles.selectedCard,
+          ]}
+          onPress={() => handleRoleSelection('service_provider')}
+        >
+          <Text style={styles.roleIcon}>💈</Text>
+          <Text style={styles.roleTitle}>Service Provider</Text>
+          <Text style={styles.roleDescription}>
+            Provide local services like saloon, spa, etc. with dashboard
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {selectedRole && (
@@ -189,7 +286,8 @@ const VendorOnboardingScreen = () => {
           <Text style={styles.inputLabel}>Shop Name *</Text>
           <TextInput
             style={styles.input}
-            placeholder="Enter your shop name"  placeholderTextColor="#d8861aff"
+            placeholder="Enter your shop name"  
+            placeholderTextColor="#d8861aff"
             value={vendorForm.shopName}
             onChangeText={(text) => setVendorForm({ ...vendorForm, shopName: text })}
           />
@@ -199,7 +297,8 @@ const VendorOnboardingScreen = () => {
           <Text style={styles.inputLabel}>Phone Number *</Text>
           <TextInput
             style={styles.input}
-            placeholder="Enter your phone number" placeholderTextColor="#d8861aff"
+            placeholder="Enter your phone number" 
+            placeholderTextColor="#d8861aff"
             value={vendorForm.phone}
             onChangeText={(text) => setVendorForm({ ...vendorForm, phone: text })}
             keyboardType="phone-pad"
@@ -210,7 +309,8 @@ const VendorOnboardingScreen = () => {
           <Text style={styles.inputLabel}>Location *</Text>
           <TextInput
             style={styles.input}
-            placeholder="Enter your business location"  placeholderTextColor="#d8861aff"
+            placeholder="Enter your business location"  
+            placeholderTextColor="#d8861aff"
             value={vendorForm.location}
             onChangeText={(text) => setVendorForm({ ...vendorForm, location: text })}
           />
@@ -253,7 +353,8 @@ const VendorOnboardingScreen = () => {
           <Text style={styles.inputLabel}>Shop Name *</Text>
           <TextInput
             style={styles.input}
-            placeholder="Enter your shop name"  placeholderTextColor="#d8861aff"
+            placeholder="Enter your shop name"  
+            placeholderTextColor="#d8861aff"
             value={shopOwnerForm.shopName}
             onChangeText={(text) => setShopOwnerForm({ ...shopOwnerForm, shopName: text })}
           />
@@ -267,24 +368,24 @@ const VendorOnboardingScreen = () => {
               <Text style={styles.loadingText}>Loading categories...</Text>
             </View>
           ) : (
-                <View style={styles.dropdownContainer}>
-      <RNPickerSelect
-        onValueChange={(value) => setShopOwnerForm({ ...shopOwnerForm, category: value })}
-        items={categories.map(cat => ({
-          label: cat.name,
-          value: cat.name, // CHANGED: from cat._id to cat.name
-          key: cat._id,
-        }))}
-        value={shopOwnerForm.category}
-        placeholder={{
-          label: 'Select a category...',
-          value: null,
-          color: '#d8b20bff',
-        }}
-        style={pickerSelectStyles}
-        useNativeAndroidPickerStyle={false}
-      />
-    </View>
+            <View style={styles.dropdownContainer}>
+              <RNPickerSelect
+                onValueChange={(value) => setShopOwnerForm({ ...shopOwnerForm, category: value })}
+                items={categories.map(cat => ({
+                  label: cat.name,
+                  value: cat.name,
+                  key: cat._id,
+                }))}
+                value={shopOwnerForm.category}
+                placeholder={{
+                  label: 'Select a category...',
+                  value: null,
+                  color: '#d8b20bff',
+                }}
+                style={pickerSelectStyles}
+                useNativeAndroidPickerStyle={false}
+              />
+            </View>
           )}
         </View>
 
@@ -292,7 +393,8 @@ const VendorOnboardingScreen = () => {
           <Text style={styles.inputLabel}>Phone Number *</Text>
           <TextInput
             style={styles.input}
-            placeholder="Enter your phone number"  placeholderTextColor="#d8861aff"
+            placeholder="Enter your phone number"  
+            placeholderTextColor="#d8861aff"
             value={shopOwnerForm.phoneNumber}
             onChangeText={(text) => setShopOwnerForm({ ...shopOwnerForm, phoneNumber: text })}
             keyboardType="phone-pad"
@@ -303,7 +405,8 @@ const VendorOnboardingScreen = () => {
           <Text style={styles.inputLabel}>Address *</Text>
           <TextInput
             style={styles.input}
-            placeholder="Enter your shop address"  placeholderTextColor="#d8861aff"
+            placeholder="Enter your shop address"  
+            placeholderTextColor="#d8861aff"
             value={shopOwnerForm.address}
             onChangeText={(text) => setShopOwnerForm({ ...shopOwnerForm, address: text })}
             multiline
@@ -315,7 +418,8 @@ const VendorOnboardingScreen = () => {
           <Text style={styles.inputLabel}>Description</Text>
           <TextInput
             style={[styles.input, { height: 80 }]}
-            placeholder="Brief description of your business"  placeholderTextColor="#d8861aff"
+            placeholder="Brief description of your business"  
+            placeholderTextColor="#d8861aff"
             value={shopOwnerForm.description}
             onChangeText={(text) => setShopOwnerForm({ ...shopOwnerForm, description: text })}
             multiline
@@ -348,13 +452,161 @@ const VendorOnboardingScreen = () => {
     </KeyboardAvoidingView>
   );
 
+  const renderServiceProviderForm = () => (
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <Text style={styles.formTitle}>💈 Service Provider Application</Text>
+        <Text style={styles.formSubtitle}>Apply for local services like saloon, spa, etc.</Text>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Business Name *</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter your business/service name"  
+            placeholderTextColor="#d8861aff"
+            value={serviceProviderForm.providerName}
+            onChangeText={(text) => setServiceProviderForm({ ...serviceProviderForm, providerName: text })}
+          />
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Service Type *</Text>
+          {loadingServiceCategories ? (
+            <View style={[styles.input, styles.loadingContainer]}>
+              <ActivityIndicator size="small" color="#db820eff" />
+              <Text style={styles.loadingText}>Loading service categories...</Text>
+            </View>
+          ) : (
+            <View style={styles.dropdownContainer}>
+              <RNPickerSelect
+                onValueChange={(value) => {
+                  setServiceProviderForm({ 
+                    ...serviceProviderForm, 
+                    category: value,
+                  });
+                }}
+                items={serviceCategories.map(cat => ({
+                  label: cat.name,
+                  value: cat._id,
+                  key: cat._id,
+                  allowDashboard: cat.allowDashboard,
+                }))}
+                value={serviceProviderForm.category}
+                placeholder={{
+                  label: 'Select service type...',
+                  value: null,
+                  color: '#d8b20bff',
+                }}
+                style={pickerSelectStyles}
+                useNativeAndroidPickerStyle={false}
+              />
+            </View>
+          )}
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Phone Number *</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter your business phone number"  
+            placeholderTextColor="#d8861aff"
+            value={serviceProviderForm.phoneNumber}
+            onChangeText={(text) => setServiceProviderForm({ ...serviceProviderForm, phoneNumber: text })}
+            keyboardType="phone-pad"
+          />
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Areas of Operation</Text>
+          <TextInput
+            style={[styles.input, { height: 80 }]}
+            placeholder="Enter areas separated by commas (e.g., Downtown, West Side, East End)"  
+            placeholderTextColor="#d8861aff"
+            value={serviceProviderForm.areasOfOperation}
+            onChangeText={(text) => setServiceProviderForm({ ...serviceProviderForm, areasOfOperation: text })}
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+          />
+          <Text style={styles.helperText}>Leave empty if you serve city-wide</Text>
+        </View>
+
+        {serviceProviderForm.category && (
+          <View style={styles.categoryInfoContainer}>
+            <Text style={styles.categoryInfoTitle}>Service Information:</Text>
+            {(() => {
+              const selectedCat = serviceCategories.find(cat => cat._id === serviceProviderForm.category);
+              if (selectedCat) {
+                return (
+                  <>
+                    <Text style={styles.categoryInfoText}>
+                      • {selectedCat.description}
+                    </Text>
+                    {selectedCat.allowDashboard && (
+                      <Text style={styles.dashboardNote}>
+                        ✅ This service comes with a business dashboard
+                      </Text>
+                    )}
+                    {selectedCat.allowBooking && (
+                      <Text style={styles.bookingNote}>
+                        ✅ Customers can book appointments online
+                      </Text>
+                    )}
+                  </>
+                );
+              }
+              return null;
+            })()}
+          </View>
+        )}
+
+        <View style={styles.noteContainer}>
+          <Text style={styles.noteTitle}>Application Process:</Text>
+          <Text style={styles.noteText}>
+            • Fill in all required fields marked with *
+            • Some services require admin approval
+            • Services with dashboards allow you to manage bookings and customers
+            • You'll receive notification once your application is processed
+            • After approval, access your dashboard from the main menu
+          </Text>
+        </View>
+
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => setSelectedRole(null)}
+          >
+            <Text style={styles.backButtonText}>Back</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.submitButton, loading && styles.disabledButton]}
+            onPress={handleServiceProviderApplication}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.submitButtonText}>Submit Application</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+
   // Main render logic
   if (!selectedRole) {
     return renderRoleSelection();
   } else if (selectedRole === 'food_vendor') {
     return renderFoodVendorForm();
-  } else {
+  } else if (selectedRole === 'shop_owner') {
     return renderShopOwnerForm();
+  } else {
+    return renderServiceProviderForm();
   }
 };
 
@@ -490,7 +742,6 @@ const styles = StyleSheet.create({
   disabledButton: {
     backgroundColor: '#bdc3c7',
   },
-  // Dropdown specific styles
   dropdownContainer: {
     backgroundColor: '#fff',
     borderWidth: 1,
@@ -511,6 +762,65 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     color: '#666',
     fontSize: 16,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#7f8c8d',
+    marginTop: 5,
+    fontStyle: 'italic',
+  },
+  categoryInfoContainer: {
+    backgroundColor: '#e8f5e9',
+    padding: 15,
+    borderRadius: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4caf50',
+    marginTop: 15,
+    marginBottom: 10,
+  },
+  categoryInfoTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#2e7d32',
+    marginBottom: 5,
+  },
+  categoryInfoText: {
+    fontSize: 13,
+    color: '#1b5e20',
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  dashboardNote: {
+    fontSize: 12,
+    color: '#388e3c',
+    fontWeight: '600',
+    marginTop: 5,
+  },
+  bookingNote: {
+    fontSize: 12,
+    color: '#388e3c',
+    fontWeight: '600',
+    marginTop: 3,
+  },
+  noteContainer: {
+    backgroundColor: '#fff8e1',
+    padding: 15,
+    borderRadius: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ffc107',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  noteTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#d84315',
+    marginBottom: 5,
+  },
+  noteText: {
+    fontSize: 13,
+    color: '#5d4037',
+    lineHeight: 18,
   },
 });
 
@@ -548,4 +858,4 @@ const pickerSelectStyles = {
   },
 };
 
-export default VendorOnboardingScreen;
+export default VendorOnboardingScreen;  

@@ -103,52 +103,53 @@ const BookingManagement = () => {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
-  const statusOptions = [
-    { value: 'all', label: 'All', color: Colors.text },
-    { value: 'pending', label: 'Pending', color: Colors.warning },
-    { value: 'confirmed', label: 'Confirmed', color: Colors.info },
-    { value: 'completed', label: 'Completed', color: Colors.success },
-    { value: 'cancelled', label: 'Cancelled', color: Colors.danger },
-    { value: 'no_show', label: 'No Show', color: Colors.textSecondary },
-  ];
+const statusOptions = [
+  { value: 'all', label: 'All', color: Colors.text },
+  { value: 'pending', label: 'Pending', color: Colors.warning },
+  { value: 'confirmed', label: 'Confirmed', color: Colors.info },
+  { value: 'completed', label: 'Completed', color: Colors.success },
+  { value: 'cancelled', label: 'Cancelled', color: Colors.danger },
+  { value: 'no_show', label: 'No Show', color: Colors.textSecondary }, // Make sure this exists
+];  
 
-  const statusLabels = {
-    pending: { 
-      label: 'PENDING', 
-      color: Colors.warning, 
-      bgColor: Colors.warning,
-      textColor: Colors.white,
-      nextStatuses: ['confirmed', 'cancelled', 'no_show']
-    },
-    confirmed: { 
-      label: 'CONFIRMED', 
-      color: Colors.info, 
-      bgColor: Colors.info,
-      textColor: Colors.white,
-      nextStatuses: ['completed', 'cancelled', 'no_show']
-    },
-    completed: { 
-      label: 'COMPLETED', 
-      color: Colors.success, 
-      bgColor: Colors.success,
-      textColor: Colors.white,
-      nextStatuses: []
-    },
-    cancelled: { 
-      label: 'CANCELLED', 
-      color: Colors.danger, 
-      bgColor: Colors.danger,
-      textColor: Colors.white,
-      nextStatuses: []
-    },
-    no_show: { 
-      label: 'NO SHOW', 
-      color: Colors.textSecondary, 
-      bgColor: Colors.textSecondary,
-      textColor: Colors.white,
-      nextStatuses: []
-    },
-  };
+// In your BookingManagement.js component
+const statusLabels = {
+  pending: { 
+    label: 'PENDING', 
+    color: Colors.warning, 
+    bgColor: Colors.warning,
+    textColor: Colors.white,
+    nextStatuses: ['confirmed', 'cancelled', 'no_show'] // Added 'no_show'
+  },
+  confirmed: { 
+    label: 'CONFIRMED', 
+    color: Colors.info, 
+    bgColor: Colors.info,
+    textColor: Colors.white,
+    nextStatuses: ['completed', 'cancelled', 'no_show'] // Already has 'no_show'
+  },
+  completed: { 
+    label: 'COMPLETED', 
+    color: Colors.success, 
+    bgColor: Colors.success,
+    textColor: Colors.white,
+    nextStatuses: []
+  },
+  cancelled: { 
+    label: 'CANCELLED', 
+    color: Colors.danger, 
+    bgColor: Colors.danger,
+    textColor: Colors.white,
+    nextStatuses: []
+  },
+  no_show: { 
+    label: 'NO SHOW', 
+    color: Colors.textSecondary, 
+    bgColor: Colors.textSecondary,
+    textColor: Colors.white,
+    nextStatuses: []
+  },
+};
 
   useEffect(() => {
     fetchData();
@@ -172,41 +173,42 @@ const BookingManagement = () => {
     }
   }, [statusFilter, activeTab]);
 
-  const fetchBookings = async () => {
-    try {
-      let url = '/api/services/dashboard/bookings';
-      if (statusFilter !== 'all') {
-        url += `?status=${statusFilter}`;
-      }
-      
-      const response = await axios.get(url);
-      
-      const formattedBookings = response.data.bookings?.map(booking => ({
-        id: booking._id,
-        customer: {
-          name: booking.userId?.username || 'Customer',
-          phone: booking.userId?.phone || '',
-          email: booking.userId?.email
-        },
-        service: {
-          name: booking.serviceId?.name || 'Service',
-          price: booking.serviceId?.price || 0,
-          duration: booking.serviceId?.duration || 60
-        },
-        date: new Date(booking.date),
-        time: booking.time,
-        status: booking.status,
-        totalAmount: booking.totalAmount,
-        notes: booking.notes,
-        createdAt: new Date(booking.createdAt)
-      })) || [];
-      
-      setBookings(formattedBookings);
-    } catch (error) {
-      console.error('Fetch bookings error:', error);
-      throw error;
+const fetchBookings = async () => {
+  try {
+    let url = '/api/services/dashboard/bookings';
+    if (statusFilter !== 'all') {
+      url += `?status=${statusFilter}`;
     }
-  };
+    
+    const response = await axios.get(url);
+    
+    const formattedBookings = response.data.bookings?.map(booking => ({
+      id: booking._id,
+      customer: {
+        name: booking.userId?.username || 'Customer',
+        phone: booking.phoneNumber || booking.userId?.phone || '', // FIXED: Use booking.phoneNumber first
+        email: booking.userId?.email
+      },
+      service: {
+        name: booking.serviceId?.name || 'Service',
+        price: booking.serviceId?.price || 0,
+        duration: booking.serviceId?.duration || 60
+      },
+      date: new Date(booking.date),
+      time: booking.time,
+      status: booking.status,
+      totalAmount: booking.totalAmount,
+      notes: booking.notes,
+      phoneNumber: booking.phoneNumber, // Keep separately
+      createdAt: new Date(booking.createdAt)
+    })) || [];
+    
+    setBookings(formattedBookings);
+  } catch (error) {
+    console.error('Fetch bookings error:', error);
+    throw error;
+  }
+};
 
   const fetchInquiries = async () => {
     try {
@@ -387,111 +389,128 @@ const BookingManagement = () => {
     Alert.alert('Copied', `${name}'s phone number copied to clipboard`);
   };
 
-  const renderBookingItem = ({ item }) => {
-    const statusInfo = statusLabels[item.status] || statusLabels.pending;
-    
-    return (
-      <View style={styles.bookingCard}>
-        <View style={styles.bookingHeader}>
-          <Text style={styles.serviceName}>{item.service.name}</Text>
-          <TouchableOpacity 
-            style={[styles.statusBadge, { backgroundColor: statusInfo.bgColor }]}
-            onPress={() => handleUpdateStatus(item)}
-          >
-            <Text style={[styles.statusText, { color: statusInfo.textColor }]}>
-              {statusInfo.label}
+const renderBookingItem = ({ item }) => {
+  const statusInfo = statusLabels[item.status] || statusLabels.pending;
+  const hasPhone = item.customer.phone && item.customer.phone.trim() !== '';
+  
+  return (
+    <View style={styles.bookingCard}>
+      <View style={styles.bookingHeader}>
+        <Text style={styles.serviceName}>{item.service.name}</Text>
+        <TouchableOpacity 
+          style={[styles.statusBadge, { backgroundColor: statusInfo.bgColor }]}
+          onPress={() => handleUpdateStatus(item)}
+        >
+          <Text style={[styles.statusText, { color: statusInfo.textColor }]}>
+            {statusInfo.label}
+          </Text>
+          {statusInfo.nextStatuses.length > 0 && (
+            <Ionicons name="chevron-forward" size={12} color={statusInfo.textColor} />
+          )}
+        </TouchableOpacity>
+      </View>
+      
+      <View style={styles.bookingBody}>
+        <View style={styles.detailRow}>
+          <View style={styles.detailColumn}>
+            <Text style={styles.detailLabel}>Customer</Text>
+            <Text style={styles.detailValue}>{item.customer.name}</Text>
+          </View>
+          <View style={styles.detailColumn}>
+            <Text style={styles.detailLabel}>Date & Time</Text>
+            <Text style={styles.detailValue}>
+              {formatDate(item.date)} • {formatTime(item.time)}
             </Text>
-            {statusInfo.nextStatuses.length > 0 && (
-              <Ionicons name="chevron-forward" size={12} color={statusInfo.textColor} />
-            )}
-          </TouchableOpacity>
+          </View>
         </View>
         
-        <View style={styles.bookingBody}>
+        <View style={styles.detailRow}>
+          <View style={styles.detailColumn}>
+            <Text style={styles.detailLabel}>Amount</Text>
+            <Text style={styles.detailValue}>{formatCurrency(item.totalAmount)}</Text>
+          </View>
+          <View style={styles.detailColumn}>
+            <Text style={styles.detailLabel}>Duration</Text>
+            <Text style={styles.detailValue}>{item.service.duration} min</Text>
+          </View>
+        </View>
+        
+        {/* SHOW PHONE NUMBER IN BODY */}
+        {hasPhone && (
           <View style={styles.detailRow}>
             <View style={styles.detailColumn}>
-              <Text style={styles.detailLabel}>Customer</Text>
-              <Text style={styles.detailValue}>{item.customer.name}</Text>
-            </View>
-            <View style={styles.detailColumn}>
-              <Text style={styles.detailLabel}>Date & Time</Text>
-              <Text style={styles.detailValue}>
-                {formatDate(item.date)} • {formatTime(item.time)}
+              <Text style={styles.detailLabel}>Contact</Text>
+              <Text style={[styles.detailValue, { color: Colors.primary }]}>
+                {item.customer.phone}
               </Text>
             </View>
           </View>
-          
-          <View style={styles.detailRow}>
-            <View style={styles.detailColumn}>
-              <Text style={styles.detailLabel}>Amount</Text>
-              <Text style={styles.detailValue}>{formatCurrency(item.totalAmount)}</Text>
-            </View>
-            <View style={styles.detailColumn}>
-              <Text style={styles.detailLabel}>Duration</Text>
-              <Text style={styles.detailValue}>{item.service.duration} min</Text>
-            </View>
-          </View>
-          
-          {item.notes ? (
-            <View style={styles.notesContainer}>
-              <Text style={styles.notesLabel}>Notes:</Text>
-              <Text style={styles.notesText}>{item.notes}</Text>
-            </View>
-          ) : null}
-        </View>
+        )}
         
-        <View style={styles.bookingFooter}>
-          <TouchableOpacity 
-            style={[styles.phoneContainer, !item.customer.phone && styles.disabledButton]}
-            onPress={() => {
-              if (item.customer.phone) {
-                Alert.alert(
-                  'Contact Customer',
-                  item.customer.phone,
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    { 
-                      text: 'Copy', 
-                      onPress: () => copyPhoneNumber(item.customer.phone, item.customer.name)
-                    },
-                    { 
-                      text: 'Call', 
-                      onPress: () => handleCallCustomer(item.customer.phone)
-                    },
-                    { 
-                      text: 'WhatsApp', 
-                      onPress: () => handleMessageCustomer(item.customer.phone, item.customer.name)
-                    }
-                  ]
-                );
-              }
-            }}
-          >
-            <Ionicons name="call" size={14} color={item.customer.phone ? Colors.primary : Colors.textSecondary} />
-            <Text style={[styles.phoneText, !item.customer.phone && styles.disabledText]}>
-              {item.customer.phone || 'No phone'}
-            </Text>
-            {item.customer.phone && (
-              <Ionicons name="chevron-forward" size={12} color={Colors.primary} />
-            )}
-          </TouchableOpacity>
-          
-          {statusInfo.nextStatuses.length > 0 ? (
-            <TouchableOpacity 
-              style={styles.updateButton}
-              onPress={() => handleUpdateStatus(item)}
-            >
-              <Ionicons name="refresh" size={16} color={Colors.text} />
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.finalStatusBadge}>
-              <Ionicons name="checkmark-done" size={16} color={statusInfo.color} />
-            </View>
-          )}
-        </View>
+        {item.notes ? (
+          <View style={styles.notesContainer}>
+            <Text style={styles.notesLabel}>Notes:</Text>
+            <Text style={styles.notesText}>{item.notes}</Text>
+          </View>
+        ) : null}
       </View>
-    );
-  };
+      
+      <View style={styles.bookingFooter}>
+        <TouchableOpacity 
+          style={[styles.phoneContainer, !hasPhone && styles.disabledButton]}
+          onPress={() => {
+            if (hasPhone) {
+              Alert.alert(
+                'Contact Customer',
+                item.customer.phone,
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { 
+                    text: 'Copy', 
+                    onPress: () => copyPhoneNumber(item.customer.phone, item.customer.name)
+                  },
+                  { 
+                    text: 'Call', 
+                    onPress: () => handleCallCustomer(item.customer.phone)
+                  },
+                  { 
+                    text: 'WhatsApp', 
+                    onPress: () => handleMessageCustomer(item.customer.phone, item.customer.name)
+                  }
+                ]
+              );
+            }
+          }}
+        >
+          <Ionicons 
+            name="call" 
+            size={14} 
+            color={hasPhone ? Colors.primary : Colors.textSecondary} 
+          />
+          <Text style={[styles.phoneText, !hasPhone && styles.disabledText]}>
+            {hasPhone ? item.customer.phone : 'No phone'}
+          </Text>
+          {hasPhone && (
+            <Ionicons name="chevron-forward" size={12} color={Colors.primary} />
+          )}
+        </TouchableOpacity>
+        
+        {statusInfo.nextStatuses.length > 0 ? (
+          <TouchableOpacity 
+            style={styles.updateButton}
+            onPress={() => handleUpdateStatus(item)}
+          >
+            <Ionicons name="refresh" size={16} color={Colors.text} />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.finalStatusBadge}>
+            <Ionicons name="checkmark-done" size={16} color={statusInfo.color} />
+          </View>
+        )}
+      </View>
+    </View>
+  );
+};
 
   const renderInquiryItem = ({ item }) => {
     const isProduct = item.type === 'product';
@@ -914,6 +933,26 @@ const styles = StyleSheet.create({
   separator: {
     height: 12,
   },
+  // Add to your styles
+detailRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  marginBottom: Spacing.sm,
+},
+detailColumn: {
+  flex: 1,
+},
+detailLabel: {
+  ...Typography.caption,
+  color: '#888',
+  fontSize: 11,
+  marginBottom: 2,
+},
+detailValue: {
+  ...Typography.body,
+  fontSize: 14,
+  color: Colors.white,
+}, 
   // Dark Cards
   bookingCard: {
     backgroundColor: '#1A1A1A',

@@ -38,13 +38,14 @@ const ServicesTab = ({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   
-  // Booking Modal State
+  // Booking Modal State - ADDED phoneNumber
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [selectedService, setSelectedService] = useState(null);
   const [bookingDate, setBookingDate] = useState(new Date());
   const [bookingTime, setBookingTime] = useState('14:30');
   const [bookingNotes, setBookingNotes] = useState('');
   const [numberOfPeople, setNumberOfPeople] = useState('1');
+  const [phoneNumber, setPhoneNumber] = useState(''); // NEW FIELD
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
@@ -113,12 +114,26 @@ const ServicesTab = ({
     setSelectedService(service);
     setBookingNotes('');
     setNumberOfPeople('1');
+    setPhoneNumber(''); // RESET PHONE NUMBER
     setShowBookingModal(true);
   };
 
   const handleConfirmBooking = async () => {
     if (!selectedService) return;
     
+    // Validate phone number
+    if (!phoneNumber.trim()) {
+      Alert.alert('Phone Required', 'Please enter your phone number for booking confirmation');
+      return;
+    }
+
+    // Basic phone validation
+    const cleanPhone = phoneNumber.replace(/\D/g, '');
+    if (cleanPhone.length < 10) {
+      Alert.alert('Invalid Phone', 'Please enter a valid phone number (at least 10 digits)');
+      return;
+    }
+
     try {
       setIsBooking(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -131,7 +146,8 @@ const ServicesTab = ({
         date: formattedDate,
         time: bookingTime,
         notes: bookingNotes,
-        numberOfPeople: parseInt(numberOfPeople) || 1
+        numberOfPeople: parseInt(numberOfPeople) || 1,
+        phoneNumber: phoneNumber // ADD PHONE NUMBER TO REQUEST
       }, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -158,9 +174,17 @@ const ServicesTab = ({
       console.error('Booking error:', error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       
+      let errorMessage = 'Failed to create booking. Please try again.';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      }
+      
       Alert.alert(
         'Booking Failed',
-        error.response?.data?.message || 'Failed to create booking. Please try again.',
+        errorMessage,
         [{ text: 'OK' }]
       );
     } finally {
@@ -269,7 +293,7 @@ const ServicesTab = ({
     </View>
   );
 
-  // Booking Modal
+  // Booking Modal - UPDATED WITH PHONE FIELD
   const renderBookingModal = () => (
     <Modal
       animationType="slide"
@@ -303,6 +327,21 @@ const ServicesTab = ({
               )}
               
               <ScrollView style={styles.bookingForm}>
+                {/* Contact Phone - REQUIRED FIELD */}
+                <View style={styles.inputField}>
+                  <Ionicons name="call" size={20} color={Colors.textSecondary} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={phoneNumber}
+                    onChangeText={setPhoneNumber}
+                    placeholder="Your phone number (required)*"
+                    placeholderTextColor={Colors.textTertiary}
+                    keyboardType="phone-pad"
+                    autoFocus={true}
+                    returnKeyType="next"
+                  />
+                </View>
+                
                 {/* Date Picker */}
                 <TouchableOpacity 
                   style={styles.inputField}
@@ -349,6 +388,14 @@ const ServicesTab = ({
                     placeholderTextColor={Colors.textTertiary}
                   />
                 </View>
+
+                {/* Phone Note */}
+                <View style={styles.phoneNote}>
+                  <Ionicons name="information-circle" size={14} color={Colors.textSecondary} />
+                  <Text style={styles.phoneNoteText}>
+                    Your phone number is required for booking confirmation and updates
+                  </Text>
+                </View>
               </ScrollView>
               
               <View style={styles.modalFooter}>
@@ -361,9 +408,9 @@ const ServicesTab = ({
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
-                  style={[styles.confirmButton, isBooking && styles.disabledButton]}
+                  style={[styles.confirmButton, (isBooking || !phoneNumber.trim()) && styles.disabledButton]}
                   onPress={handleConfirmBooking}
-                  disabled={isBooking}
+                  disabled={isBooking || !phoneNumber.trim()}
                 >
                   {isBooking ? (
                     <ActivityIndicator size="small" color={Colors.text} />
@@ -413,7 +460,7 @@ const ServicesTab = ({
     </Modal>
   );
 
-  // Inquiry Modal
+  // Inquiry Modal (unchanged)
   const renderInquiryModal = () => (
     <Modal
       animationType="slide"
@@ -872,7 +919,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontStyle: 'italic',
   },
-  // Modal Styles
+  // Modal Styles - ADDED phoneNote
   modalContainer: {
     flex: 1,
   },
@@ -936,6 +983,20 @@ const styles = StyleSheet.create({
     padding: 0,
     margin: 0,
   },
+  phoneNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.info + '20',
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginTop: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  phoneNoteText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.info,
+  },
   infoNote: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -987,4 +1048,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ServicesTab;
+export default ServicesTab;  

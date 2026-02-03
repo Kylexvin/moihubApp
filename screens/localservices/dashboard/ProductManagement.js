@@ -789,21 +789,25 @@ const ProductManagement = () => {
         ]}
         ListHeaderComponent={() => !isEmpty && (
           <View style={styles.statsContainer}>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{products.length}</Text>
-              <Text style={styles.statLabel}>Total Products</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>
-                {products.filter(p => p.isActive).length}
-              </Text>
-              <Text style={styles.statLabel}>Active</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>
-                {products.reduce((sum, p) => sum + p.stock, 0)}
-              </Text>
-              <Text style={styles.statLabel}>Total Stock</Text>
+            <Text style={styles.pageTitle}>Product Management</Text>
+            <Text style={styles.pageSubtitle}>Manage your products and inventory</Text>
+            <View style={styles.statsRow}>
+              <View style={styles.statCard}>
+                <Text style={styles.statNumber}>{products.length}</Text>
+                <Text style={styles.statLabel}>Total Products</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statNumber}>
+                  {products.filter(p => p.isActive).length}
+                </Text>
+                <Text style={styles.statLabel}>Active</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statNumber}>
+                  {products.reduce((sum, p) => sum + p.stock, 0)}
+                </Text>
+                <Text style={styles.statLabel}>Total Stock</Text>
+              </View>
             </View>
           </View>
         )}
@@ -816,27 +820,19 @@ const ProductManagement = () => {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
       
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Product Management</Text>
-        <TouchableOpacity 
-          style={styles.addButton}
-          onPress={handleAddProduct}
-        >
-          <Ionicons name="add" size={24} color={Colors.primary} />
-        </TouchableOpacity>
-      </View>
-
       {/* Content */}
       <View style={styles.contentContainer}>
         {renderContent()}
       </View>
+
+      {/* FAB Button */}
+      <TouchableOpacity 
+        style={styles.fabButton}
+        onPress={handleAddProduct}
+        activeOpacity={0.9}
+      >
+        <Ionicons name="add" size={28} color={Colors.text} />
+      </TouchableOpacity>
 
       {/* Add/Edit Modal */}
       {renderAddEditModal()}
@@ -854,26 +850,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.cardBorder,
-  },
-  backButton: {
-    padding: Spacing.xs,
-  },
-  headerTitle: {
-    ...Typography.h3,
-    color: Colors.text,
-    fontWeight: '700',
-  },
-  addButton: {
-    padding: Spacing.xs,
   },
   contentContainer: {
     flex: 1,
@@ -895,11 +871,26 @@ const styles = StyleSheet.create({
     ...Typography.body,
     color: Colors.textSecondary,
   },
-  // Stats
+  // Stats and Title
   statsContainer: {
-    flexDirection: 'row',
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.md,
+  },
+  pageTitle: {
+    ...Typography.h1,
+    color: Colors.text,
+    fontWeight: '700',
+    fontSize: 28,
+    marginBottom: Spacing.xs,
+  },
+  pageSubtitle: {
+    ...Typography.body,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.lg,
+  },
+  statsRow: {
+    flexDirection: 'row',
     gap: Spacing.md,
   },
   statCard: {
@@ -921,6 +912,28 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.textSecondary,
     marginTop: 4,
+  },
+  // FAB Button
+  fabButton: {
+    position: 'absolute',
+    bottom: Spacing.xl,
+    right: Spacing.xl,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Shadows.medium,
+    elevation: 8,
+    zIndex: 1000,
+    shadowColor: Colors.primary,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   // Product Card
   productCard: {
