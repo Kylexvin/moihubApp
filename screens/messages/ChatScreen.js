@@ -15,8 +15,8 @@ import {
   Clipboard,
   Modal,
   Animated,
-  StatusBar, // Add this import
-  Dimensions, // Add this import
+  StatusBar,
+  Dimensions,
 } from 'react-native';
 import { TouchableWithoutFeedback } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -281,21 +281,14 @@ const ChatScreen = ({ route, navigation }) => {
       if (isLoadMore) {
         setMessages((prev) => [...prev, ...normalizedMessages]);
       } else {
-        // Sort newest first for WhatsApp-like behavior
-        const sortedMessages = normalizedMessages.sort((a, b) => {
-          const aTime = new Date(a.createdAt).getTime() || 0;
-          const bTime = new Date(b.createdAt).getTime() || 0;
-          return bTime - aTime; // Newest first
-        });
-
-        setMessages(sortedMessages);
+        setMessages(normalizedMessages);
       }
 
       setHasMoreMessages(normalizedMessages.length === 20);
       setPage(pageNum);
 
       if (normalizedMessages.length > 0) {
-        const latest = normalizedMessages[0];
+        const latest = normalizedMessages[normalizedMessages.length - 1];
         lastMessageIdRef.current = latest._id;
 
         if (!derivedOtherUser) {
@@ -308,6 +301,13 @@ const ChatScreen = ({ route, navigation }) => {
             setDerivedOtherUser(other);
           }
         }
+      }
+
+      // Scroll to bottom after initial load
+      if (!isLoadMore) {
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: false });
+        }, 100);
       }
 
     } catch (error) {
@@ -328,8 +328,7 @@ const ChatScreen = ({ route, navigation }) => {
       );
       if (isDuplicate) return prev;
 
-      // Add new message at the beginning (newest first)
-      return [normalized, ...prev];
+      return [...prev, normalized];
     });
 
     const messageSenderId = normalized.sender._id || normalized.sender.id;
@@ -337,6 +336,11 @@ const ChatScreen = ({ route, navigation }) => {
     if (messageSenderId !== currentUserId) {
       setTimeout(() => markMessageAsRead(normalized._id), 500);
     }
+
+    // Scroll to bottom
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
   };
 
   const updateMessageStatus = (identifier, messageData, status) => {
@@ -406,8 +410,7 @@ const ChatScreen = ({ route, navigation }) => {
       deliveredToUserIds: [],
     };
 
-    // Add to beginning (newest first)
-    setMessages(prev => [tempMessage, ...prev]);
+    setMessages(prev => [...prev, tempMessage]);
     setNewMessage('');
     setSending(true);
 
@@ -421,6 +424,10 @@ const ChatScreen = ({ route, navigation }) => {
       });
 
       handleTyping(false);
+
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
 
     } catch {
       setMessages(prev => prev.filter(msg => msg.tempId !== tempId));
@@ -688,7 +695,7 @@ const ChatScreen = ({ route, navigation }) => {
                   ],
                   opacity: menuAnimatedValue,
                   position: 'absolute',
-                  top: 60, // Position below header
+                  top: 60,
                   right: 16,
                 },
               ]}
@@ -975,8 +982,8 @@ const ChatScreen = ({ route, navigation }) => {
 
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={0}
         >
           <View style={{ flex: 1 }}>
             {/* Header */}
@@ -1023,8 +1030,7 @@ const ChatScreen = ({ route, navigation }) => {
               showsVerticalScrollIndicator={false}
               onEndReached={loadMoreMessages}
               onEndReachedThreshold={0.5}
-              ListHeaderComponent={renderTypingIndicator}
-              ListFooterComponent={
+              ListHeaderComponent={
                 loadingMore ? (
                   <View style={styles.loadingMore}>
                     <ActivityIndicator size="small" color="#007AFF" />
@@ -1032,14 +1038,9 @@ const ChatScreen = ({ route, navigation }) => {
                   </View>
                 ) : null
               }
-              contentContainerStyle={[
-                styles.messagesList,
-                { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 80 : 20 }
-              ]}
+              ListFooterComponent={renderTypingIndicator}
+              contentContainerStyle={styles.messagesList}
               onScrollToIndexFailed={() => {}}
-              maintainVisibleContentPosition={{
-                minIndexForVisible: 0,
-              }}
               removeClippedSubviews={false}
               maxToRenderPerBatch={20}
               windowSize={21}
@@ -1047,7 +1048,7 @@ const ChatScreen = ({ route, navigation }) => {
             />
 
             {/* Input Container */}
-            <View style={[styles.inputContainer, { marginBottom: keyboardHeight > 0 ? keyboardHeight - 20 : 20 }]}>
+            <View style={styles.inputContainer}>
               <View style={styles.inputRow}>
                 <TextInput
                   ref={inputRef}
@@ -1098,7 +1099,7 @@ const ChatScreen = ({ route, navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const styles =  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#083028',
@@ -1210,10 +1211,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#AAAAAA',
     marginHorizontal: 2,
   },
-  typingText: {
-    color: '#AAAAAA',
-    fontSize: 12,
-  },
   messageText: {
     fontSize: 16,
     lineHeight: 22,
@@ -1245,14 +1242,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   blueTickContainer: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#e9f0e9',
     borderRadius: 8,
     padding: 2,
   },
   inputContainer: {
     backgroundColor: '#0a3a2d',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
     borderTopWidth: 1,
     borderTopColor: '#2A2A2A',
   },
@@ -1265,9 +1263,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#1A1A1A',
     borderRadius: 20,
     paddingHorizontal: 16,
-    paddingVertical: 0,
+    paddingTop: 10,
+    paddingBottom: 10,
     fontSize: 16,
     color: '#FFFFFF',
+    minHeight: 44,
     maxHeight: 100,
   },
   sendButton: {
@@ -1381,4 +1381,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ChatScreen;
+export default ChatScreen; 

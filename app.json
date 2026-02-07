@@ -5,9 +5,10 @@
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/appicon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "scheme": "moihubapp",
     "splash": {
-      "backgroundColor": "#005f4b",
+      "backgroundColor": "#093028",
       "resizeMode": "contain",
       "image": "./assets/moihublogo.png"
     },
@@ -18,7 +19,7 @@
       "bundleIdentifier": "com.kylexvin.moihub",
       "supportsTablet": true,
       "infoPlist": {
-        "NSUserTrackingUsageDescription": "This identifier will be used for notifications."
+        "NSUserTrackingUsageDescription": "This identifier will be used for notifications and personalized experience."
       }
     },
     "android": {
@@ -32,15 +33,34 @@
         "VIBRATE",
         "ACCESS_NETWORK_STATE",
         "WAKE_LOCK",
-        "FOREGROUND_SERVICE",
-        "com.google.android.c2dm.permission.RECEIVE",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "FOREGROUND_SERVICE"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "com.kylexvin.moihub",
+              "host": "oauth2redirect"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "com.kylexvin.moihub",
+              "host": "github-auth"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
       ],
       "googleServicesFile": "./android/app/google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/appicon.png",
-        "backgroundColor": "#f2f5f4ff"
+        "backgroundColor": "#093028"
       }
     },
     "web": {
@@ -53,7 +73,7 @@
         "expo-notifications",
         {
           "icon": "./assets/ic_stat_notification.png",
-          "color": "#005f4b"
+          "color": "#00C896"
         }
       ],
       "@react-native-firebase/app",
@@ -62,21 +82,21 @@
         "expo-build-properties",
         {
           "android": {
-            "minSdkVersion": 21
+            "minSdkVersion": 23
           }
         }
       ],
       "expo-sqlite"
     ],
-    "scheme": "moihubapp",
     "updates": {
       "fallbackToCacheTimeout": 0
     },
     "extra": {
+      "backendUrl": "https://moihub.onrender.com",
       "eas": {
         "projectId": "2fe67dfd-7c68-4c43-a61f-5fb4ce28cc1d"
       }
     },
     "owner": "kylexvinny"
   }
-}
+} 

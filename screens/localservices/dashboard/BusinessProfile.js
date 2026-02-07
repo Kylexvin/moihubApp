@@ -17,11 +17,11 @@ import {
   Platform,
   KeyboardAvoidingView,
   Dimensions,
+  Linking
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import MapView, { Marker } from 'react-native-maps';
 import axios from 'axios';
 import * as Haptics from 'expo-haptics';
 import Theme from '../../theme/Theme';
@@ -393,6 +393,39 @@ const uploadImage = async (imageAsset) => {
 
   const isDayClosed = (day) => {
     return !hoursData[day].open && !hoursData[day].close;
+  };
+
+  // New function to open maps with the location
+  const openLocationInMaps = () => {
+    if (!locationData.address && locationData.latitude === 0 && locationData.longitude === 0) {
+      Alert.alert('No Location', 'Please add a location first');
+      return;
+    }
+
+    let mapUrl = '';
+    const address = locationData.address || '';
+    
+    if (address) {
+      const encodedAddress = encodeURIComponent(address);
+      if (Platform.OS === 'ios') {
+        mapUrl = `http://maps.apple.com/?q=${encodedAddress}`;
+      } else {
+        mapUrl = `https://maps.google.com/?q=${encodedAddress}`;
+      }
+    } else if (locationData.latitude !== 0 || locationData.longitude !== 0) {
+      if (Platform.OS === 'ios') {
+        mapUrl = `http://maps.apple.com/?ll=${locationData.latitude},${locationData.longitude}`;
+      } else {
+        mapUrl = `https://maps.google.com/?q=${locationData.latitude},${locationData.longitude}`;
+      }
+    }
+
+    if (mapUrl) {
+      Linking.openURL(mapUrl).catch((err) => {
+        console.log('Failed to open maps:', err);
+        Alert.alert('Error', 'Could not open maps application');
+      });
+    }
   };
 
   if (loading) {
@@ -881,25 +914,31 @@ const uploadImage = async (imageAsset) => {
             )}
           </View>
 
+          {/* REPLACED MapView with location preview */}
           {(locationData.latitude !== 0 || locationData.longitude !== 0) && (
-            <View style={styles.mapContainer}>
-              <MapView
-                style={styles.map}
-                region={{
-                  latitude: locationData.latitude || -1.2921,
-                  longitude: locationData.longitude || 36.8219,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
-                }}
+            <View style={styles.locationPreviewContainer}>
+              <View style={styles.locationPreview}>
+                <Ionicons name="location-sharp" size={48} color={Colors.primary} />
+                <Text style={styles.locationPreviewText}>
+                  Your Business Location
+                </Text>
+                <Text style={styles.locationCoordinates}>
+                  {locationData.latitude.toFixed(6)}, {locationData.longitude.toFixed(6)}
+                </Text>
+                {locationData.address && (
+                  <Text style={styles.locationAddress} numberOfLines={2}>
+                    {locationData.address}
+                  </Text>
+                )}
+              </View>
+              
+              <TouchableOpacity 
+                style={styles.viewOnMapButton}
+                onPress={openLocationInMaps}
               >
-                <Marker
-                  coordinate={{
-                    latitude: locationData.latitude || -1.2921,
-                    longitude: locationData.longitude || 36.8219,
-                  }}
-                  title="Your Business"
-                />
-              </MapView>
+                <Ionicons name="map" size={18} color={Colors.text} />
+                <Text style={styles.viewOnMapText}>View on Maps</Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -1087,7 +1126,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.background,
   },
 
-  // Add bottom padding to infoCard
+  // Info Card
   infoCard: {
     paddingHorizontal: Spacing.lg,
     paddingBottom: 100, // Increase this for bottom navigation
@@ -1205,7 +1244,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: Spacing.lg,
   },
-    modalContainer: {
+  modalContainer: {
     backgroundColor: Colors.background,
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
@@ -1214,8 +1253,6 @@ const styles = StyleSheet.create({
     maxHeight: '80%',
     marginBottom: 70, // ADD THIS LINE for bottom navigation spacing
   },
-
-
   modalTitle: {
     ...Typography.h3,
     color: Colors.text,
@@ -1311,7 +1348,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: Spacing.sm,
   },
-  // Location Modal
+  // Location Modal - Updated Styles
   coordinateInputs: {
     flexDirection: 'row',
     gap: Spacing.md,
@@ -1351,14 +1388,56 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '600',
   },
-  mapContainer: {
-    height: 200,
-    borderRadius: BorderRadius.md,
-    overflow: 'hidden',
+  // Location Preview (replaces MapView)
+  locationPreviewContainer: {
     marginTop: Spacing.md,
   },
-  map: {
-    flex: 1,
+  locationPreview: {
+    height: 180,
+    backgroundColor: Colors.card + '40',
+    borderRadius: BorderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    borderStyle: 'dashed',
+  },
+  locationPreviewText: {
+    marginTop: Spacing.sm,
+    color: Colors.text,
+    fontWeight: '600',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  locationCoordinates: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: Spacing.xs,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  locationAddress: {
+    fontSize: 14,
+    color: Colors.text,
+    marginTop: Spacing.sm,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  viewOnMapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  viewOnMapText: {
+    ...Typography.button,
+    color: Colors.text,
+    fontSize: 14,
+    fontWeight: '600',
   },
   // Modal Actions
   modalActions: {
@@ -1394,8 +1473,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
-  // Info Card
-  // Update imagePickerContainer to add bottom spacing
   imagePickerContainer: {
     backgroundColor: Colors.background,
     borderTopLeftRadius: BorderRadius.lg,
@@ -1403,7 +1480,6 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     paddingBottom: 70, // ADD THIS LINE for bottom navigation spacing
   },
-
   imagePickerTitle: {
     ...Typography.h3,
     color: Colors.text,
@@ -1445,5 +1521,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
- 
+
 export default BusinessProfile;

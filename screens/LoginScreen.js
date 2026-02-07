@@ -9,20 +9,27 @@ import {
   Alert,
   Animated,
   Dimensions,
-  Image
+  Image,
+  Linking,
+  ScrollView,
+  Modal
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useAuth } from '../context/AuthContext';
-import { Linking } from 'react-native';
-
-import { requestNotificationPermission } from '../utils/notifications';
+import * as Google from 'expo-auth-session/providers/google';
+import * as AuthSession from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
+import { makeRedirectUri } from 'expo-auth-session';
+import * as Notifications from 'expo-notifications';
 import axios from 'axios';
 import Constants from 'expo-constants';
 
+WebBrowser.maybeCompleteAuthSession();
+
 const isExpoGo = Constants?.appOwnership === 'expo';
 const messaging = !isExpoGo ? require('@react-native-firebase/messaging').default : null;
-
 const { width } = Dimensions.get('window');
+const BACKEND_URL = 'https://moihub.onrender.com';
 
 const LoginScreen = ({ navigation }) => {
   const [emailOrUsername, setEmailOrUsername] = useState('');
@@ -30,34 +37,141 @@ const LoginScreen = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [googleLoading, setGoogleLoading] = useState(false);
   
-  const { login, loading, error, currentUser } = useAuth();
+  // Permission States
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [permissionGranted, setPermissionGranted] = useState(false);
+  const [isCheckingPermission, setIsCheckingPermission] = useState(true);
+  
+  const { login, socialLogin, loading } = useAuth();
   
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
   const slideAnim = useState(new Animated.Value(50))[0];
 
-  useEffect(() => {
-    requestNotificationPermission();
-  }, []);
+  // Notification Permission Function
+  const requestNotificationPermission = async () => {
+    try {
+      const { status } = await Notifications.requestPermissionsAsync();
+      
+      if (status === 'granted') {
+        setPermissionGranted(true);
+        setShowPermissionModal(false);
+      }
+      return status;
+    } catch (error) {
+      console.error('Permission error:', error);
+      return 'undetermined';
+    }
+  };
+
+  // Google Auth Hook Configuration
+  const [googleRequest, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
+    androidClientId: '333099247116-d7ur0csf6427g3s5uubrg5l1c2m0kmdv.apps.googleusercontent.com',
+    webClientId: '333099247116-5vmfobodqd5rt34glk0d04bu319j74b7.apps.googleusercontent.com',
+    redirectUri: makeRedirectUri({
+      native: 'com.kylexvin.moihub:/oauth2redirect',
+    }),
+  });
 
   useEffect(() => {
+    // Check notification permission
+    const checkPermissions = async () => {
+      setIsCheckingPermission(true);
+      const { status } = await Notifications.getPermissionsAsync();
+      
+      if (status === 'granted') {
+        setPermissionGranted(true);
+      } else {
+        setTimeout(() => {
+          setShowPermissionModal(true);
+        }, 500);
+      }
+      setIsCheckingPermission(false);
+    };
+
+    checkPermissions();
+    
     // Entrance animation
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 800,
-        useNativeDriver: true,
-      }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 800, useNativeDriver: true }),
     ]).start();
   }, []);
 
+  // Handle Google Auth Response
+  useEffect(() => {
+    if (googleResponse?.type === 'success') {
+      const { id_token } = googleResponse.params;
+      if (id_token) {
+        handleSocialLogin('google', id_token);
+      } else {
+        setGoogleLoading(false);
+        Alert.alert('Error', 'Google did not return credentials.');
+      }
+    } else if (googleResponse?.type === 'error') {
+      setGoogleLoading(false);
+      Alert.alert('Google Error', 'Authentication failed.');
+    }
+  }, [googleResponse]);
+
+const handleSocialLogin = async (provider, token = null) => {
+  if (!permissionGranted) {
+    setShowPermissionModal(true);
+    return;
+  }
+  
+  try {
+    setGoogleLoading(true);
+    setFeedback(`Authenticating with ${provider}...`);
+    
+    // Remove the fetch call and use socialLogin directly
+    const user = await socialLogin(provider, token);
+    
+    if (user?._id) {
+      await syncPushToken(user._id);
+    }
+    
+  } catch (err) {
+    setFeedback('');
+    Alert.alert(`${provider} Login Failed`, err.message || `Could not sign in with ${provider}`);
+  } finally {
+    setGoogleLoading(false);
+  }
+};
+
+  const syncPushToken = async (userId) => {
+    if (!messaging) return;
+    try {
+      const fcmToken = await messaging().getToken();
+      if (fcmToken) {
+        await axios.post(`${BACKEND_URL}/api/auth/update-push-token`, { userId, fcmToken });
+      }
+    } catch (err) {
+      console.error('Failed to sync push token:', err);
+    }
+  };
+
+  const handleGoogleBtnPress = () => {
+    if (!permissionGranted) {
+      setShowPermissionModal(true);
+      return;
+    }
+    
+    setGoogleLoading(true);
+    googlePromptAsync().catch((err) => {
+      setGoogleLoading(false);
+      console.log('Google Prompt Error:', err);
+    });
+  };
+
   const handleLogin = async () => {
+    if (!permissionGranted) {
+      setShowPermissionModal(true);
+      return;
+    }
+    
     if (!emailOrUsername || !password) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
@@ -67,141 +181,241 @@ const LoginScreen = ({ navigation }) => {
       setIsRedirecting(true);
       setFeedback('Logging in...');
 
-      // Perform login
       const user = await login(emailOrUsername, password);
-
-      // Ensure Firebase Messaging is available (not in Expo Go)
-      if (!messaging) {
-        Alert.alert('Error', 'Push notifications are not supported on this device.');
-        setIsRedirecting(false);
-        return;
+      if (user?._id) {
+        await syncPushToken(user._id);
       }
 
-      // Request notification permission and get FCM token
-      const fcmToken = await messaging().getToken();
-      if (!fcmToken) {
-        Alert.alert(
-          'Permission Required',
-          'Push notifications are required to use this app. Please enable notifications in your settings.'
-        );
-        setIsRedirecting(false);
-        return;
-      }
-
-      // Update FCM token in backend
-      await axios.post('/api/auth/update-push-token', {
-        userId: user._id,
-        fcmToken,
-      });
-
-      setFeedback('Login successful! Redirecting...');
-
+      setFeedback('Login successful!');
     } catch (err) {
       setIsRedirecting(false);
       setFeedback('');
-
-      const errorMessage =
-        err.response?.data?.message || err.message || 'Please check your credentials and try again';
+      const errorMessage = err.response?.data?.message || err.message || 'Login failed';
       Alert.alert('Login Failed', errorMessage);
     }
   };
 
-  const handleGoogleSignIn = () => {
-    Alert.alert(
-      'Coming Soon!',
-      'Google Sign-In will be available in a future update. Please use email/username login for now.',
-      [{ text: 'OK' }]
+  // Permission Modal
+  const PermissionModal = () => (
+    <Modal
+      transparent={true}
+      visible={showPermissionModal}
+      animationType="fade"
+      onRequestClose={() => {}}
+    >
+      <View style={styles.modalOverlay}>
+        <Animated.View style={[styles.modalContainer, { opacity: fadeAnim }]}>
+          <View style={styles.modalHeader}>
+            <Icon name="bell" size={40} color="#00C896" />
+            <Text style={styles.modalTitle}>Stay Connected</Text>
+          </View>
+          
+          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+            <Text style={styles.modalSubtitle}>
+              Enable notifications to get the most out of MoiHub:
+            </Text>
+            
+            <View style={styles.featureList}>
+              <View style={styles.featureItem}>
+                <Icon name="check-circle" size={20} color="#00C896" style={styles.featureIcon} />
+                <Text style={styles.featureText}>Instant message alerts</Text>
+              </View>
+              
+              <View style={styles.featureItem}>
+                <Icon name="check-circle" size={20} color="#00C896" style={styles.featureIcon} />
+                <Text style={styles.featureText}>Order status updates</Text>
+              </View>
+              
+              <View style={styles.featureItem}>
+                <Icon name="check-circle" size={20} color="#00C896" style={styles.featureIcon} />
+                <Text style={styles.featureText}>Security and safety alerts</Text>
+              </View>
+              
+              <View style={styles.featureItem}>
+                <Icon name="check-circle" size={20} color="#00C896" style={styles.featureIcon} />
+                <Text style={styles.featureText}>Community announcements</Text>
+              </View>
+            </View>
+            
+            <Text style={styles.modalNote}>
+              You can change notification settings anytime in your phone's Settings.
+            </Text>
+          </ScrollView>
+          
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={requestNotificationPermission}
+              activeOpacity={0.8}
+            >
+              <Icon name="check" size={18} color="#093028" style={styles.buttonIcon} />
+              <Text style={styles.primaryButtonText}>Allow Notifications</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => {
+                setShowPermissionModal(false);
+                Alert.alert(
+                  'Limited Experience',
+                  'Some features may not work optimally without notifications.',
+                  [{ text: 'Continue Anyway', style: 'default' }]
+                );
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.secondaryButtonText}>Maybe Later</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+
+  if (isCheckingPermission) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#00C896" />
+        <Text style={styles.loadingText}>Getting ready...</Text>
+      </View>
     );
-  };
+  }
 
   return (
     <View style={styles.container}>
+      <PermissionModal />
+      
       <View style={styles.glowCircle} />
       <View style={styles.glowCircle2} />
       
-      <Animated.View 
-        style={[
-          styles.contentContainer,
-          { 
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }] 
-          }
-        ]}
-      >
-        <Image 
-          source={require('../assets/moihublogo.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-        
-        <Text style={styles.title}>MoiHub</Text>
-        <Text style={styles.subtitle}>Sign in to continue</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Animated.View 
+          style={[
+            styles.contentContainer,
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
+          ]}
+        >
+          <Image 
+            source={require('../assets/moihublogo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          
+          <Text style={styles.title}>MoiHub</Text>
+          <Text style={styles.subtitle}>Sign in to continue</Text>
 
-        {/* Traditional Login Form */}
-        <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email or Username</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your email or username"
-              placeholderTextColor="#88A99B"
-              value={emailOrUsername}
-              onChangeText={setEmailOrUsername}
-              autoCapitalize="none"
-            />
+          {/* Social Login Buttons */}
+          <View style={styles.socialSection}>
+            {/* Google Button */}
+            <TouchableOpacity 
+              style={[
+                styles.socialButton,
+                styles.googleButton, 
+                (!permissionGranted || googleLoading || !googleRequest) && styles.buttonDisabled
+              ]} 
+              onPress={handleGoogleBtnPress}
+              disabled={!permissionGranted || googleLoading || !googleRequest}
+            >
+              {googleLoading ? (
+                <ActivityIndicator size="small" color="#DB4437" />
+              ) : (
+                <>
+                  <Icon name="google" size={24} color="#DB4437" style={styles.socialIcon} />
+                  <Text style={styles.googleButtonText}>
+                    {!permissionGranted ? 'Enable Notifications First' : 'Continue with Google'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.passwordContainer}>
+          <View style={styles.dividerContainer}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>OR LOGIN WITH EMAIL</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Traditional Login Form */}
+          <View style={styles.form}>
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Email or Username</Text>
               <TextInput
-                style={[styles.input, styles.passwordInput]}
-                placeholder="Enter your password"
+                style={styles.input}
+                placeholder="Enter your email or username"
                 placeholderTextColor="#88A99B"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
+                value={emailOrUsername}
+                onChangeText={setEmailOrUsername}
+                autoCapitalize="none"
+                editable={permissionGranted}
               />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Password</Text>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={[styles.input, styles.passwordInput]}
+                  placeholder="Enter your password"
+                  placeholderTextColor="#88A99B"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  editable={permissionGranted}
+                />
+                <TouchableOpacity 
+                  style={styles.eyeIcon}
+                  onPress={() => permissionGranted && setShowPassword(!showPassword)}
+                  disabled={!permissionGranted}
+                >
+                  <Icon 
+                    name={showPassword ? "eye" : "eye-slash"} 
+                    size={20} 
+                    color={permissionGranted ? "#88A99B" : "#0F5443"} 
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.forgotPasswordContainer}
+              onPress={() => permissionGranted && Linking.openURL('https://moihub-silk.vercel.app/forgot-password')}
+              disabled={!permissionGranted}
+            >
+              <Text style={[styles.forgotPasswordText, !permissionGranted && styles.textDisabled]}>
+                Forgot Password?
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.button, (!permissionGranted || loading || isRedirecting) && styles.buttonDisabled]}
+              onPress={handleLogin}
+              disabled={!permissionGranted || loading || isRedirecting}
+            >
+              {loading || isRedirecting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>
+                  {!permissionGranted ? 'Enable Notifications to Login' : 'LOGIN'}
+                </Text>
+              )}
+            </TouchableOpacity>
+            
+            {feedback ? <Text style={styles.feedbackText}>{feedback}</Text> : null}
+
+            <View style={styles.registerContainer}>
+              <Text style={[styles.registerPrompt, !permissionGranted && styles.textDisabled]}>
+                Don't have an account?
+              </Text>
               <TouchableOpacity 
-                style={styles.eyeIcon}
-                onPress={() => setShowPassword(!showPassword)}
+                onPress={() => permissionGranted && navigation.navigate('Register')}
+                disabled={!permissionGranted}
               >
-                <Icon name={showPassword ? "eye" : "eye-slash"} size={20} color="#88A99B" />
+                <Text style={[styles.registerText, !permissionGranted && styles.textDisabled]}> Register</Text>
               </TouchableOpacity>
             </View>
           </View>
-
-          <TouchableOpacity 
-            style={styles.forgotPasswordContainer}
-            onPress={() => Linking.openURL('https://moihub-silk.vercel.app/forgot-password')}
-          >
-            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.button, (loading || isRedirecting) && styles.buttonDisabled]}
-            onPress={handleLogin}
-            disabled={loading || isRedirecting}
-          >
-            {loading || isRedirecting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>LOGIN</Text>
-            )}
-          </TouchableOpacity>
-          
-          {feedback ? (
-            <Text style={styles.feedbackText}>{feedback}</Text>
-          ) : null}
-
-          <View style={styles.registerContainer}>
-            <Text style={styles.registerPrompt}>Don't have an account?</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={styles.registerText}> Register</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Animated.View>
+        </Animated.View>
+      </ScrollView>
     </View>
   );
 };
@@ -209,11 +423,23 @@ const LoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
     backgroundColor: '#093028',
-    position: 'relative',
-    alignItems: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#093028',
+  },
+  loadingText: {
+    color: '#88A99B',
+    marginTop: 20,
+    fontSize: 16,
+  },
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 40,
+    alignItems: 'center',
   },
   glowCircle: {
     position: 'absolute',
@@ -236,20 +462,19 @@ const styles = StyleSheet.create({
   contentContainer: {
     width: '100%',
     maxWidth: 400,
-    alignSelf: 'center',
+    marginTop: 60,
   },
   logo: {
-    width: 120,
-    height: 120,
+    width: 100,
+    height: 100,
     alignSelf: 'center',
-    marginBottom: 20,
+    marginBottom: 10,
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
     color: '#E0FFF5',
     textAlign: 'center',
-    marginBottom: 8,
     letterSpacing: 2,
   },
   subtitle: {
@@ -258,18 +483,57 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     textAlign: 'center',
   },
+  socialSection: {
+    marginBottom: 20,
+  },
+  socialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    borderRadius: 12,
+    elevation: 3,
+  },
+  googleButton: {
+    backgroundColor: '#fff',
+  },
+  socialIcon: {
+    marginRight: 12,
+  },
+  googleButtonText: {
+    color: '#333',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#0F5443',
+  },
+  dividerText: {
+    color: '#88A99B',
+    paddingHorizontal: 15,
+    fontSize: 12,
+  },
   form: {
     width: '100%',
   },
   inputContainer: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   label: {
     fontSize: 14,
     marginBottom: 8,
     fontWeight: '500',
     color: '#E0FFF5',
-    letterSpacing: 0.5,
   },
   input: {
     borderWidth: 1,
@@ -299,6 +563,7 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     color: '#2DFFC3',
     fontSize: 14,
+    textDecorationLine: 'underline',
   },
   button: {
     backgroundColor: '#00C896',
@@ -306,27 +571,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 10,
-    shadowColor: '#00FFC3',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  buttonDisabled: {
-    backgroundColor: '#00805F',
-    opacity: 0.6,
   },
   buttonText: {
     color: '#093028',
     fontSize: 16,
     fontWeight: '700',
-    letterSpacing: 1,
   },
   feedbackText: {
     color: '#2DFFC3',
     textAlign: 'center',
-    marginTop: 20,
-    fontSize: 14,
+    marginTop: 15,
+    fontSize: 13,
   },
   registerContainer: {
     flexDirection: 'row',
@@ -335,9 +590,119 @@ const styles = StyleSheet.create({
   },
   registerPrompt: {
     color: '#88A99B',
+    fontSize: 14,
   },
   registerText: {
     color: '#2DFFC3',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  textDisabled: {
+    color: '#0F5443',
+    opacity: 0.6,
+  },
+  
+  // MODAL STYLES
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(9, 48, 40, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContainer: {
+    backgroundColor: '#0A382D',
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    borderWidth: 2,
+    borderColor: '#00C896',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    alignItems: 'center',
+    padding: 25,
+    backgroundColor: 'rgba(0, 200, 150, 0.1)',
+    borderBottomWidth: 1,
+    borderBottomColor: '#0F5443',
+  },
+  modalTitle: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#E0FFF5',
+    marginTop: 15,
+    textAlign: 'center',
+  },
+  modalBody: {
+    padding: 25,
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: '#88A99B',
+    marginBottom: 20,
+    lineHeight: 24,
+    textAlign: 'center',
+  },
+  featureList: {
+    marginBottom: 25,
+  },
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+    paddingHorizontal: 10,
+  },
+  featureIcon: {
+    marginRight: 15,
+  },
+  featureText: {
+    color: '#E0FFF5',
+    fontSize: 16,
+    flex: 1,
+  },
+  modalNote: {
+    color: '#88A99B',
+    fontSize: 14,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginTop: 10,
+  },
+  modalFooter: {
+    padding: 20,
+    backgroundColor: 'rgba(15, 84, 67, 0.3)',
+    borderTopWidth: 1,
+    borderTopColor: '#0F5443',
+    gap: 12,
+  },
+  primaryButton: {
+    backgroundColor: '#00C896',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+    borderRadius: 12,
+  },
+  buttonIcon: {
+    marginRight: 10,
+  },
+  primaryButtonText: {
+    color: '#093028',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  secondaryButton: {
+    backgroundColor: 'transparent',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#88A99B',
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    color: '#88A99B',
+    fontSize: 16,
     fontWeight: '600',
   },
 });

@@ -152,86 +152,55 @@ const ProviderProfile = ({ route, navigation }) => {
     setRefreshing(false);
   };
 
-  const handleInitiateChat = async (bookingDetails = null) => {
+  const handleWhatsAppChat = async (bookingDetails = null) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
-    try {
-      const providerUserId = overviewData?.metadata?.providerUserId;
-      
-      if (!providerUserId) {
-        Alert.alert('Error', 'Could not start chat. Provider information is incomplete.');
-        return;
-      }
-      
-      let chatTypeToUse = 'business';
-      let response;
-      
-      try {
-        response = await axios.post('/api/messages/conversations', {
-          participantId: providerUserId,
-          chatType: 'business',
-          context: bookingDetails ? 'service_booking' : 'general_inquiry',
-          bookingDetails: bookingDetails
-        }, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          }
-        });
-      } catch (error) {
-        if (error.response?.status === 400 && error.response?.data?.message?.includes('Invalid chat type')) {
-          console.log('"business" chat type rejected, falling back to "normal"');
-          chatTypeToUse = 'normal';
-          
-          response = await axios.post('/api/messages/conversations', {
-            participantId: providerUserId,
-            chatType: 'normal',
-            context: bookingDetails ? 'service_booking' : 'general_inquiry',
-            bookingDetails: bookingDetails
-          }, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            }
-          });
-        } else {
-          throw error;
-        }
-      }
-
-      const convo = response.data;
-      
-      const chatParams = {
-        conversationId: convo._id,
-        conversation: convo,
-        otherUser: {
-          _id: providerUserId,
-          username: overviewData?.header?.name || 'Provider',
-          email: '',
-          name: overviewData?.header?.name || 'Provider',
-        },
-        chatType: convo.chatType || chatTypeToUse
-      };
-      
-      if (bookingDetails) {
-        chatParams.initialMessage = 
-          `Hi! I'd like to book ${bookingDetails.serviceName} for ${bookingDetails.selectedDate} at ${bookingDetails.selectedTime}. Price: ${bookingDetails.servicePrice}. Duration: ${bookingDetails.serviceDuration}. ${bookingDetails.notes ? `Notes: ${bookingDetails.notes}` : ''}`;
-      }
-      
-      console.log('Navigating to Messages tab -> ChatScreen');
-      
-      navigation.navigate('Messages', {
-        screen: 'ChatScreen',
-        params: chatParams
-      });
-      
-    } catch (error) {
-      console.error('Error creating conversation:', error);
-      Alert.alert('Error', 'Could not start chat. Please try again.');
+    // Get phone number from provider data
+    const phoneNumber = overviewData?.header?.phone;
+    
+    if (!phoneNumber) {
+      Alert.alert('No Phone Number', 'This business has not provided a contact number.');
+      return;
     }
-  };
-
-  const handleChat = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    handleInitiateChat();
+    
+    // Format phone number (remove any non-digit characters)
+    const cleanPhone = phoneNumber.replace(/\D/g, '');
+    
+    // Create message
+    let message = `Hello, I'm interested in your services.`;
+    
+    if (bookingDetails) {
+      message = `Hi! I'd like to book ${bookingDetails.serviceName} for ${bookingDetails.selectedDate} at ${bookingDetails.selectedTime}. Price: ${bookingDetails.servicePrice}. Duration: ${bookingDetails.serviceDuration}. ${bookingDetails.notes ? `Notes: ${bookingDetails.notes}` : ''}`;
+    }
+    
+    // Encode message for URL
+    const encodedMessage = encodeURIComponent(message);
+    
+    // WhatsApp URL
+    const whatsappUrl = `whatsapp://send?phone=${cleanPhone}&text=${encodedMessage}`;
+    
+    // First try WhatsApp
+    try {
+      const canOpen = await Linking.canOpenURL(whatsappUrl);
+      
+      if (canOpen) {
+        await Linking.openURL(whatsappUrl);
+      } else {
+        // If WhatsApp not installed, try regular SMS
+        const smsUrl = `sms:${cleanPhone}?body=${encodedMessage}`;
+        await Linking.openURL(smsUrl);
+      }
+    } catch (error) {
+      console.error('Error opening chat:', error);
+      
+      // Fallback: Open phone dialer
+      try {
+        const phoneUrl = `tel:${cleanPhone}`;
+        await Linking.openURL(phoneUrl);
+      } catch (phoneError) {
+        Alert.alert('Error', 'Could not open communication app. Please try contacting directly.');
+      }
+    }
   };
 
   const handleCall = async () => {
@@ -333,42 +302,6 @@ const ProviderProfile = ({ route, navigation }) => {
             <View style={[styles.coverImage, { backgroundColor: Colors.primary }]} />
           )}
           
-          <View style={styles.topRightIcons}>
-            <TouchableOpacity 
-              style={styles.topIconButton}
-              onPress={handleGetDirections}
-              activeOpacity={0.7}
-            >
-              <View style={styles.iconCircle}>
-                <Ionicons name="location" size={20} color={Colors.text} />
-              </View>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.topIconButton}
-              onPress={handleSave}
-              activeOpacity={0.7}
-            >
-              <View style={styles.iconCircle}>
-                <Ionicons 
-                  name={isSaved ? "bookmark" : "bookmark-outline"} 
-                  size={20} 
-                  color={Colors.text} 
-                />
-              </View>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.topIconButton}
-              onPress={handleShare}
-              activeOpacity={0.7}
-            >
-              <View style={styles.iconCircle}>
-                <Ionicons name="share-outline" size={20} color={Colors.text} />
-              </View>
-            </TouchableOpacity>
-          </View>
-          
           <LinearGradient
             colors={['transparent', 'rgba(10,10,10,0.7)', Colors.background]}
             style={styles.coverGradient}
@@ -438,14 +371,14 @@ const ProviderProfile = ({ route, navigation }) => {
     return (
       <View style={styles.actionButtonsContainer}>
         <View style={styles.primaryActions}>
-          {/* Chat Button */}
+          {/* WhatsApp Button */}
           <TouchableOpacity 
-            style={[styles.actionButton, styles.chatButton]}
-            onPress={handleChat}
+            style={[styles.actionButton, styles.whatsappButton]}
+            onPress={() => handleWhatsAppChat()}
             activeOpacity={0.8}
           >
-            <Ionicons name="chatbubble" size={20} color={Colors.text} />
-            <Text style={styles.actionButtonText}>Chat</Text>
+            <Ionicons name="logo-whatsapp" size={20} color={Colors.text} />
+            <Text style={styles.actionButtonText}>WhatsApp</Text>
           </TouchableOpacity>
           
           {/* Info Button */}
@@ -514,57 +447,52 @@ const ProviderProfile = ({ route, navigation }) => {
     );
   };
 
-// In ProviderProfile.js, update renderTabContent:
+  const renderTabContent = () => {
+    const commonProps = {
+      providerId,
+      providerName: overviewData?.header?.name || '',
+      providerUserId: overviewData?.metadata?.providerUserId,
+      token,
+      navigation,
+      onInitiateWhatsApp: handleWhatsAppChat, // Changed from onInitiateChat
+      overviewData,
+      renderStars,
+      formatTimeAgo,
+    };
 
-const renderTabContent = () => {
-  const commonProps = {
-    providerId,
-    providerName: overviewData?.header?.name || '',
-    providerUserId: overviewData?.metadata?.providerUserId,
-    token,
-    navigation,
-    onInitiateChat: handleInitiateChat,
-    overviewData,
-    renderStars,
-    formatTimeAgo,
+    switch (activeTab) {
+      case 'services':
+        return <ServicesTab 
+          {...commonProps}
+        />;
+      case 'products':
+        return <ProductsTab 
+          {...commonProps}
+        />;
+      case 'reviews':
+        return <ReviewsTab 
+          providerId={providerId}
+          providerName={overviewData?.header?.name || ''}
+          token={token}
+          navigation={navigation}
+          renderStars={renderStars}
+          formatTimeAgo={formatTimeAgo}
+        />;
+      case 'info':
+        return (
+          <InfoTab 
+            providerId={providerId}
+            providerName={overviewData?.header?.name || ''}
+            token={token}
+            handleGetDirections={handleGetDirections}
+            handleCall={handleCall}
+            handleWhatsApp={handleWhatsAppChat} // Changed from handleChat
+          />
+        );
+      default:
+        return <ServicesTab {...commonProps} />;
+    }
   };
-
-  switch (activeTab) {
-    case 'services':
-      return <ServicesTab 
-        {...commonProps}
-        // ServicesTab fetches its own data
-      />;
-    case 'products':
-      return <ProductsTab 
-        {...commonProps}
-        // ProductsTab fetches its own data
-      />;
-    // In ProviderProfile.js renderTabContent():
-case 'reviews':
-  return <ReviewsTab 
-    providerId={providerId}
-    providerName={overviewData?.header?.name || ''}
-    token={token}
-    navigation={navigation}
-    renderStars={renderStars}
-    formatTimeAgo={formatTimeAgo}
-  />;
-    case 'info':
-  return (
-    <InfoTab 
-  providerId={providerId}
-  providerName={overviewData?.header?.name || ''}
-  token={token}
-  handleGetDirections={handleGetDirections}
-  handleCall={handleCall}
-  handleChat={handleChat}
-/>
-  );
-    default:
-      return <ServicesTab {...commonProps} />;
-  }
-};
 
   if (loading) {
     return (
@@ -648,7 +576,6 @@ case 'reviews':
   );
 };
 
-
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -658,35 +585,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   
-  // Header styles
+  // Header styles - Reduced height
   coverImageContainer: {
     position: 'relative',
   },
   coverImage: {
     width: '100%',
-    height: 250,
-  },
-  topRightIcons: {
-    position: 'absolute',
-    top: 50,
-    right: Spacing.lg,
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    height: 180,
   },
   coverGradient: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 150,
+    height: 100,
   },
   profileInfo: {
     paddingHorizontal: Spacing.lg,
@@ -779,7 +691,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     gap: Spacing.sm,
   },
-  chatButton: {
+  whatsappButton: {
     backgroundColor: '#25D366', // WhatsApp green
   },
   infoButton: {
@@ -896,4 +808,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ProviderProfile;
+export default ProviderProfile; 

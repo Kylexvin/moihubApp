@@ -5,14 +5,12 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
   ScrollView,
-  Image,
   Linking,
-  RefreshControl
+  RefreshControl,
+  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker } from 'react-native-maps';
 import * as Haptics from 'expo-haptics';
 import axios from 'axios';
 import Theme from '../../theme/Theme';
@@ -26,7 +24,7 @@ const SkeletonLoader = ({ style }) => (
   </View>
 );
 
-// Section Skeleton Components
+// Section Skeleton Components (updated without map)
 const SectionSkeleton = () => (
   <View style={styles.section}>
     <SkeletonLoader style={styles.sectionTitleSkeleton} />
@@ -68,14 +66,15 @@ const HoursSkeleton = () => (
   </View>
 );
 
-const MapSkeleton = () => (
+// Updated: No MapSkeleton needed
+const LocationSkeleton = () => (
   <View style={styles.section}>
     <View style={styles.sectionHeader}>
       <SkeletonLoader style={styles.iconSkeleton} />
       <SkeletonLoader style={styles.sectionTitleSkeletonShort} />
     </View>
     <SkeletonLoader style={styles.addressSkeleton} />
-    <SkeletonLoader style={styles.mapSkeleton} />
+    <SkeletonLoader style={styles.locationPreviewSkeleton} />
     <SkeletonLoader style={styles.directionsButtonSkeleton} />
   </View>
 );
@@ -124,6 +123,17 @@ const ActionButtonsSkeleton = () => (
     ))}
   </View>
 );
+
+// Safe haptic feedback wrapper
+const safeHapticFeedback = async (type = 'light') => {
+  try {
+    if (Haptics && Haptics.impactAsync) {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle[type]);
+    }
+  } catch (error) {
+    console.log('Haptics not available:', error);
+  }
+};
 
 // Main InfoTab Component
 const InfoTab = ({ 
@@ -176,30 +186,72 @@ const InfoTab = ({
   };
 
   const handleOpenMap = () => {
+    safeHapticFeedback('light');
+    
+    // Improved map URL generation
+    let mapUrl = '';
+    
     if (infoData?.location?.mapUrl) {
-      Linking.openURL(infoData.location.mapUrl);
+      mapUrl = infoData.location.mapUrl;
     } else if (infoData?.location?.address) {
-      const mapUrl = `https://maps.google.com/?q=${encodeURIComponent(infoData.location.address)}`;
-      Linking.openURL(mapUrl);
+      // Clean address for URL
+      const cleanAddress = encodeURIComponent(infoData.location.address);
+      
+      // Use platform-specific map links for better UX
+      if (Platform.OS === 'ios') {
+        // Apple Maps for iOS
+        mapUrl = `http://maps.apple.com/?q=${cleanAddress}`;
+      } else {
+        // Google Maps for Android (and fallback)
+        mapUrl = `https://maps.google.com/?q=${cleanAddress}`;
+      }
+    } else if (infoData?.location?.coordinates) {
+      // Use coordinates if available
+      const { latitude, longitude } = infoData.location.coordinates;
+      
+      if (Platform.OS === 'ios') {
+        mapUrl = `http://maps.apple.com/?ll=${latitude},${longitude}`;
+      } else {
+        mapUrl = `https://maps.google.com/?q=${latitude},${longitude}`;
+      }
+    }
+    
+    if (mapUrl) {
+      Linking.openURL(mapUrl).catch((err) => {
+        console.log('Failed to open maps:', err);
+        // Fallback to Google Maps
+        const fallbackUrl = `https://maps.google.com`;
+        Linking.openURL(fallbackUrl);
+      });
     }
   };
 
   const handleOpenSocial = (url) => {
+    safeHapticFeedback('light');
     if (url) {
-      Linking.openURL(url);
+      Linking.openURL(url).catch(err => 
+        console.log('Failed to open URL:', err)
+      );
     }
   };
 
   const handleOpenEmail = () => {
+    safeHapticFeedback('light');
     if (infoData?.contact?.email) {
-      Linking.openURL(`mailto:${infoData.contact.email}`);
+      Linking.openURL(`mailto:${infoData.contact.email}`).catch(err =>
+        console.log('Failed to open email:', err)
+      );
     }
   };
 
   const handleOpenWhatsApp = () => {
+    safeHapticFeedback('light');
     if (infoData?.contact?.whatsapp) {
       const phone = infoData.contact.whatsapp.replace('+', '').replace(/\D/g, '');
-      Linking.openURL(`https://wa.me/${phone}`);
+      const url = `https://wa.me/${phone}`;
+      Linking.openURL(url).catch(err =>
+        console.log('Failed to open WhatsApp:', err)
+      );
     }
   };
 
@@ -211,28 +263,13 @@ const InfoTab = ({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.contentContainer}
       >
-        {/* About Section Skeleton */}
         <SectionSkeleton />
-        
-        {/* Stats Section Skeleton */}
         <StatsSkeleton />
-        
-        {/* Operating Hours Skeleton */}
         <HoursSkeleton />
-        
-        {/* Map/Location Skeleton */}
-        <MapSkeleton />
-        
-        {/* Contact Info Skeleton */}
+        <LocationSkeleton />
         <ContactSkeleton />
-        
-        {/* Social Media Skeleton */}
         <SocialSkeleton />
-        
-        {/* Business Details Skeleton */}
         <DetailsSkeleton />
-        
-        {/* Action Buttons Skeleton */}
         <ActionButtonsSkeleton />
       </ScrollView>
     );
@@ -245,7 +282,10 @@ const InfoTab = ({
         <Text style={styles.errorText}>{error || 'No information available'}</Text>
         <TouchableOpacity 
           style={styles.retryButton}
-          onPress={fetchInfoData}
+          onPress={() => {
+            safeHapticFeedback('light');
+            fetchInfoData();
+          }}
         >
           <Text style={styles.retryText}>Retry</Text>
         </TouchableOpacity>
@@ -253,9 +293,8 @@ const InfoTab = ({
     );
   }
 
-  const hasMap = infoData.location?.coordinates || infoData.location?.address;
+  const hasLocation = infoData.location?.address || infoData.location?.coordinates;
   const hasSocialLinks = infoData.social && Object.values(infoData.social).some(val => val);
-  const hasGallery = infoData.images?.gallery?.length > 0;
 
   return (
     <ScrollView 
@@ -336,8 +375,8 @@ const InfoTab = ({
         </View>
       )}
 
-      {/* Location & Map */}
-      {hasMap && (
+      {/* Location (No Map) */}
+      {hasLocation && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="location" size={24} color={Colors.primary} />
@@ -350,38 +389,18 @@ const InfoTab = ({
             </Text>
           )}
           
-          {/* Map Preview */}
-          {infoData.location?.coordinates ? (
-            <View style={styles.mapContainer}>
-              <MapView
-                style={styles.map}
-                initialRegion={{
-                  latitude: infoData.location.coordinates.latitude,
-                  longitude: infoData.location.coordinates.longitude,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
-                }}
-                zoomEnabled={true}
-                scrollEnabled={true}
-                zoomControlEnabled={true}
-              >
-                <Marker
-                  coordinate={infoData.location.coordinates}
-                  title={infoData.business?.name}
-                  description={infoData.location.address}
-                >
-                  <View style={styles.mapMarker}>
-                    <Ionicons name="location" size={24} color={Colors.primary} />
-                  </View>
-                </Marker>
-              </MapView>
-            </View>
-          ) : (
-            <View style={styles.noMapContainer}>
-              <Ionicons name="map-outline" size={48} color={Colors.textSecondary} />
-              <Text style={styles.noMapText}>Map preview unavailable</Text>
-            </View>
-          )}
+          {/* Location Preview (No Map) */}
+          <View style={styles.locationPreview}>
+            <Ionicons name="location-sharp" size={48} color={Colors.primary} />
+            <Text style={styles.locationPreviewText}>
+              {infoData.business?.name || 'Business Location'}
+            </Text>
+            {infoData.location?.coordinates && (
+              <Text style={styles.coordinatesText}>
+                {infoData.location.coordinates.latitude.toFixed(6)}, {infoData.location.coordinates.longitude.toFixed(6)}
+              </Text>
+            )}
+          </View>
           
           <TouchableOpacity 
             style={styles.directionsButton}
@@ -389,7 +408,9 @@ const InfoTab = ({
             activeOpacity={0.8}
           >
             <Ionicons name="navigate" size={20} color={Colors.text} />
-            <Text style={styles.directionsText}>Open in Maps</Text>
+            <Text style={styles.directionsText}>
+              {Platform.OS === 'ios' ? 'Open in Apple Maps' : 'Open in Google Maps'}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
@@ -401,7 +422,10 @@ const InfoTab = ({
         {infoData.contact?.phone && (
           <TouchableOpacity 
             style={styles.contactItem}
-            onPress={() => handleCall(infoData.contact.phone)}
+            onPress={() => {
+              safeHapticFeedback('light');
+              handleCall(infoData.contact.phone);
+            }}
             activeOpacity={0.7}
           >
             <Ionicons name="call" size={20} color={Colors.info} />
@@ -523,7 +547,10 @@ const InfoTab = ({
         {infoData.contact?.phone && (
           <TouchableOpacity 
             style={[styles.actionButton, styles.callButton]}
-            onPress={() => handleCall(infoData.contact.phone)}
+            onPress={() => {
+              safeHapticFeedback('medium');
+              handleCall(infoData.contact.phone);
+            }}
             activeOpacity={0.8}
           >
             <Ionicons name="call" size={20} color={Colors.text} />
@@ -533,7 +560,10 @@ const InfoTab = ({
         
         <TouchableOpacity 
           style={[styles.actionButton, styles.chatButton]}
-          onPress={handleChat}
+          onPress={() => {
+            safeHapticFeedback('medium');
+            handleChat();
+          }}
           activeOpacity={0.8}
         >
           <Ionicons name="chatbubble" size={20} color={Colors.text} />
@@ -554,7 +584,7 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xl * 2,
   },
   
-  // Loading Container (removed from skeleton view)
+  // Loading Container
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -652,15 +682,15 @@ const styles = StyleSheet.create({
     height: 18,
   },
   
-  // Map Skeleton
+  // Location Skeleton (replaces MapSkeleton)
   addressSkeleton: {
     width: '100%',
     height: 20,
     marginBottom: Spacing.md,
   },
-  mapSkeleton: {
+  locationPreviewSkeleton: {
     width: '100%',
-    height: 200,
+    height: 150,
     borderRadius: BorderRadius.md,
     marginBottom: Spacing.md,
   },
@@ -718,7 +748,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
   },
   
-  // Original Styles (keep all existing styles)
+  // Original Styles
   section: {
     backgroundColor: Colors.card,
     borderRadius: BorderRadius.lg,
@@ -792,36 +822,36 @@ const styles = StyleSheet.create({
     color: Colors.danger,
     fontStyle: 'italic',
   },
+  
+  // Location Styles (No Map)
   addressText: {
     ...Typography.body,
     color: Colors.text,
     marginBottom: Spacing.md,
+    lineHeight: 22,
   },
-  mapContainer: {
-    height: 200,
-    borderRadius: BorderRadius.md,
-    overflow: 'hidden',
-    marginBottom: Spacing.md,
-  },
-  map: {
-    flex: 1,
-  },
-  mapMarker: {
-    backgroundColor: Colors.background,
-    padding: 4,
-    borderRadius: BorderRadius.round,
-  },
-  noMapContainer: {
-    height: 120,
+  locationPreview: {
+    height: 150,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.cardBorder,
+    backgroundColor: Colors.cardBorder + '40',
     borderRadius: BorderRadius.md,
     marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    borderStyle: 'dashed',
   },
-  noMapText: {
+  locationPreviewText: {
     marginTop: Spacing.sm,
+    color: Colors.text,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  coordinatesText: {
+    fontSize: 12,
     color: Colors.textSecondary,
+    marginTop: Spacing.xs,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   directionsButton: {
     flexDirection: 'row',
@@ -837,6 +867,8 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontSize: 14,
   },
+  
+  // Contact Styles
   contactItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -850,6 +882,8 @@ const styles = StyleSheet.create({
     color: Colors.text,
     flex: 1,
   },
+  
+  // Social Styles
   socialGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -870,6 +904,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.text,
   },
+  
+  // Detail Styles
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -902,6 +938,8 @@ const styles = StyleSheet.create({
     color: Colors.success,
     fontWeight: '600',
   },
+  
+  // Action Button Styles
   actionButtons: {
     flexDirection: 'row',
     gap: Spacing.md,
@@ -929,4 +967,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default InfoTab; 
+export default InfoTab;

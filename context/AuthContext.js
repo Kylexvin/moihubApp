@@ -320,14 +320,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const socialLogin = async (provider, userData) => {
+  const socialLogin = async (provider, socialToken) => {
     setError('');
     setLoading(true);
 
     try {
       const response = await axios.post('/api/auth/social-login', {
         provider,
-        ...userData,
+        token: socialToken,
       });
 
       console.log('Social login response:', response.data);
