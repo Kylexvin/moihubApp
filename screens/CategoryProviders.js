@@ -179,7 +179,7 @@ const CategoryProviders = ({ route, navigation }) => {
     }
   };
 
-  // DIRECT ACTIONS - NO BULLSHIT ALERTS
+  
   const handleCallProvider = (provider) => {
     const phoneNumber = provider.phone?.startsWith('+') 
       ? provider.phone 

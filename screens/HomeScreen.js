@@ -11,7 +11,8 @@ import {
   FlatList,
   Alert,
   RefreshControl,
-  Linking 
+  Linking,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Animatable from 'react-native-animatable';
@@ -22,9 +23,13 @@ import axios from 'axios';
 import WhatsAppFAB from './WhatsAppFAB';
 import DataService from '../services/DataService';
 
-const { width } = Dimensions.get('window');
+// NEW: Import showcase components
+import ServicesShowcase from './components/ServicesShowcase';
+import MarketplaceShowcase from './components/MarketplaceShowcase';
 
-// Skeleton Components
+const { width } = Dimensions.get('window');
+  
+// Skeleton Components (keep existing)
 const SkeletonBox = ({ width, height, style }) => (
   <View 
     style={[
@@ -135,6 +140,11 @@ const HomeScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [currentAdSlide, setCurrentAdSlide] = useState(0);
 
+  // NEW: Showcase states
+  const [marketplaceShowcase, setMarketplaceShowcase] = useState([]);
+  const [servicesShowcase, setServicesShowcase] = useState([]);
+  const [showcaseLoading, setShowcaseLoading] = useState(false);
+
   // Personalization states
   const [personalizedFeed, setPersonalizedFeed] = useState([]);
   const [exploreSections, setExploreSections] = useState([]);
@@ -156,8 +166,8 @@ const HomeScreen = () => {
     checkIcons();
   }, []);
 
-  // Cache configuration
-  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+  // Cache configuration - UPDATED to 30 minutes
+  const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
 
   // Track user behavior
   const trackUserBehavior = async (action, screen, metadata = {}) => {
@@ -188,210 +198,216 @@ const HomeScreen = () => {
     }
   };
 
-const getDefaultPersonalizedFeed = () => [
-  {
-    id: 1,
-    type: 'BLOG',
-    title: 'Campus Events',
-    description: '📝 Latest campus updates',
-    icon: '📝',
-    action: () => {
-      if (trackUserBehavior) {
-        trackUserBehavior('feed_click', 'Blogs', { type: 'blog' });
-      }
-      navigation.navigate('BlogsNavigator', { screen: 'Blogs' });
+  // Fetch showcase data
+  const fetchShowcases = async () => {
+    try {
+      setShowcaseLoading(true);
+      const [marketplaceRes, servicesRes] = await Promise.all([
+        axios.get('/api/marketplace/showcase'),
+        axios.get('/api/services/showcase')
+      ]);
+      
+      setMarketplaceShowcase(marketplaceRes.data.showcaseItems || []);
+      setServicesShowcase(servicesRes.data.showcaseItems || []);
+    } catch (error) {
+      console.error('Failed to fetch showcases:', error);
+    } finally {
+      setShowcaseLoading(false);
     }
-  },
-  {
-    id: 2,
-    type: 'MARKET',
-    title: 'Second Hand Items',
-    description: '🛒 Great deals in marketplace',
-    icon: '🛒',
-    action: () => {
-      if (trackUserBehavior) {
-        trackUserBehavior('feed_click', 'SecondHandHome', { type: 'market' });
-      }
-      navigation.navigate('SecondHandStack', { screen: 'SecondHandHome' }); // UPDATED
-    }
-  }
-];
+  };
 
-const getDefaultExploreSections = () => [
-  {
-    id: 1,
-    title: '🍕 Food Delivery',
-    subtitle: 'Order from campus restaurants',
-    icon: 'restaurant',
-    action: () => {
-      if (trackUserBehavior) {
-        trackUserBehavior('explore_click', 'FoodHome', { section: 'food' });
+  const getDefaultPersonalizedFeed = () => [
+    {
+      id: 1,
+      type: 'BLOG',
+      title: 'Campus Events',
+      description: '📝 Latest campus updates',
+      icon: '📝',
+      action: () => {
+        if (trackUserBehavior) {
+          trackUserBehavior('feed_click', 'Blogs', { type: 'blog' });
+        }
+        navigation.navigate('BlogsNavigator', { screen: 'Blogs' });
       }
-      navigation.navigate('FoodStack', { screen: 'FoodHome' });
     },
-    buttonText: 'Order now →'
-  },
-  {
-    id: 2,
-    title: '🛍️ E-Shop',
-    subtitle: 'Campus online shopping',
-    icon: 'cart',
-    action: () => {
-      if (trackUserBehavior) {
-        trackUserBehavior('explore_click', 'EshopHome', { section: 'eshop' });
+    {
+      id: 2,
+      type: 'MARKET',
+      title: 'Second Hand Items',
+      description: '🛒 Great deals in marketplace',
+      icon: '🛒',
+      action: () => {
+        if (trackUserBehavior) {
+          trackUserBehavior('feed_click', 'SecondHandHome', { type: 'market' });
+        }
+        navigation.navigate('SecondHandStack');
       }
-      navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
+    }
+  ];
+
+  const getDefaultExploreSections = () => [
+    {
+      id: 1,
+      title: '🍕 Food Delivery',
+      subtitle: 'Order from campus restaurants',
+      icon: 'restaurant',
+      action: () => {
+        if (trackUserBehavior) {
+          trackUserBehavior('explore_click', 'FoodHome', { section: 'food' });
+        }
+        navigation.navigate('FoodStack', { screen: 'FoodHome' });
+      },
+      buttonText: 'Order now →'
     },
-    buttonText: 'Shop now →'
-  },
-  {
-    id: 3,
-    title: '💕 LinkMe Dating',
-    subtitle: 'Meet students on campus',
-    icon: 'heart',
-    action: () => {
-      if (trackUserBehavior) {
-        trackUserBehavior('explore_click', 'LinkMeEntry', { section: 'dating' });
+    {
+      id: 2,
+      title: '🛍️ E-Shop',
+      subtitle: 'Campus online shopping',
+      icon: 'cart',
+      action: () => {
+        if (trackUserBehavior) {
+          trackUserBehavior('explore_click', 'EshopHome', { section: 'eshop' });
+        }
+        navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
+      },
+      buttonText: 'Shop now →'
+    },
+    {
+      id: 3,
+      title: '💕 LinkMe Dating',
+      subtitle: 'Meet students on campus',
+      icon: 'heart',
+      action: () => {
+        if (trackUserBehavior) {
+          trackUserBehavior('explore_click', 'LinkMeEntry', { section: 'dating' });
+        }
+        navigation.navigate('LinkMe', { screen: 'LinkMeEntry' });
+      },
+      buttonText: 'Explore →'
+    },
+    {
+      id: 4,
+      title: '🏠 Find Roommates',
+      subtitle: 'Connect with potential roommates',
+      icon: 'people',
+      action: () => {
+        if (trackUserBehavior) {
+          trackUserBehavior('explore_click', 'RoommateBrowse', { section: 'roommate' });
+        }
+        navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' });
+      },
+      buttonText: 'Browse →'
+    }
+  ];
+
+  const getDefaultRecentlyViewed = () => [
+    {
+      id: 1,
+      title: 'Food Vendors',
+      description: 'Order your favorite meals',
+      action: () => navigation.navigate('FoodStack', { screen: 'FoodHome' })
+    },
+    {
+      id: 2,
+      title: 'My School Portal',
+      description: 'Access student portal',
+      action: () => navigation.navigate('MySchoolNavigator', { screen: 'MySchoolHome' })
+    },
+    {
+      id: 3,
+      title: 'Marketplace',
+      description: 'Buy and sell second-hand items',
+      action: () => navigation.navigate('SecondHandStack')
+    },
+    {
+      id: 4,
+      title: 'Local Services',
+      description: 'Find campus service providers',
+      action: () => navigation.navigate('ServicesStack', { screen: 'LocalServices' })
+    }
+  ];
+
+  const slideData = [
+    {
+      id: 1,
+      title: "Welcome to MoiHub",
+      subtitle: "Your campus companion for everything you need",
+      image: require('../assets/hero.jpg'),
+      backgroundColor: '#2C5F2D',
+      buttonText: "Get Started",
+      buttonAction: () => {
+        navigation.navigate('ServicesStack', { screen: 'ServicesList' });
       }
-      navigation.navigate('LinkMe', { screen: 'LinkMeEntry' });
     },
-    buttonText: 'Explore →'
-  },
-  {
-    id: 4,
-    title: '🏠 Find Roommates',
-    subtitle: 'Connect with potential roommates',
-    icon: 'people',
-    action: () => {
-      if (trackUserBehavior) {
-        trackUserBehavior('explore_click', 'RoommateBrowse', { section: 'roommate' });
+    {
+      id: 2,
+      title: "Fast Food Delivery",
+      subtitle: "Delicious meals delivered to your doorstep in minutes",
+      image: require('../assets/food.png'),
+      backgroundColor: '#1976D2',
+      buttonText: "Order Now",
+      buttonAction: () => {
+        navigation.navigate('FoodStack', { screen: 'FoodHome' });
       }
-      navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' }); // UPDATED
     },
-    buttonText: 'Browse →'
-  }
-];
+    {
+      id: 3,
+      title: "E-Shop Marketplace",
+      subtitle: "Shop from campus stores online",
+      image: require('../assets/hero.jpg'),
+      backgroundColor: '#7B1FA2',
+      buttonText: "Shop Now",
+      buttonAction: () => {
+        navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
+      }
+    },
+    {
+      id: 4,
+      title: "LinkMe Dating",
+      subtitle: "Find real connections within Moi University",
+      image: require('../assets/linkmelogo.png'),
+      backgroundColor: '#FF4081',
+      buttonText: "Get Started",
+      buttonAction: () => {
+        navigation.navigate('LinkMe', { screen: 'LinkMeEntry' });
+      }
+    }
+  ];
 
-const getDefaultRecentlyViewed = () => [
-  {
-    id: 1,
-    title: 'Food Vendors',
-    description: 'Order your favorite meals',
-    action: () => navigation.navigate('FoodStack', { screen: 'FoodHome' })
-  },
-  {
-    id: 2,
-    title: 'My School Portal',
-    description: 'Access student portal',
-    action: () => navigation.navigate('MySchoolNavigator', { screen: 'MySchoolHome' })
-  },
-  {
-    id: 3,
-    title: 'Marketplace',
-    description: 'Buy and sell second-hand items',
-    action: () => navigation.navigate('SecondHandStack', { screen: 'SecondHandHome' }) // UPDATED
-  },
-  {
-    id: 4,
-    title: 'Local Services',
-    description: 'Find campus service providers',
-    action: () => navigation.navigate('Services', { screen: 'LocalServices' })
-  }
-];
-
-
-
-const slideData = [
-  {
-    id: 1,
-    title: "Welcome to MoiHub",
-    subtitle: "Your campus companion for everything you need",
-    image: require('../assets/hero.jpg'),
-    backgroundColor: '#2C5F2D',
-    buttonText: "Get Started",
-    buttonAction: () => {
-      // Navigate to Services (which is a tab) and go to ServicesList screen
-      navigation.navigate('Services', { screen: 'ServicesList' });
+  const serviceCategories = [
+    { 
+      title: "Emergency", 
+      icon: "alert-circle-outline", 
+      color: "#EF5350",
+      onPress: () => {
+        navigation.navigate('ServicesStack', { screen: 'EmergencyServices' });
+      }
+    },
+    { 
+      title: "Portal", 
+      icon: "school-outline", 
+      color: "#66BB6A",
+      onPress: () => {
+        navigation.navigate('MySchoolNavigator', { screen: 'MySchoolHome' });
+      }
+    },
+    { 
+      title: "Food Delivery", 
+      icon: "fast-food-outline", 
+      color: "#42A5F5",
+      onPress: () => {
+        navigation.navigate('FoodStack', { screen: 'FoodHome' });
+      }
+    },
+    { 
+      title: "Local Services", 
+      icon: "bicycle-outline", 
+      color: "#FFB300",
+      onPress: () => {
+        navigation.navigate('ServicesStack', { screen: 'LocalServices' });
+      }
     }
-  },
-  {
-    id: 2,
-    title: "Fast Food Delivery",
-    subtitle: "Delicious meals delivered to your doorstep in minutes",
-    image: require('../assets/food.png'),
-    backgroundColor: '#1976D2',
-    buttonText: "Order Now",
-    buttonAction: () => {
-      // FoodStack is defined in MainTabNavigator, navigate to FoodHome
-      navigation.navigate('FoodStack', { screen: 'FoodHome' });
-    }
-  },
-  {
-    id: 3,
-    title: "E-Shop Marketplace",
-    subtitle: "Shop from campus stores online",
-    image: require('../assets/hero.jpg'),
-    backgroundColor: '#7B1FA2',
-    buttonText: "Shop Now",
-    buttonAction: () => {
-      // Based on your navigation structure, this should navigate to EshopNavigator
-      navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
-    }
-  },
-  {
-    id: 4,
-    title: "LinkMe Dating",
-    subtitle: "Find real connections within Moi University",
-    image: require('../assets/linkmelogo.png'),
-    backgroundColor: '#FF4081',
-    buttonText: "Get Started",
-    buttonAction: () => {
-      // LinkMe is a separate navigator, navigate to LinkMeEntry
-      navigation.navigate('LinkMe', { screen: 'LinkMeEntry' });
-    }
-  }
-];
-
-
-const serviceCategories = [
-  { 
-    title: "Emergency", 
-    icon: "alert-circle-outline", 
-    color: "#EF5350",
-    onPress: () => {
-      // Navigate to EmergencyServices which is in ServicesStackNavigator
-      navigation.navigate('Services', { screen: 'EmergencyServices' });
-    }
-  },
-  { 
-    title: "Portal", 
-    icon: "school-outline", 
-    color: "#66BB6A",
-    onPress: () => {
-      // Navigate to MySchoolNavigator's MySchoolHome
-      navigation.navigate('MySchoolNavigator', { screen: 'MySchoolHome' });
-    }
-  },
-  { 
-    title: "Food Delivery", 
-    icon: "fast-food-outline", 
-    color: "#42A5F5",
-    onPress: () => {
-      // Navigate to FoodStack's FoodHome
-      navigation.navigate('FoodStack', { screen: 'FoodHome' });
-    }
-  },
-  { 
-    title: "Local Services", 
-    icon: "bicycle-outline", 
-    color: "#FFB300",
-    onPress: () => {
-      // Navigate to LocalServices which is in ServicesStackNavigator
-      navigation.navigate('Services', { screen: 'LocalServices' });
-    }
-  }
-];
-
+  ];
 
   const loadCachedData = async () => {
     try {
@@ -472,6 +488,7 @@ const serviceCategories = [
       }
 
       await generatePersonalizedContent();
+      await fetchShowcases();
     };
 
     initializeData();
@@ -480,6 +497,7 @@ const serviceCategories = [
   // Pull to refresh
   const onRefresh = useCallback(() => {
     fetchHomescreenData(true, false);
+    fetchShowcases();
   }, []);
 
   // Auto-slide functionality
@@ -542,124 +560,119 @@ const serviceCategories = [
     });
   };
 
+  const handleHighlightPress = () => {
+    if (!homescreenData?.highlight) return;
 
-const handleHighlightPress = () => {
-  if (!homescreenData?.highlight) return;
+    const highlight = homescreenData.highlight;
+    
+    if (trackUserBehavior) {
+      trackUserBehavior('highlight_click', 'Highlight', { 
+        title: highlight.title,
+        type: highlight.type 
+      });
+    }
 
-  const highlight = homescreenData.highlight;
-  
-  if (trackUserBehavior) {
-    trackUserBehavior('highlight_click', 'Highlight', { 
-      title: highlight.title,
-      type: highlight.type 
-    });
-  }
+    if (highlight.targetScreen && highlight.targetId) {
+      navigation.navigate(highlight.targetScreen, { 
+        id: highlight.targetId,
+        ...(highlight.metadata || {})
+      });
+      return;
+    }
 
-  // NEW: If we have targetScreen and targetId, use them
-  if (highlight.targetScreen && highlight.targetId) {
-    navigation.navigate(highlight.targetScreen, { 
-      id: highlight.targetId,
-      ...(highlight.metadata || {})
-    });
-    return;
-  }
+    const highlightType = highlight.type?.toUpperCase();
+    
+    if (highlightType === 'BLOG' || highlightType === 'ARTICLE' || highlightType === 'NEWS') {
+      navigation.navigate('BlogsNavigator', { screen: 'Blogs' });
+      return;
+    }
+    
+    if (highlightType === 'FOOD' || highlightType === 'RESTAURANT') {
+      navigation.navigate('FoodStack', { screen: 'FoodHome' });
+      return;
+    }
+    
+    if (highlightType === 'SHOP' || highlightType === 'MARKETPLACE' || highlightType === 'STORE') {
+      navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
+      return;
+    }
+    
+    if (highlightType === 'DATING' || highlightType === 'MATCH' || highlightType === 'LINKME') {
+      navigation.navigate('LinkMe', { screen: 'LinkMeEntry' });
+      return;
+    }
+    
+    if (highlightType === 'ROOMMATE' || highlightType === 'ACCOMMODATION' || highlightType === 'RENTAL') {
+      navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' });
+      return;
+    }
+    
+    if (highlightType === 'SECONDHAND' || highlightType === 'MARKET' || highlightType === 'SELL') {
+      navigation.navigate('SecondHandStack');
+      return;
+    }
 
-  // OLD LOGIC: Fallback to type-based navigation
-  const highlightType = highlight.type?.toUpperCase();
-  
-  if (highlightType === 'BLOG' || highlightType === 'ARTICLE' || highlightType === 'NEWS') {
-    navigation.navigate('BlogsNavigator', { screen: 'Blogs' });
-    return;
-  }
-  
-  if (highlightType === 'FOOD' || highlightType === 'RESTAURANT') {
-    navigation.navigate('FoodStack', { screen: 'FoodHome' });
-    return;
-  }
-  
-  if (highlightType === 'SHOP' || highlightType === 'MARKETPLACE' || highlightType === 'STORE') {
-    navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
-    return;
-  }
-  
-  if (highlightType === 'DATING' || highlightType === 'MATCH' || highlightType === 'LINKME') {
-    navigation.navigate('LinkMe', { screen: 'LinkMeEntry' });
-    return;
-  }
-  
-  if (highlightType === 'ROOMMATE' || highlightType === 'ACCOMMODATION' || highlightType === 'RENTAL') {
-    navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' }); // UPDATED
-    return;
-  }
-  
-  if (highlightType === 'SECONDHAND' || highlightType === 'MARKET' || highlightType === 'SELL') {
-    navigation.navigate('SecondHandStack', { screen: 'SecondHandHome' }); // UPDATED
-    return;
-  }
+    const searchText = `${highlight.title} ${highlight.content || ''}`.toLowerCase();
+    
+    if (searchText.includes('blog') || searchText.includes('article') || 
+        searchText.includes('news') || searchText.includes('campus') ||
+        searchText.includes('event') || searchText.includes('update')) {
+      navigation.navigate('BlogsNavigator', { screen: 'Blogs' });
+    } else if (searchText.includes('food') || searchText.includes('restaurant') || 
+               searchText.includes('delivery') || searchText.includes('meal')) {
+      navigation.navigate('FoodStack', { screen: 'FoodHome' });
+    } else if (searchText.includes('shop') || searchText.includes('buy') || 
+               searchText.includes('store') || searchText.includes('product')) {
+      navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
+    } else if (searchText.includes('date') || searchText.includes('linkme') || 
+               searchText.includes('meet') || searchText.includes('match')) {
+      navigation.navigate('LinkMe', { screen: 'LinkMeEntry' });
+    } else if (searchText.includes('room') || searchText.includes('rent') || 
+               searchText.includes('accommodation') || searchText.includes('roommate')) {
+      navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' });
+    } else if (searchText.includes('second') || searchText.includes('sell') || 
+               searchText.includes('market') || searchText.includes('used')) {
+      navigation.navigate('SecondHandStack');
+    } else {
+      navigation.navigate('BlogsNavigator', { screen: 'Blogs' });
+    }
+  };
 
-  // Keyword fallback (same as before)
-  const searchText = `${highlight.title} ${highlight.content || ''}`.toLowerCase();
-  
-  if (searchText.includes('blog') || searchText.includes('article') || 
-      searchText.includes('news') || searchText.includes('campus') ||
-      searchText.includes('event') || searchText.includes('update')) {
-    navigation.navigate('BlogsNavigator', { screen: 'Blogs' });
-  } else if (searchText.includes('food') || searchText.includes('restaurant') || 
-             searchText.includes('delivery') || searchText.includes('meal')) {
-    navigation.navigate('FoodStack', { screen: 'FoodHome' });
-  } else if (searchText.includes('shop') || searchText.includes('buy') || 
-             searchText.includes('store') || searchText.includes('product')) {
-    navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
-  } else if (searchText.includes('date') || searchText.includes('linkme') || 
-             searchText.includes('meet') || searchText.includes('match')) {
-    navigation.navigate('LinkMe', { screen: 'LinkMeEntry' });
-  } else if (searchText.includes('room') || searchText.includes('rent') || 
-             searchText.includes('accommodation') || searchText.includes('roommate')) {
-    navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' }); // UPDATED
-  } else if (searchText.includes('second') || searchText.includes('sell') || 
-             searchText.includes('market') || searchText.includes('used')) {
-    navigation.navigate('SecondHandStack', { screen: 'SecondHandHome' }); // UPDATED
-  } else {
-    navigation.navigate('BlogsNavigator', { screen: 'Blogs' });
-  }
-};
+  const handleVendorCTAPress = () => {
+    if (trackUserBehavior) {
+      trackUserBehavior('vendor_cta_click', 'OnboardingNavigator', { 
+        source: 'homescreen',
+        type: 'vendor_onboarding' 
+      });
+    }
+    
+    navigation.navigate('OnboardingNavigator');
+  };
 
-const handleVendorCTAPress = () => {
-  if (trackUserBehavior) {
-    trackUserBehavior('vendor_cta_click', 'OnboardingNavigator', { 
-      source: 'homescreen',
-      type: 'vendor_onboarding' 
-    });
-  }
-  
-  // Navigate to the shared onboarding navigator for vendors
-  navigation.navigate('OnboardingNavigator');
-};
+  const handleAdPress = (ad) => {
+    if (trackUserBehavior) {
+      trackUserBehavior('ad_click', 'Ad', { 
+        title: ad.title,
+        adId: ad._id 
+      });
+    }
 
-const handleAdPress = (ad) => {
-  if (trackUserBehavior) {
-    trackUserBehavior('ad_click', 'Ad', { 
-      title: ad.title,
-      adId: ad._id 
-    });
-  }
+    const searchText = `${ad.title} ${ad.caption}`.toLowerCase();
 
-  const searchText = `${ad.title} ${ad.caption}`.toLowerCase();
-
-  if (searchText.includes('food') || searchText.includes('restaurant') || searchText.includes('delivery')) {
-    navigation.navigate('FoodStack', { screen: 'FoodHome' });
-  } else if (searchText.includes('shop') || searchText.includes('buy') || searchText.includes('store')) {
-    navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
-  } else if (searchText.includes('rent') || searchText.includes('room') || searchText.includes('accommodation')) {
-    navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' }); 
-  } else if (searchText.includes('second') || searchText.includes('sell') || searchText.includes('market')) {
-    navigation.navigate('SecondHandStack', { screen: 'SecondHandHome' }); 
-  } else if (searchText.includes('date') || searchText.includes('link') || searchText.includes('dating')) {
-    navigation.navigate('LinkMe', { screen: 'LinkMeEntry' });
-  } else {
-    navigation.navigate('Services', { screen: 'ServicesList' });
-  }
-};
+    if (searchText.includes('food') || searchText.includes('restaurant') || searchText.includes('delivery')) {
+      navigation.navigate('FoodStack', { screen: 'FoodHome' });
+    } else if (searchText.includes('shop') || searchText.includes('buy') || searchText.includes('store')) {
+      navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
+    } else if (searchText.includes('rent') || searchText.includes('room') || searchText.includes('accommodation')) {
+      navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' }); 
+    } else if (searchText.includes('second') || searchText.includes('sell') || searchText.includes('market')) {
+      navigation.navigate('SecondHandStack'); 
+    } else if (searchText.includes('date') || searchText.includes('link') || searchText.includes('dating')) {
+      navigation.navigate('LinkMe', { screen: 'LinkMeEntry' });
+    } else {
+      navigation.navigate('ServicesStack', { screen: 'ServicesList' });
+    }
+  };
 
   const renderSlideItem = ({ item }) => (
     <View style={[styles.slideItem, { backgroundColor: item.backgroundColor }]}>
@@ -699,27 +712,26 @@ const handleAdPress = (ad) => {
     </View>
   );
 
-const renderAdItem = ({ item }) => (
-  <TouchableOpacity style={styles.adItem} onPress={() => handleAdPress(item)}>
-    <Image
-      source={{ uri: item.imageUrl }}
-      style={styles.adImage}
-      resizeMode="cover"
-    />
-    <View style={styles.adOverlay}>
-      <Text style={styles.adTitle}>{item.title}</Text>
-      <Text style={styles.adCaption}>{item.caption}</Text>
-      <TouchableOpacity
-        style={styles.adButton}
-        onPress={() => handleAdPress(item)}
-      >
-        <Text style={styles.adButtonText}>Explore</Text>
-      </TouchableOpacity>
-    </View>
-  </TouchableOpacity>
-);
+  const renderAdItem = ({ item }) => (
+    <TouchableOpacity style={styles.adItem} onPress={() => handleAdPress(item)}>
+      <Image
+        source={{ uri: item.imageUrl }}
+        style={styles.adImage}
+        resizeMode="cover"
+      />
+      <View style={styles.adOverlay}>
+        <Text style={styles.adTitle}>{item.title}</Text>
+        <Text style={styles.adCaption}>{item.caption}</Text>
+        <TouchableOpacity
+          style={styles.adButton}
+          onPress={() => handleAdPress(item)}
+        >
+          <Text style={styles.adButtonText}>Explore</Text>
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
 
-  // Render Personalized Feed Item
   const renderFeedItem = ({ item }) => (
     <TouchableOpacity style={styles.feedItem} onPress={item.action}>
       <View style={styles.feedHeader}>
@@ -730,7 +742,6 @@ const renderAdItem = ({ item }) => (
     </TouchableOpacity>
   );
 
-  // Render Explore Section Item
   const renderExploreItem = ({ item }) => (
     <TouchableOpacity style={styles.exploreItem} onPress={item.action}>
       <View style={styles.exploreContent}>
@@ -745,7 +756,6 @@ const renderAdItem = ({ item }) => (
     </TouchableOpacity>
   );
 
-  // Render Recently Viewed Item
   const renderRecentItem = ({ item }) => (
     <TouchableOpacity style={styles.recentItem} onPress={item.action}>
       <View style={styles.recentContent}>
@@ -763,7 +773,7 @@ const renderAdItem = ({ item }) => (
       
       <WhatsAppFAB />
       
-      {/* Header */}
+      {/* Header - ALWAYS VISIBLE */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.logoTextContainer}>
@@ -778,17 +788,16 @@ const renderAdItem = ({ item }) => (
             </View>
           </View>
 
-
-<TouchableOpacity 
-  style={styles.notificationButton}
-  onPress={() => navigation.navigate('Messages', { screen: 'ChatList' })}
->
-  {iconsLoaded ? (
-    <Ionicons name="notifications-outline" size={28} color="#2C5F2D" />
-  ) : (
-    <View style={{ width: 28, height: 28, backgroundColor: '#2C5F2D', borderRadius: 14 }} />
-  )}
-</TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.notificationButton}
+            onPress={() => navigation.navigate('Messages', { screen: 'ChatList' })}
+          >
+            {iconsLoaded ? (
+              <Ionicons name="notifications-outline" size={28} color="#2C5F2D" />
+            ) : (
+              <View style={{ width: 28, height: 28, backgroundColor: '#2C5F2D', borderRadius: 14 }} />
+            )}
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -798,7 +807,7 @@ const renderAdItem = ({ item }) => (
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Interactive Slideshow */}
+        {/* Interactive Slideshow - ALWAYS VISIBLE */}
         <View style={styles.slideshowContainer}>
           <FlatList
             ref={slideRef}
@@ -830,7 +839,7 @@ const renderAdItem = ({ item }) => (
           </View>
         </View>
 
-        {/* Service Categories */}
+        {/* Service Categories - ALWAYS VISIBLE */}
         <View style={styles.sectionContainer}>          
           <View style={styles.categoriesContainer}>
             {serviceCategories.map((category, idx) => (
@@ -853,14 +862,12 @@ const renderAdItem = ({ item }) => (
           </View>
         </View>
 
-        {/* API-dependent content */}
+        {/* API-dependent content - PROGRESSIVE LOADING */}
         {loading ? (
-          <>
-            <MissionSkeleton />
-            <HighlightSkeleton />
-            <AdsSkeleton />
-            <VendorCallSkeleton />
-          </>
+          <View style={styles.loadingContentContainer}>
+            <ActivityIndicator size="large" color="#01604c" />
+            <Text style={styles.loadingText}>Loading personalized content...</Text>
+          </View>
         ) : (
           <>
             {/* Today's Mission */}
@@ -900,6 +907,27 @@ const renderAdItem = ({ item }) => (
               </View>
             )}
 
+            {/* Services Showcase - Only show if not empty */}
+            {servicesShowcase.length > 0 && (
+              <View style={styles.sectionContainer}>
+                <View style={styles.showcaseHeader}>
+                  <Text style={styles.sectionTitle}>Featured Services</Text>
+                  <TouchableOpacity 
+                    style={styles.viewAllButton}
+                    onPress={() => navigation.navigate('ServicesStack', { screen: 'LocalServices' })}
+                  >
+                    <Text style={styles.viewAllText}>View All</Text>
+                    <Ionicons name="arrow-forward" size={14} color="#01604c" />
+                  </TouchableOpacity>
+                </View>
+                <ServicesShowcase 
+                  items={servicesShowcase}
+                  loading={showcaseLoading}
+                  navigation={navigation}
+                />
+              </View>
+            )}
+
             {/* Highlight Section */}
             {homescreenData?.highlight && (
               <View style={styles.sectionContainer}>
@@ -932,20 +960,40 @@ const renderAdItem = ({ item }) => (
                       <Text style={styles.highlightTitle}>{homescreenData.highlight.title}</Text>
                     </View>
                     <Text style={styles.highlightText}>{homescreenData.highlight.content}</Text>
-                    {/* In the highlight section */}
-<TouchableOpacity
-  style={styles.highlightButton}
-  onPress={handleHighlightPress}  // Make sure this is correct
->
-  <Text style={styles.highlightButtonText}>Check out</Text>
-  {iconsLoaded ? (
-    <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
-  ) : (
-    <View style={{ width: 16, height: 16, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 8 }} />
-  )}
-</TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.highlightButton}
+                      onPress={handleHighlightPress}
+                    >
+                      <Text style={styles.highlightButtonText}>Check out</Text>
+                      {iconsLoaded ? (
+                        <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+                      ) : (
+                        <View style={{ width: 16, height: 16, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 8 }} />
+                      )}
+                    </TouchableOpacity>
                   </View>
                 </Animatable.View>
+              </View>
+            )}
+
+            {/* Marketplace Showcase - Only show if not empty */}
+            {marketplaceShowcase.length > 0 && (
+              <View style={styles.sectionContainer}>
+                <View style={styles.showcaseHeader}>
+                  <Text style={styles.sectionTitle}>Trending in Marketplace</Text>
+                  <TouchableOpacity 
+                    style={styles.viewAllButton}
+                    onPress={() => navigation.navigate('SecondHandStack')}
+                  >
+                    <Text style={styles.viewAllText}>View All</Text>
+                    <Ionicons name="arrow-forward" size={14} color="#01604c" />
+                  </TouchableOpacity>
+                </View>
+                <MarketplaceShowcase 
+                  items={marketplaceShowcase}
+                  loading={showcaseLoading}
+                  navigation={navigation}
+                />
               </View>
             )}
 
@@ -988,65 +1036,62 @@ const renderAdItem = ({ item }) => (
               </View>
             )}
 
-           
-          </>
-        )}
+            {/* Personalized Feed */}
+            {personalizedFeed.length > 0 && (
+              <View style={styles.sectionContainer}>
+                <Text style={styles.sectionTitle}>Personalized Feed</Text>
+                <View style={styles.feedContainer}>
+                  {personalizedFeed.map((item) => (
+                    <Animatable.View
+                      key={item.id}
+                      animation="fadeInUp"
+                      duration={800}
+                      delay={item.id * 200}
+                    >
+                      {renderFeedItem({ item })}
+                    </Animatable.View>
+                  ))}
+                </View>
+              </View>
+            )}
 
-        {/* Personalized Feed */}
-        {personalizedFeed.length > 0 && (
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Personalized Feed</Text>
-            <View style={styles.feedContainer}>
-              {personalizedFeed.map((item) => (
-                <Animatable.View
-                  key={item.id}
-                  animation="fadeInUp"
-                  duration={800}
-                  delay={item.id * 200}
-                >
-                  {renderFeedItem({ item })}
-                </Animatable.View>
-              ))}
+            {/* Explore Sections */}
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionTitle}>Explore Sections</Text>
+              <View style={styles.exploreContainer}>
+                {exploreSections.map((item) => (
+                  <Animatable.View
+                    key={item.id}
+                    animation="fadeInUp"
+                    duration={800}
+                    delay={item.id * 200}
+                  >
+                    {renderExploreItem({ item })}
+                  </Animatable.View>
+                ))}
+              </View>
             </View>
-          </View>
-        )}
 
-        {/* Explore Sections */}
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Explore Sections</Text>
-          <View style={styles.exploreContainer}>
-            {exploreSections.map((item) => (
-              <Animatable.View
-                key={item.id}
-                animation="fadeInUp"
-                duration={800}
-                delay={item.id * 200}
-              >
-                {renderExploreItem({ item })}
-              </Animatable.View>
-            ))}
-          </View>
-        </View>
+            {/* Recently Viewed */}
+            {recentlyViewed.length > 0 && (
+              <View style={styles.sectionContainer}>
+                <Text style={styles.sectionTitle}>Recently Viewed</Text>
+                <View style={styles.recentContainer}>
+                  {recentlyViewed.map((item) => (
+                    <Animatable.View
+                      key={item.id}
+                      animation="fadeInUp"
+                      duration={800}
+                      delay={item.id * 200}
+                    >
+                      {renderRecentItem({ item })}
+                    </Animatable.View>
+                  ))}
+                </View>
+              </View>
+            )}
 
-        {/* Recently Viewed */}
-        {recentlyViewed.length > 0 && (
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Recently Viewed</Text>
-            <View style={styles.recentContainer}>
-              {recentlyViewed.map((item) => (
-                <Animatable.View
-                  key={item.id}
-                  animation="fadeInUp"
-                  duration={800}
-                  delay={item.id * 200}
-                >
-                  {renderRecentItem({ item })}
-                </Animatable.View>
-              ))}
-            </View>
-          </View>
-        )}
-         {/* Vendor Call to Action */}
+            {/* Vendor Call to Action - UPDATED TEXT */}
             {homescreenData?.vendorCall && (
               <View style={styles.sectionContainer}>
                 <Animatable.View 
@@ -1061,13 +1106,15 @@ const renderAdItem = ({ item }) => (
                     ) : (
                       <View style={{ width: 32, height: 32, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 16, marginBottom: 10 }} />
                     )}
-                    <Text style={styles.vendorCallTitle}>{homescreenData.vendorCall.title}</Text>
-                    <Text style={styles.vendorCallText}>{homescreenData.vendorCall.content}</Text>
+                    <Text style={styles.vendorCallTitle}>List Your Business on MoiHub</Text>
+                    <Text style={styles.vendorCallText}>
+                      Reach thousands of students. Get your business listed today!
+                    </Text>
                     <TouchableOpacity
                       style={styles.vendorCallButton}
                       onPress={handleVendorCTAPress}
                     >
-                      <Text style={styles.vendorCallButtonText}>Get Listed</Text>
+                      <Text style={styles.vendorCallButtonText}>Become a Vendor</Text>
                       {iconsLoaded ? (
                         <Ionicons name="arrow-forward" size={16} color="#4CAF50" />
                       ) : (
@@ -1078,6 +1125,9 @@ const renderAdItem = ({ item }) => (
                 </Animatable.View>
               </View>
             )}
+          </>
+        )}
+
         {/* Footer */}
         <View style={styles.footer}>
           <View style={styles.footerLinks}>
@@ -1101,10 +1151,7 @@ const renderAdItem = ({ item }) => (
   );
 };
 
-
-
 const styles = StyleSheet.create({
-
   container: {
     flex: 1,
     backgroundColor: 'ivory', 
@@ -1235,6 +1282,18 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
 
+  // Loading content container
+  loadingContentContainer: {
+    marginTop: 40,
+    alignItems: 'center',
+    paddingVertical: 30,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
+  },
+
   sectionContainer: {
     marginTop: 24,
     paddingHorizontal: 20,
@@ -1245,6 +1304,29 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 16,
   },
+
+  // NEW: Showcase Header with View All
+  showcaseHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: '#E8F5E8',
+    borderRadius: 20,
+  },
+  viewAllText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#01604c',
+    marginRight: 4,
+  },
+
   categoriesContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1480,7 +1562,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
 
-  // NEW: Personalized Feed Styles
+  // Personalized Feed Styles
   feedContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -1518,7 +1600,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // NEW: Explore Sections Styles
+  // Explore Sections Styles
   exploreContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -1560,7 +1642,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // NEW: Recently Viewed Styles
+  // Recently Viewed Styles
   recentContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -1626,4 +1708,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default HomeScreen;
+export default HomeScreen; 
