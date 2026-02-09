@@ -656,7 +656,7 @@ const SecondHandHome = () => {
           style={[styles.tab, activeTab === 'buyers' && styles.tabActive]}
         >
           <Text style={[styles.tabText, activeTab === 'buyers' && styles.tabTextActive]}>
-            Wanted
+            On Demand
           </Text>
         </TouchableOpacity>
       </View>

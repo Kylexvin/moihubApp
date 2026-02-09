@@ -12,7 +12,12 @@
           "package_name": "com.kylexvin.moihub"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "440940724570-q2oimhoge0bre1curvl7h8glbnp6rbma.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBGnkHnAG19TTL71uyK1s8CqA0P2O1-u1g"
@@ -20,7 +25,41 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "440940724570-q2oimhoge0bre1curvl7h8glbnp6rbma.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:440940724570:android:14f6eb6d2131c5b779b363",
+        "android_client_info": {
+          "package_name": "com.kylexvin.moihub.admin"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "440940724570-q2oimhoge0bre1curvl7h8glbnp6rbma.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGnkHnAG19TTL71uyK1s8CqA0P2O1-u1g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "440940724570-q2oimhoge0bre1curvl7h8glbnp6rbma.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

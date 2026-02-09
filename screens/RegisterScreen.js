@@ -84,13 +84,13 @@ const RegisterScreen = ({ navigation }) => {
   };
 
   // Google Auth Hook Configuration
-  const [googleRequest, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
-    androidClientId: '333099247116-d7ur0csf6427g3s5uubrg5l1c2m0kmdv.apps.googleusercontent.com',
-    webClientId: '333099247116-5vmfobodqd5rt34glk0d04bu319j74b7.apps.googleusercontent.com',
-    redirectUri: makeRedirectUri({
-      native: 'com.kylexvin.moihub:/oauth2redirect',
-    }),
-  });
+const [googleRequest, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
+  androidClientId: '440940724570-q2oimhoge0bre1curvl7h8glbnp6rbma.apps.googleusercontent.com',
+  webClientId: '440940724570-q2oimhoge0bre1curvl7h8glbnp6rbma.apps.googleusercontent.com',
+  redirectUri: makeRedirectUri({
+    native: 'com.kylexvin.moihub:/oauth2redirect',
+  }),
+}); 
 
   useEffect(() => {
     // Check notification permission

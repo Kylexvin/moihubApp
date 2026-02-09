@@ -1154,10 +1154,10 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'ivory', 
+    backgroundColor: '#f0f0e1', 
   },
   header: {
-    backgroundColor: 'ivory',
+    backgroundColor: '#edeedf',
     paddingTop: 10,
     paddingBottom: 15,
     paddingHorizontal: 20,

@@ -1,5 +1,5 @@
 // screens/eshop/ShopProductsScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,10 @@ import {
   Dimensions,
   Animated,
   StatusBar,
+  TextInput,
+  Keyboard,
+  TouchableWithoutFeedback,
+  Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useCart } from '../../context/CartContext';
@@ -23,19 +27,37 @@ const ITEM_WIDTH = (width - 48) / 2;
 const ShopProductsScreen = ({ navigation, route }) => {
   const { shopSlug, shopName, shopId } = route.params;
   const [products, setProducts] = useState([]);
+  const [filteredProducts, setFilteredProducts] = useState([]);
   const [shopInfo, setShopInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [addingToCart, setAddingToCart] = useState(null);
   const [scrollY] = useState(new Animated.Value(0));
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchInputRef = useRef(null);
 
   const { cartItems, addToCart, getCartItemQuantity, getTotalQuantity } = useCart();
 
   useEffect(() => {
     fetchProducts();
-    // Set status bar to light content for dark theme
     StatusBar.setBarStyle('light-content', true);
   }, []);
+
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredProducts(products);
+    } else {
+      const filtered = products.filter(product =>
+        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.category?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredProducts(filtered);
+    }
+  }, [searchQuery, products]);
 
   const fetchProducts = async () => {
     try {
@@ -45,6 +67,7 @@ const ShopProductsScreen = ({ navigation, route }) => {
       
       if (data.success) {
         setProducts(data.data);
+        setFilteredProducts(data.data);
         setShopInfo(data.shop);
       } else {
         Alert.alert('Error', 'Failed to fetch products');
@@ -78,7 +101,6 @@ const ShopProductsScreen = ({ navigation, route }) => {
         shopName: shopName,
       });
       
-      // Enhanced success feedback with haptic
       Alert.alert('Added to Cart! 🛒', `${product.name} has been added to your cart`);
       
     } catch (error) {
@@ -91,6 +113,15 @@ const ShopProductsScreen = ({ navigation, route }) => {
 
   const formatPrice = (price) => {
     return `KSh ${price.toLocaleString()}`;
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    searchInputRef.current?.focus();
+  };
+
+  const handleSearchBlur = () => {
+    setSearchFocused(false);
   };
 
   const ProductCard = ({ item, index }) => {
@@ -130,7 +161,6 @@ const ShopProductsScreen = ({ navigation, route }) => {
             defaultSource={{ uri: 'https://via.placeholder.com/200x200?text=Product' }}
           />
           
-          {/* Gradient overlay for better text readability */}
           <View style={styles.imageGradient} />
           
           {!item.isAvailable && (
@@ -145,14 +175,6 @@ const ShopProductsScreen = ({ navigation, route }) => {
               <Text style={styles.cartBadgeText}>{itemQuantity}</Text>
             </View>
           )}
-
-          {/* Quick view button */}
-          <TouchableOpacity 
-            style={styles.quickViewButton}
-            onPress={() => {/* Navigate to product details */}}
-          >
-            {/* <Icon name="visibility" size={16} color="#fff" /> */}
-          </TouchableOpacity>
         </View>
         
         <View style={styles.productInfo}>
@@ -163,7 +185,6 @@ const ShopProductsScreen = ({ navigation, route }) => {
             {item.description}
           </Text>
           
-          {/* Rating stars (mock data - replace with actual ratings) */}
           <View style={styles.ratingContainer}>
             {[1, 2, 3, 4, 5].map((star) => (
               <Icon 
@@ -181,7 +202,6 @@ const ShopProductsScreen = ({ navigation, route }) => {
               <Text style={styles.productPrice}>
                 {formatPrice(item.price)}
               </Text>
-              {/* Mock discount - replace with actual discount data */}
               <Text style={styles.originalPrice}>
                 KSh {(item.price * 1.2).toLocaleString()}
               </Text>
@@ -228,40 +248,100 @@ const ShopProductsScreen = ({ navigation, route }) => {
       extrapolate: 'clamp',
     });
 
+    const searchBarTranslateY = scrollY.interpolate({
+      inputRange: [0, 100],
+      outputRange: [0, -40],
+      extrapolate: 'clamp',
+    });
+
     return (
-      <Animated.View 
-        style={[
-          styles.shopHeader,
-          { transform: [{ translateY: headerTranslateY }] }
-        ]}
-      >
-        <View style={styles.shopHeaderContent}>
-          <View style={styles.shopTitleContainer}>
-            <Icon name="store" size={24} color="#10b981" />
-            <Text style={styles.shopName}>{shopInfo?.name || shopName}</Text>
+      <>
+        <Animated.View 
+          style={[
+            styles.shopHeader,
+            { transform: [{ translateY: headerTranslateY }] }
+          ]}
+        >
+          <View style={styles.shopHeaderContent}>
+            <View style={styles.shopTitleRow}>
+              <View style={styles.shopTitleContainer}>
+                <Icon name="store" size={24} color="#10b981" />
+                <Text style={styles.shopName}>{shopInfo?.name || shopName}</Text>
+              </View>
+              <View style={styles.shopStatsHeader}>
+                <View style={styles.statItemHeader}>
+                  <Icon name="inventory" size={16} color="#6ee7b7" />
+                  <Text style={styles.statText}>
+                    {products.length}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            
+            {shopInfo?.contactNumber && (
+              <TouchableOpacity style={styles.shopContact}>
+                <Icon name="phone" size={16} color="#6ee7b7" />
+                <Text style={styles.contactText}>{shopInfo.contactNumber}</Text>
+              </TouchableOpacity>
+            )}
+            
+            <View style={styles.shopStats}>
+              <View style={styles.statItem}>
+                <Icon name="local-shipping" size={16} color="#6ee7b7" />
+                <Text style={styles.statText}>Free Delivery</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Icon name="star" size={16} color="#6ee7b7" />
+                <Text style={styles.statText}>4.8 Rating</Text>
+              </View>
+            </View>
+          </View>
+        </Animated.View>
+
+        <Animated.View 
+          style={[
+            styles.searchContainer,
+            { transform: [{ translateY: searchBarTranslateY }] }
+          ]}
+        >
+          <View style={[
+            styles.searchInputContainer,
+            searchFocused && styles.searchInputContainerFocused
+          ]}>
+            <Icon name="search" size={20} color="#94a3b8" style={styles.searchIcon} />
+            <TextInput
+              ref={searchInputRef}
+              style={styles.searchInput}
+              placeholder="Search products by name or description..."
+              placeholderTextColor="#94a3b8"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={handleSearchBlur}
+              returnKeyType="search"
+              autoCorrect={false}
+              autoCapitalize="none"
+              clearButtonMode="while-editing"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={clearSearch} style={styles.clearButton}>
+                <Icon name="close" size={18} color="#94a3b8" />
+              </TouchableOpacity>
+            )}
           </View>
           
-          {shopInfo?.contactNumber && (
-            <TouchableOpacity style={styles.shopContact}>
-              <Icon name="phone" size={16} color="#6ee7b7" />
-              <Text style={styles.contactText}>{shopInfo.contactNumber}</Text>
-            </TouchableOpacity>
-          )}
-          
-          <View style={styles.shopStats}>
-            <View style={styles.statItem}>
-              <Icon name="inventory" size={16} color="#6ee7b7" />
-              <Text style={styles.statText}>
-                {products.length} Products
+          {searchQuery.length > 0 && (
+            <View style={styles.searchResultsInfo}>
+              <Text style={styles.searchResultsText}>
+                Found {filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''}
               </Text>
+              <TouchableOpacity onPress={clearSearch} style={styles.clearSearchButton}>
+                <Text style={styles.clearSearchText}>Clear</Text>
+              </TouchableOpacity>
             </View>
-            <View style={styles.statItem}>
-              <Icon name="local-shipping" size={16} color="#6ee7b7" />
-              <Text style={styles.statText}>Free Delivery</Text>
-            </View>
-          </View>
-        </View>
-      </Animated.View>
+          )}
+        </Animated.View>
+      </>
     );
   };
 
@@ -275,63 +355,81 @@ const ShopProductsScreen = ({ navigation, route }) => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar backgroundColor="#064e3b" barStyle="light-content" />
-      
-      <Animated.FlatList
-        data={products}
-        renderItem={renderProductItem}
-        keyExtractor={(item) => item._id}
-        numColumns={2}
-        ListHeaderComponent={renderHeader}
-        contentContainerStyle={styles.productsList}
-        columnWrapperStyle={styles.row}
-        showsVerticalScrollIndicator={false}
-        refreshing={refreshing}
-        onRefresh={onRefresh}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
-        )}
-        scrollEventThrottle={16}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Icon name="inventory" size={80} color="#374151" />
-            <Text style={styles.emptyTitle}>No Products Available</Text>
-            <Text style={styles.emptyText}>
-              This shop is currently updating their inventory. Check back soon!
-            </Text>
-            <TouchableOpacity style={styles.retryButton} onPress={fetchProducts}>
-              <Icon name="refresh" size={20} color="#fff" />
-              <Text style={styles.retryText}>Refresh</Text>
-            </TouchableOpacity>
-          </View>
-        }
-      />
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <SafeAreaView style={styles.container}>
+        <StatusBar backgroundColor="#064e3b" barStyle="light-content" />
+        
+        <Animated.FlatList
+          data={filteredProducts}
+          renderItem={renderProductItem}
+          keyExtractor={(item) => item._id}
+          numColumns={2}
+          ListHeaderComponent={renderHeader}
+          contentContainerStyle={styles.productsList}
+          columnWrapperStyle={styles.row}
+          showsVerticalScrollIndicator={false}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: true }
+          )}
+          scrollEventThrottle={16}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              {searchQuery.length > 0 ? (
+                <>
+                  <Icon name="search-off" size={80} color="#374151" />
+                  <Text style={styles.emptyTitle}>No Results Found</Text>
+                  <Text style={styles.emptyText}>
+                    No products match "{searchQuery}". Try different keywords.
+                  </Text>
+                  <TouchableOpacity style={styles.retryButton} onPress={clearSearch}>
+                    <Icon name="close" size={20} color="#fff" />
+                    <Text style={styles.retryText}>Clear Search</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <Icon name="inventory" size={80} color="#374151" />
+                  <Text style={styles.emptyTitle}>No Products Available</Text>
+                  <Text style={styles.emptyText}>
+                    This shop is currently updating their inventory. Check back soon!
+                  </Text>
+                  <TouchableOpacity style={styles.retryButton} onPress={fetchProducts}>
+                    <Icon name="refresh" size={20} color="#fff" />
+                    <Text style={styles.retryText}>Refresh</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          }
+        />
 
-      {/* Enhanced Floating Cart Button */}
-      <TouchableOpacity
-        style={styles.cartButton}
-        onPress={() => navigation.navigate('Cart')}
-        activeOpacity={0.8}
-      >
-        <Icon name="shopping-cart" size={24} color="#fff" />
-        {getTotalQuantity() > 0 && (
-          <Animated.View style={styles.cartBadgeFloat}>
-            <Text style={styles.cartBadgeFloatText}>
-              {getTotalQuantity()}
-            </Text>
-          </Animated.View>
-        )}
-      </TouchableOpacity>
-    </SafeAreaView>
+        <TouchableOpacity
+          style={styles.cartButton}
+          onPress={() => navigation.navigate('Cart')}
+          activeOpacity={0.8}
+        >
+          <Icon name="shopping-cart" size={24} color="#fff" />
+          {getTotalQuantity() > 0 && (
+            <Animated.View style={styles.cartBadgeFloat}>
+              <Text style={styles.cartBadgeFloatText}>
+                {getTotalQuantity()}
+              </Text>
+            </Animated.View>
+          )}
+        </TouchableOpacity>
+      </SafeAreaView>
+    </TouchableWithoutFeedback>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a', // Dark slate background
+    backgroundColor: '#0f172a',
   },
   loadingContainer: {
     flex: 1,
@@ -354,9 +452,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   shopHeader: {
-    backgroundColor: '#064e3b', // Dark emerald
+    backgroundColor: '#064e3b',
     borderRadius: 16,
-    marginBottom: 24,
+    marginBottom: 16,
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -366,10 +464,16 @@ const styles = StyleSheet.create({
   shopHeaderContent: {
     padding: 20,
   },
+  shopTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
   shopTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    flex: 1,
   },
   shopName: {
     fontSize: 24,
@@ -377,6 +481,23 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginLeft: 12,
     flex: 1,
+  },
+  shopStatsHeader: {
+    alignItems: 'flex-end',
+  },
+  statItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  statText: {
+    color: '#a7f3d0',
+    fontSize: 12,
+    marginLeft: 4,
+    fontWeight: '600',
   },
   shopContact: {
     flexDirection: 'row',
@@ -407,15 +528,63 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     flex: 0.48,
   },
-  statText: {
-    color: '#a7f3d0',
+  searchContainer: {
+    marginBottom: 20,
+    zIndex: 1000,
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    minHeight: 48,
+  },
+  searchInputContainerFocused: {
+    borderColor: '#10b981',
+    backgroundColor: '#1e293b',
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    color: '#f1f5f9',
+    fontSize: 16,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 8,
+    paddingHorizontal: 8,
+  },
+  clearButton: {
+    padding: 4,
+  },
+  searchResultsInfo: {
+    marginTop: 8,
+    paddingHorizontal: 4,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  searchResultsText: {
+    color: '#94a3b8',
     fontSize: 12,
-    marginLeft: 6,
+    fontStyle: 'italic',
+  },
+  clearSearchButton: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  clearSearchText: {
+    color: '#6ee7b7',
+    fontSize: 12,
     fontWeight: '500',
   },
   productCard: {
     width: ITEM_WIDTH,
-    backgroundColor: '#1e293b', // Dark card background
+    backgroundColor: '#1e293b',
     borderRadius: 16,
     overflow: 'hidden',
     elevation: 4,
@@ -444,8 +613,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 50,
-    backgroundColor: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
+    height: 30,
+    backgroundColor: 'linear-gradient(transparent, rgba(0, 0, 0, 0.07))',
   },
   unavailableBadge: {
     position: 'absolute',
@@ -479,17 +648,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: 'bold',
-  },
-  quickViewButton: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   productInfo: {
     padding: 12,
@@ -625,4 +783,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ShopProductsScreen;
+export default ShopProductsScreen; 
