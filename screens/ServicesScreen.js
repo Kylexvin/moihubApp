@@ -1,1004 +1,594 @@
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  Dimensions,
-  StatusBar,
-  Alert,
-  RefreshControl,
-  ActivityIndicator,
-  TextInput,
-  Animated,
-  Modal,
-  TouchableWithoutFeedback
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { 
+  StyleSheet, Text, View, TouchableOpacity, ScrollView, 
+  SafeAreaView, Dimensions, TextInput, ActivityIndicator,
+  RefreshControl
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import Theme from './theme/Theme';
-import localServicesDB from '../services/LocalServicesDatabase';
+import * as WebBrowser from 'expo-web-browser';
+import WhatsAppFAB from './WhatsAppFAB';
+import DataService from '../services/DataService';
+import ServiceTrackingService from '../services/ServiceTrackingService';
 
-const { width, height } = Dimensions.get('window');
-const { Colors, Gradients, Typography, Spacing, BorderRadius, Components, Shadows } = Theme;
+const { width } = Dimensions.get('window');
 
-const ServicesScreen = ({ navigation }) => {
-  const [categories, setCategories] = useState([]);
-  const [filteredCategories, setFilteredCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(null);
+const ServicesScreen = () => {
+  const navigation = useNavigation();
   const [searchQuery, setSearchQuery] = useState('');
-  const [isOffline, setIsOffline] = useState(false);
-  const [showAIChatbot, setShowAIChatbot] = useState(false);
-  const [aiQuery, setAiQuery] = useState('');
-  const [dbReady, setDbReady] = useState(false);
-  
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
+  const [activeTab, setActiveTab] = useState('All');
+  const [reorderedServices, setReorderedServices] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showSmartSort, setShowSmartSort] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastClickTime, setLastClickTime] = useState(null);
 
-// Replace the getCategoryIcon function with this corrected version:
-const getCategoryIcon = (categoryName) => {
-  const name = categoryName.toLowerCase();
-  const iconMap = {
-    // Transport icons
-    'matatu services': 'bus',
-    'matatu services': 'bus',
-    'boda boda': 'bicycle',
-    'motorbike services': 'bicycle',
-    'tuktuk services': 'car',
-    'transport': 'car',
-    
-    // Service icons
-    'electronic repairs': 'build',
-    'laundry services': 'shirt',
-    'photoshoot services': 'camera',
-    'cyber café': 'desktop',
-    'cyber cafe': 'desktop',
-    'gas deliveries': 'flame',
-    'gas deliveries services': 'flame',
-    
-    // Beauty/Hair icons
-    'saloonist': 'cut',
-    'kinyozi': 'cut',
-    'best kinyozi': 'cut',
-    
-    // Food icons
-    'food ': 'ice-cream', // Changed from 'cake' to 'ice-cream'
-    'poshomill': 'nutrition', // Alternative: 'leaf' or 'restaurant'
-    
-    // Other services
-    'capentry services': 'construct',
-    'mama fua': 'woman',
-    'test': 'star',
-    
-    // Additional mappings for your API categories
-    'electronic repairs': 'hardware-chip',
-    'laundry services': 'shirt',
-    'photoshoot services': 'camera',
-  };
-  
-  // Return the icon or a sensible default
-  return iconMap[name] || 'business';
-};
+  const categories = ['All', 'uni', 'accom', 'food', 'shop', 'local'];
 
-// Also update the color mapping for better consistency:
-const getCategoryColor = (categoryName) => {
-  const name = categoryName.toLowerCase();
-  const colorMap = {
-    // Transport - Green
-    'matatu services': '#10B981',
-    'boda boda': '#059669',
-    'motorbike services': '#10B981',
-    'transport': '#3B82F6',
-    'tuktuk services': '#10B981',
-    
-    // Food/Drink - Orange/Yellow
-    'cake': '#F59E0B',
-    'poshomill': '#F59E0B',
-    'gas deliveries': '#F59E0B',
-    
-    // Tech/Electronics - Purple
-    'electronic repairs': '#8B5CF6',
-    'cyber café': '#8B5CF6',
-    'cyber cafe': '#8B5CF6',
-    
-    // Beauty/Salon - Pink
-    'saloonist': '#EC4899',
-    'best kinyozi': '#EC4899',
-    'kinyozi': '#EC4899',
-    
-    // Cleaning/Laundry - Blue
-    'laundry services': '#06B6D4',
-    'mama fua': '#06B6D4',
-    
-    // Photography - Pink
-    'photoshoot services': '#EC4899',
-    
-    // Carpentry - Brown/Orange
-    'capentry services': '#F59E0B',
-    
-    // Test - Purple
-    'test': '#8B5CF6',
-  };
-  
-  return colorMap[name] || Colors.primary;
-};
+  // Original services array (this remains your default order)
+  const originalServices = [
+    { id: "uni", title: "My University", icon: "school", category: "uni", color: "#50c878" },
+    { id: "rental", title: "Rental Booking", icon: "home", category: "accom", color: "#50c878", badge: 'New' },
+    { id: "roommate", title: "Roommate Finder", icon: "people", category: "accom", color: "#50c878" },
+    { id: "secondhand", title: "Second Hand Items", icon: "pricetag", category: "accom", color: "#50c878" },
+    { id: "pharmacy", title: "Pharmacy", icon: "medkit", category: "pharma", color: "#8e44ad" },
+    { id: "food", title: "Food Delivery", icon: "fast-food", category: "food", color: "#ff7f50" },
+    { id: "eshop", title: "Eshop", icon: "bag", category: "shop", color: "#ffb347", badge: 'Hot' },
+    { id: "linkme", title: "LinkMe", icon: "heart", category: "local", color: "red" },
+    { id: "bundles", title: "Mavo Bingwa Bundles", icon: "wifi", category: "local", color: "#1abc9c" },
+    { id: "blogs", title: "Blogs", icon: "book", category: "local", color: "#3498db" }
+  ];
 
-  const initializeCategory = (category) => {
-    if (!category) return null;
-    
-    const categoryName = category.name || '';
-    const isPinned = category.isPinned || false;
-    const icon = getCategoryIcon(categoryName);
-    const color = getCategoryColor(categoryName);
-    const bgColor = color + '20';
-
-    return {
-      _id: category.id || category._id,
-      id: category.id || category._id,
-      name: categoryName,
-      description: category.description || '',
-      icon,
-      color,
-      bgColor,
-      isPinned,
-      providerCount: category.providerCount || 0,
-      allowDashboard: category.allowDashboard || false,
-      allowBooking: category.allowBooking || false
-    };
-  };
-
-  // Initialize database in background
-  useEffect(() => {
-    const initDatabase = async () => {
-      try {
-        console.log('🔄 Initializing database in background...');
-        await localServicesDB.init();
-        setDbReady(true);
-        console.log('✅ Database ready');
-      } catch (error) {
-        console.log('⚠️ Database init failed, will use fallback:', error.message);
-      }
-    };
-    
-    initDatabase();
-  }, []);
-
-  // Main data initialization
-  useEffect(() => {
-    initializeData();
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
-  useEffect(() => {
-    filterCategories();
-  }, [searchQuery, categories]);
-
-  const initializeData = async () => {
+  // Function to reorder services based on usage
+  const reorderServices = useCallback(async (category = activeTab) => {
     try {
-      setLoading(true);
-      setError(null);
+      // Get recommended order based on usage
+      const recommendedOrder = await ServiceTrackingService.getRecommendedServiceOrder(category);
       
-      console.log('🚀 Starting data load...');
-      
-      // SHOW DEFAULT CATEGORIES IMMEDIATELY
-      const defaultCategories = [
-        {
-          _id: 'matatu_services',
-          id: 'matatu_services',
-          name: 'Matatu Services',
-          description: 'Public transport services around campus',
-          icon: 'bus',
-          color: '#10B981',
-          bgColor: '#10B98120',
-          isPinned: true,
-          providerCount: 12,
-          allowDashboard: false,
-          allowBooking: false
-        },
-        {
-          _id: 'boda_boda',
-          id: 'boda_boda',
-          name: 'Boda Boda',
-          description: 'Motorbike taxi and delivery services',
-          icon: 'bicycle',
-          color: '#059669',
-          bgColor: '#05966920',
-          isPinned: true,
-          providerCount: 8,
-          allowDashboard: false,
-          allowBooking: false
-        }
-      ];
-      
-      // Show default categories immediately
-      setCategories(defaultCategories);
-      console.log('📱 Default categories shown immediately');
-      
-      // Try to fetch fresh data in background
-      fetchFreshDataInBackground();
-      
-    } catch (error) {
-      console.error('❌ Initial load error:', error);
-      setError('Failed to load services');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchFreshDataInBackground = async () => {
-    console.log('🌐 Starting background data sync...');
-    
-    try {
-      // Try network first
-      const freshCategories = await fetchFreshData();
-      
-      if (freshCategories && freshCategories.length > 0) {
-        console.log(`🔄 Updating with ${freshCategories.length} fresh categories`);
+      if (recommendedOrder && recommendedOrder.length > 0) {
+        // Create a map for quick lookup
+        const serviceMap = {};
+        originalServices.forEach(service => {
+          serviceMap[service.id] = service;
+        });
         
-        // Merge with defaults (keep pinned categories)
-        const mergedCategories = mergeCategoriesWithDefaults(freshCategories);
-        
-        // Update UI
-        setCategories(mergedCategories);
-        setIsOffline(false);
-        
-        // Save to SQLite in background (if ready)
-        if (dbReady) {
-          try {
-            await localServicesDB.saveCategories(freshCategories);
-            console.log('💾 Saved to SQLite');
-          } catch (dbError) {
-            console.log('⚠️ Could not save to SQLite:', dbError.message);
-          }
-        }
-        
-        // Also save to AsyncStorage as backup
-        await AsyncStorage.setItem('local_services_cache', JSON.stringify(freshCategories));
-        await AsyncStorage.setItem('local_services_cache_time', Date.now().toString());
-        
-        console.log('✅ Background sync complete');
-      }
-    } catch (networkError) {
-      console.log('📶 Network failed, checking cache...');
-      
-      // Try to load from AsyncStorage cache
-      try {
-        const cacheTime = await AsyncStorage.getItem('local_services_cache_time');
-        const cacheData = await AsyncStorage.getItem('local_services_cache');
-        
-        if (cacheData && cacheTime) {
-          const cachedCategories = JSON.parse(cacheData);
-          const cacheAge = Date.now() - parseInt(cacheTime);
-          const oneHour = 60 * 60 * 1000;
-          
-          if (cacheAge < oneHour * 24) { // Cache valid for 24 hours
-            console.log(`📂 Loading ${cachedCategories.length} categories from cache`);
+        // Sort based on recommended order
+        const sortedServices = [...originalServices]
+          .filter(service => category === 'All' || service.category === category)
+          .sort((a, b) => {
+            const aIndex = recommendedOrder.indexOf(a.id);
+            const bIndex = recommendedOrder.indexOf(b.id);
             
-            const mergedCategories = mergeCategoriesWithDefaults(cachedCategories);
-            setCategories(mergedCategories);
-            setIsOffline(true);
-            setError('Using cached data. Connect for latest updates.');
-          }
-        }
-      } catch (cacheError) {
-        console.log('📭 No cache available');
-        setIsOffline(true);
-        setError('No internet connection. Basic services available.');
-      }
-    }
-  };
-
-  const mergeCategoriesWithDefaults = (freshCategories) => {
-    const defaultPinnedIds = ['matatu_services', 'boda_boda'];
-    
-    // Initialize fresh categories
-    const initializedFresh = freshCategories
-      .map(cat => initializeCategory(cat))
-      .filter(cat => cat !== null);
-    
-    // Check if we have our default pinned categories
-    const hasMatatu = initializedFresh.some(cat => 
-      cat.name.toLowerCase().includes('matatu'));
-    const hasBoda = initializedFresh.some(cat => 
-      cat.name.toLowerCase().includes('boda boda') || 
-      cat.name.toLowerCase().includes('motorbike'));
-    
-    let result = [...initializedFresh];
-    
-    // Add default Matatu if not present
-    if (!hasMatatu) {
-      result.push({
-        _id: 'matatu_services',
-        id: 'matatu_services',
-        name: 'Matatu Services',
-        description: 'Public transport services around campus',
-        icon: 'bus',
-        color: '#10B981',
-        bgColor: '#10B98120',
-        isPinned: true,
-        providerCount: 12,
-        allowDashboard: false,
-        allowBooking: false
-      });
-    }
-    
-    // Add default Boda Boda if not present
-    if (!hasBoda) {
-      result.push({
-        _id: 'boda_boda',
-        id: 'boda_boda',
-        name: 'Boda Boda',
-        description: 'Motorbike taxi and delivery services',
-        icon: 'bicycle',
-        color: '#059669',
-        bgColor: '#05966920',
-        isPinned: true,
-        providerCount: 8,
-        allowDashboard: false,
-        allowBooking: false
-      });
-    }
-    
-    return result;
-  };
-
-  const fetchFreshData = async () => {
-    try {
-      console.log('🌐 Fetching fresh data...');
-      
-      const response = await axios.get('/api/services/categories', {
-        timeout: 8000, // Shorter timeout
-        headers: { 'Cache-Control': 'no-cache' }
-      });
-      
-      console.log('✅ API response received');
-      
-      let categoriesArray = response.data?.categories || [];
-      
-      if (!Array.isArray(categoriesArray)) {
-        categoriesArray = [];
-      }
-      
-      // Mark Matatu and Boda Boda as pinned
-      const processedCategories = categoriesArray.map(category => {
-        const name = (category.name || '').toLowerCase();
-        const isPinned = name.includes('matatu') || 
-                        name.includes('boda boda') || 
-                        name.includes('motorbike');
+            // If both are in recommended order, sort by that order
+            if (aIndex >= 0 && bIndex >= 0) {
+              return aIndex - bIndex;
+            }
+            // If only one is in recommended order, it comes first
+            if (aIndex >= 0) return -1;
+            if (bIndex >= 0) return 1;
+            // If neither are in recommended order, keep original order
+            return originalServices.indexOf(a) - originalServices.indexOf(b);
+          });
         
-        return {
-          ...category,
-          id: category._id,
-          isPinned,
-          providerCount: 0
-        };
-      });
-      
-      console.log(`📊 Processed ${processedCategories.length} categories`);
-      return processedCategories;
-      
+        return sortedServices;
+      } else {
+        return originalServices.filter(service => category === 'All' || service.category === category);
+      }
     } catch (error) {
-      console.error('❌ Fetch error:', error.message);
-      throw error;
+      return originalServices.filter(service => category === 'All' || service.category === category);
     }
-  };
+  }, [activeTab]);
 
-  const onRefresh = async () => {
-    setRefreshing(true);
+  // Load and reorder services based on usage
+  const loadReorderedServices = useCallback(async () => {
+    setIsLoading(true);
     try {
-      await fetchFreshDataInBackground();
+      const sortedServices = await reorderServices(activeTab);
+      setReorderedServices(sortedServices);
     } catch (error) {
-      console.log('Refresh error:', error);
+      setReorderedServices(originalServices.filter(service => 
+        activeTab === 'All' || service.category === activeTab
+      ));
     } finally {
+      setIsLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [activeTab, reorderServices]);
 
-  const filterCategories = () => {
-    if (searchQuery.trim() === '') {
-      setFilteredCategories(categories);
-    } else {
-      const filtered = categories.filter(category =>
-        category.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (category.description && category.description.toLowerCase().includes(searchQuery.toLowerCase()))
-      );
-      setFilteredCategories(filtered);
+  // Initial load
+  useEffect(() => {
+    loadReorderedServices();
+  }, [loadReorderedServices]);
+
+  // Refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadReorderedServices();
+    }, [loadReorderedServices])
+  );
+
+  // Refresh when tab changes
+  useEffect(() => {
+    loadReorderedServices();
+  }, [activeTab]);
+
+  // Refresh after a click (with a small delay to ensure data is saved)
+  useEffect(() => {
+    if (lastClickTime) {
+      const timer = setTimeout(() => {
+        loadReorderedServices();
+      }, 500);
+      
+      return () => clearTimeout(timer);
     }
-  };
+  }, [lastClickTime, loadReorderedServices]);
 
-  const handleCategoryPress = (category) => {
-    navigation.navigate('CategoryProviders', {
-      categoryId: category._id,
-      categoryName: category.name,
-    });
-  };
-
-  const handleAddService = () => {
-    Alert.alert('Coming Soon', 'Service addition feature is under development');
-  };
-
-  const getPinnedCategories = () => {
-    return categories.filter(cat => cat.isPinned);
-  };
-
-  const getRegularCategories = () => {
-    return filteredCategories.filter(cat => !cat.isPinned);
-  };
-
-  const renderHeader = () => (
-    <Animated.View 
-      style={[
-        styles.headerContainer,
-        {
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }]
-        }
-      ]}
-    >
-      <View>
-        <Text style={styles.welcomeText}>Moi University</Text>
-        <Text style={styles.headerTitle}>Services Hub</Text>
-      </View>
-      <TouchableOpacity 
-        style={styles.addServiceButton}
-        onPress={handleAddService}
-      >
-        <Ionicons name="add-circle" size={24} color={Colors.primary} />
-        <Text style={styles.addServiceText}>Add Service</Text>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-
-  const renderSearchBar = () => (
-    <Animated.View 
-      style={[
-        styles.searchContainer,
-        {
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }]
-        }
-      ]}
-    >
-      <View style={styles.searchWrapper}>
-        <Ionicons name="search" size={20} color={Colors.textSecondary} style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search for services..."
-          placeholderTextColor={Colors.textSecondary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          returnKeyType="search"
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity
-            style={styles.clearButton}
-            onPress={() => setSearchQuery('')}
-          >
-            <Ionicons name="close-circle" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-        )}
-      </View>
-    </Animated.View>
-  );
-
-  const renderPinnedServices = () => {
-    const pinnedCategories = getPinnedCategories();
-    if (pinnedCategories.length === 0 || searchQuery !== '') return null;
-
-    return (
-      <Animated.View 
-        style={[
-          styles.section,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }]
-          }
-        ]}
-      >
-        <View style={styles.sectionHeader}>
-          <View style={styles.featuredTitleContainer}>
-            <Ionicons name="star" size={20} color={Colors.warning} />
-            <Text style={styles.featuredTitle}>Featured Services</Text>
-          </View>
-          <View style={styles.featuredBadge}>
-            <Ionicons name="pin" size={12} color={Colors.text} />
-            <Text style={styles.featuredBadgeText}>PINNED</Text>
-          </View>
-        </View>
-        
-        <View style={styles.featuredGrid}>
-          {pinnedCategories.map((category) => (
-            <TouchableOpacity
-              key={category._id}
-              style={[
-                styles.featuredGridCard, 
-                { backgroundColor: category.bgColor }
-              ]}
-              onPress={() => handleCategoryPress(category)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.featuredGridCardHeader}>
-                <View style={[styles.featuredGridIcon, { backgroundColor: category.color }]}>
-                  <Ionicons name={category.icon} size={22} color="#FFFFFF" />
-                </View>
-                <View style={styles.featuredGridBadge}>
-                  <Text style={styles.featuredGridBadgeText}>POPULAR</Text>
-                </View>
-              </View>
-              <View style={styles.featuredGridCardContent}>
-                <Text style={styles.featuredGridCardTitle} numberOfLines={2}>
-                  {category.name}
-                </Text>
-                <Text style={styles.featuredGridCardDescription} numberOfLines={2}>
-                  {category.description}
-                </Text>
-                {category.providerCount > 0 && (
-                  <View style={styles.featuredGridStats}>
-                    <View style={styles.featuredGridStatItem}>
-                      <Ionicons name="business" size={12} color={Colors.textSecondary} />
-                      <Text style={styles.featuredGridStatText}>
-                        {category.providerCount} providers
-                      </Text>
-                    </View>
-                  </View>
-                )}
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </Animated.View>
-    );
-  };
-
-  const renderAllServices = () => {
-    const regularCategories = getRegularCategories();
+  const handleServicePress = async (service) => {
+    // Set click time to trigger reorder
+    setLastClickTime(Date.now());
     
-    if (regularCategories.length === 0 && searchQuery) {
-      return (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Search Results</Text>
-          </View>
-          <View style={styles.emptyState}>
-            <Ionicons name="search" size={48} color={Colors.textTertiary} />
-            <Text style={styles.emptyStateTitle}>No services found</Text>
-            <Text style={styles.emptyStateDescription}>
-              Try different keywords or check your connection
-            </Text>
-          </View>
-        </View>
-      );
-    }
-
-    if (regularCategories.length === 0 && !searchQuery) {
-      return null;
-    }
-
-    return (
-      <Animated.View 
-        style={[
-          styles.section,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }]
-          }
-        ]}
-      >
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>
-            {searchQuery ? `Results (${regularCategories.length})` : 'All Services'}
-          </Text>
-          {!searchQuery && regularCategories.length > 0 && (
-            <Text style={styles.servicesCount}>{regularCategories.length} services</Text>
-          )}
-        </View>
-        
-        <View style={styles.servicesGrid}>
-          {regularCategories.map((category) => (
-            <TouchableOpacity
-              key={category._id}
-              style={styles.serviceCard}
-              onPress={() => handleCategoryPress(category)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.serviceIcon, { backgroundColor: category.bgColor }]}>
-                <Ionicons name={category.icon} size={24} color={category.color} />
-              </View>
-              <Text style={styles.serviceName} numberOfLines={2}>{category.name}</Text>
-              {category.providerCount > 0 && (
-                <View style={styles.serviceStatus}>
-                  <Ionicons name="checkmark-circle" size={12} color={Colors.success} />
-                  <Text style={styles.serviceStatusText}>{category.providerCount} available</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
-      </Animated.View>
+    // Track service usage
+    await ServiceTrackingService.trackServiceUsage(
+      service.id,
+      service.title,
+      service.category
     );
+
+    // Record screen view
+    await DataService.recordScreenView(service.title);
+
+    // Navigation logic
+    switch (service.title) {
+      case 'LinkMe': navigation.navigate('LinkMe'); break;
+      case 'Food Delivery': navigation.navigate('FoodStack', { screen: 'FoodHome' }); break;
+      case 'Rental Booking': navigation.navigate('AccomStack', { screen: 'RentalHome' }); break;
+      case 'Roommate Finder': navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' }); break;
+      case 'Second Hand Items': navigation.navigate('SecondHandStack', { screen: 'SecondHandHome' }); break;
+      case 'Pharmacy': navigation.navigate('Echem'); break;
+      case 'My University': navigation.navigate('MySchoolNavigator', { screen: 'MySchoolHome' }); break;
+      case 'Eshop': navigation.navigate('EshopNavigator'); break;
+      case 'Blogs': navigation.navigate('BlogsNavigator'); break;
+      case 'Mavo Bingwa Bundles': WebBrowser.openBrowserAsync('https://mvobingwa.godaddysites.com/'); break;
+      default:
+        if (service.category === 'local') navigation.navigate('LocalServices');
+    }
   };
 
-  // Show loading only for first 500ms, then show default content
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <LinearGradient colors={Gradients.primary} style={StyleSheet.absoluteFill} />
-        <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>Loading services...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const filteredServices = useMemo(() => {
+    return reorderedServices.filter(s => {
+      const matchesSearch = s.title.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesTab = activeTab === 'All' || s.category === activeTab;
+      return matchesSearch && matchesTab;
+    });
+  }, [searchQuery, activeTab, reorderedServices]);
+
+  // Function to toggle between smart sort and default view
+  const toggleSort = async () => {
+    if (showSmartSort) {
+      // Switch back to default view
+      setShowSmartSort(false);
+      setReorderedServices(originalServices.filter(service => 
+        activeTab === 'All' || service.category === activeTab
+      ));
+    } else {
+      // Switch to smart sort view
+      setShowSmartSort(true);
+      const sortedServices = await reorderServices(activeTab);
+      setReorderedServices(sortedServices);
+    }
+  };
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadReorderedServices();
+  }, [loadReorderedServices]);
+
+  // Get popularity rank for a service
+  const getPopularityRank = (serviceId) => {
+    const index = reorderedServices.findIndex(s => s.id === serviceId);
+    return index + 1;
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <LinearGradient colors={Gradients.primary} style={StyleSheet.absoluteFill} />
-      
-      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
-      
+      <LinearGradient colors={['#083028', '#0a0a0a', '#0a0a0a']} style={StyleSheet.absoluteFill} />
+
       <ScrollView 
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={Colors.primary}
-            colors={[Colors.primary]}
+            tintColor="#50c878"
+            colors={['#50c878']}
           />
         }
-        contentContainerStyle={styles.scrollContent}
       >
-        {renderHeader()}
-        {renderSearchBar()}
-        {renderPinnedServices()}
-        {renderAllServices()}
-        
-        <View style={styles.footerSpace} />
-      </ScrollView>
+        <View style={styles.headerContainer}>
+          <Text style={styles.headerText}>MoiHub Services</Text>
+          <TouchableOpacity onPress={toggleSort} style={styles.sortToggle}>
+            <Ionicons 
+              name={showSmartSort ? "sparkles" : "sparkles-outline"} 
+              size={18} 
+              color="#50c878" 
+            />
+            <Text style={styles.sortToggleText}>
+              {showSmartSort ? 'Smart' : 'Smart'}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
-      {isOffline && !loading && (
-        <View style={styles.offlineBanner}>
-          <Ionicons name="wifi" size={16} color={Colors.text} />
-          <Text style={styles.offlineText}>Offline Mode • Using cached data</Text>
-          {refreshing && (
-            <ActivityIndicator size="small" color={Colors.text} style={{ marginLeft: 8 }} />
-          )}
+        {/* Info Banner */}
+        {showSmartSort && (
+          <View style={styles.infoBanner}>
+            <Ionicons name="sparkles" size={14} color="#50c878" />
+            <Text style={styles.infoText}>
+              Services sorted by your usage patterns
+            </Text>
+          </View>
+        )}
+
+        {/* Featured Section */}
+        <View style={styles.featuredStaticGrid}>
+          <TouchableOpacity 
+            style={[styles.featuredCard, { marginRight: 10 }]} 
+            onPress={() => navigation.navigate('EmergencyServices')}
+          >
+            <View style={[styles.featIconCircle, { backgroundColor: '#e74c3c20' }]}>
+              <Ionicons name="alert-circle" size={28} color="#e74c3c" />
+            </View>
+            <Text style={styles.featText}>Emergency</Text>
+            <Text style={styles.featSubText}>Tap for help</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.featuredCard} 
+            onPress={() => navigation.navigate('LocalServices')}
+          >
+            <View style={[styles.featIconCircle, { backgroundColor: '#9370db20' }]}>
+              <Ionicons name="location" size={28} color="#9370db" />
+            </View>
+            <Text style={styles.featText}>Local Services</Text>
+            <Text style={styles.featSubText}>Explore Moi Uni</Text>
+          </TouchableOpacity>
         </View>
-      )}
+
+        {/* Search Box */}
+        <View style={styles.searchBox}>
+          <Ionicons name="search" size={18} color="#50c878" />
+          <TextInput 
+            placeholder="Search services..." 
+            placeholderTextColor="#777"
+            style={styles.input}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+
+        {/* Category Chips */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipContainer}>
+          {categories.map(cat => (
+            <TouchableOpacity 
+              key={cat} 
+              onPress={() => setActiveTab(cat)}
+              style={[styles.chip, activeTab === cat && styles.activeChip]}
+            >
+              <Text style={[styles.chipText, activeTab === cat && styles.activeChipText]}>
+                {cat === 'All' ? 'ALL' : cat.toUpperCase()}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Smart Sort Indicator */}
+        {showSmartSort && (
+          <View style={styles.sortIndicator}>
+            <Ionicons name="trending-up" size={16} color="#50c878" />
+            <Text style={styles.sortIndicatorText}>
+              {activeTab === 'All' 
+                ? 'Most used services' 
+                : `Most used in ${activeTab}`}
+            </Text>
+          </View>
+        )}
+
+        {/* Loading Indicator */}
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#50c878" />
+            <Text style={styles.loadingText}>Loading services...</Text>
+          </View>
+        ) : (
+          /* Main Services Grid */
+          <View style={styles.grid}>
+            {filteredServices.map((service, idx) => {
+              const rank = getPopularityRank(service.id);
+              const isTopThree = rank <= 3 && showSmartSort;
+              
+              return (
+                <TouchableOpacity 
+                  key={`${service.id}-${idx}`} 
+                  style={[
+                    styles.serviceCard,
+                    isTopThree && styles.topServiceCard
+                  ]} 
+                  onPress={() => handleServicePress(service)}
+                >
+                  {service.badge && (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{service.badge}</Text>
+                    </View>
+                  )}
+                  
+                  {/* Popularity indicator */}
+                  <View style={styles.cardHeader}>
+                    {showSmartSort && isTopThree && (
+                      <View style={[
+                        styles.rankBadge,
+                        rank === 1 && styles.rankBadgeGold,
+                        rank === 2 && styles.rankBadgeSilver,
+                        rank === 3 && styles.rankBadgeBronze
+                      ]}>
+                        <Text style={styles.rankBadgeText}>
+                          {rank}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  
+                  <View style={[styles.iconBox, { backgroundColor: service.color + '20' }]}>
+                    <Ionicons name={service.icon} size={24} color={service.color} />
+                  </View>
+                  <Text style={styles.cardTitle}>{service.title}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
       
-      {/* Background sync indicator */}
-      {refreshing && !isOffline && (
-        <View style={styles.syncIndicator}>
-          <ActivityIndicator size="small" color={Colors.primary} />
-          <Text style={styles.syncText}>Syncing...</Text>
-        </View>
-      )}
+      <WhatsAppFAB />
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scrollContent: {
-    paddingBottom: Spacing.xxxl,
-  },
-  
-  // Header Styles
+  safeArea: { flex: 1, backgroundColor: '#0a0a0a' },
   headerContainer: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xl + Spacing.md,
-    paddingBottom: Spacing.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginTop: 15,
+    marginBottom: 5
   },
-  welcomeText: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.xs,
+  headerText: { 
+    fontSize: 24, 
+    fontWeight: 'bold', 
+    color: '#fff',
+    flex: 1
   },
-  headerTitle: {
-    ...Typography.h1,
-    color: Colors.text,
-  },
-  addServiceButton: {
-    backgroundColor: Colors.card,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
+  sortToggle: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(80, 200, 120, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
     borderWidth: 1,
-    borderColor: Colors.cardBorder,
+    borderColor: '#50c878',
+    gap: 4
   },
-  addServiceText: {
-    ...Typography.caption,
-    color: Colors.primary,
-    fontWeight: '600',
-    marginLeft: Spacing.xs,
-  },
-  
-  // Search Styles
-  searchContainer: {
-    paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
-  },
-  searchWrapper: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    height: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.cardBorder,
-  },
-  searchIcon: {
-    marginRight: Spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    ...Typography.body,
-    color: Colors.text,
-  },
-  clearButton: {
-    padding: Spacing.xs,
-  },
-  
-  // Section Styles
-  section: {
-    paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.xl,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  sectionTitle: {
-    ...Typography.h3,
-    color: Colors.text,
-  },
-  servicesCount: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-  },
-  
-  // Featured Services
-  featuredTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  featuredTitle: {
-    ...Typography.h3,
-    color: Colors.text,
-  },
-  featuredBadge: {
-    backgroundColor: Colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.sm,
-    gap: Spacing.xs,
-  },
-  featuredBadgeText: {
-    fontSize: 11,
-    color: Colors.text,
-    fontWeight: '700',
-  },
-  featuredGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  featuredGridCard: {
-    width: (width - Spacing.lg * 2 - Spacing.sm) / 2,
-    backgroundColor: Colors.card,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    borderColor: Colors.cardBorder,
-  },
-  featuredGridCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: Spacing.sm,
-  },
-  featuredGridIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.round,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  featuredGridBadge: {
-    backgroundColor: Colors.warning,
-    paddingHorizontal: Spacing.xs,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.xs,
-  },
-  featuredGridBadgeText: {
-    fontSize: 8,
-    color: Colors.text,
-    fontWeight: '700',
-  },
-  featuredGridCardContent: {
-    flex: 1,
-  },
-  featuredGridCardTitle: {
-    ...Typography.caption,
-    color: Colors.text,
-    fontWeight: '600',
-    fontSize: 13,
-    marginBottom: 4,
-  },
-  featuredGridCardDescription: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.xs,
-    lineHeight: 14,
-  },
-  featuredGridStats: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  featuredGridStatItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  featuredGridStatText: {
-    fontSize: 10,
-    color: Colors.textSecondary,
-  },
-  
-  // All Services Grid
-  servicesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  serviceCard: {
-    width: (width - Spacing.lg * 2 - Spacing.sm) / 2,
-    backgroundColor: Colors.card,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.cardBorder,
-    alignItems: 'center',
-  },
-  serviceIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: BorderRadius.round,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  serviceName: {
-    ...Typography.caption,
-    color: Colors.text,
-    fontWeight: '600',
-    textAlign: 'center',
+  sortToggleText: {
+    color: '#50c878',
     fontSize: 12,
-    marginBottom: Spacing.xs,
-    minHeight: 32,
+    fontWeight: '600'
   },
-  serviceStatus: {
+  infoBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
+    backgroundColor: 'rgba(80, 200, 120, 0.1)',
+    marginHorizontal: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(80, 200, 120, 0.3)'
   },
-  serviceStatusText: {
-    fontSize: 10,
-    color: Colors.success,
+  infoText: {
+    color: '#50c878',
+    fontSize: 12,
     fontWeight: '500',
+    marginLeft: 8,
+    flex: 1
   },
-  
-  // Empty State
-  emptyState: {
+  featuredStaticGrid: { 
+    flexDirection: 'row', 
+    paddingHorizontal: 20, 
+    marginVertical: 10,
+    justifyContent: 'space-between' 
+  },
+  featuredCard: { 
+    flex: 1, 
+    height: 100, 
+    backgroundColor: 'rgba(255,255,255,0.06)', 
+    borderRadius: 15, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)'
+  },
+  featIconCircle: { 
+    width: 44, 
+    height: 44, 
+    borderRadius: 22, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginBottom: 6 
+  },
+  featText: { 
+    color: '#fff', 
+    fontSize: 13, 
+    fontWeight: '700' 
+  },
+  featSubText: { 
+    color: '#888', 
+    fontSize: 10, 
+    marginTop: 2 
+  },
+  searchBox: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: 'rgba(255,255,255,0.08)', 
+    marginHorizontal: 20, 
+    borderRadius: 12, 
+    paddingHorizontal: 15, 
+    height: 45, 
+    marginBottom: 12 
+  },
+  input: { 
+    flex: 1, 
+    marginLeft: 10, 
+    color: '#fff', 
+    fontSize: 14 
+  },
+  chipContainer: { 
+    paddingLeft: 20, 
+    marginBottom: 15 
+  },
+  chip: { 
+    paddingHorizontal: 14, 
+    paddingVertical: 6, 
+    borderRadius: 15, 
+    borderWeight: 1, 
+    borderColor: '#333', 
+    borderWidth: 1, 
+    marginRight: 8 
+  },
+  activeChip: { 
+    backgroundColor: '#50c878', 
+    borderColor: '#50c878' 
+  },
+  chipText: { 
+    color: '#999', 
+    fontSize: 10, 
+    fontWeight: 'bold' 
+  },
+  activeChipText: { 
+    color: '#000' 
+  },
+  sortIndicator: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Spacing.xxxl,
+    backgroundColor: 'rgba(80, 200, 120, 0.08)',
+    marginHorizontal: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginBottom: 15,
   },
-  emptyStateTitle: {
-    ...Typography.h4,
-    color: Colors.text,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.xs,
+  sortIndicatorText: {
+    color: '#50c878',
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 8
   },
-  emptyStateDescription: {
-    ...Typography.bodySmall,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: Spacing.lg,
-  },
-  
-  // Loading State
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    height: 200
   },
   loadingText: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    marginTop: Spacing.md,
+    color: '#888',
+    fontSize: 12,
+    marginTop: 10
   },
-  
-  // Offline Banner
-  offlineBanner: {
-    position: 'absolute',
-    bottom: Spacing.lg,
-    left: Spacing.lg,
-    right: Spacing.lg,
-    backgroundColor: Colors.card,
-    flexDirection: 'row',
+  grid: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    paddingHorizontal: 15, 
+    justifyContent: 'space-between' 
+  },
+  serviceCard: { 
+    width: '48%', 
+    backgroundColor: 'rgba(255,255,255,0.04)', 
+    borderRadius: 15, 
+    padding: 12, 
+    marginBottom: 12, 
     alignItems: 'center',
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)'
+  },
+  topServiceCard: {
+    borderColor: 'rgba(80, 200, 120, 0.3)',
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(80, 200, 120, 0.05)'
+  },
+  cardHeader: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  rankBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
-    padding: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.cardBorder,
-    gap: Spacing.xs,
-  },
-  offlineText: {
-    ...Typography.caption,
-    color: Colors.text,
-    fontWeight: '600',
-  },
-  
-  // Sync Indicator
-  syncIndicator: {
-    position: 'absolute',
-    top: Spacing.xl + Spacing.md + 10,
-    right: Spacing.lg,
-    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.card + 'CC',
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
     borderWidth: 1,
-    borderColor: Colors.cardBorder,
-    gap: Spacing.xs,
+    borderColor: 'rgba(255,255,255,0.2)'
   },
-  syncText: {
-    fontSize: 11,
-    color: Colors.textSecondary,
+  rankBadgeGold: {
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    borderColor: 'rgba(255, 215, 0, 0.4)'
   },
-  
-  // Footer Space
-  footerSpace: {
-    height: Spacing.xxxl,
+  rankBadgeSilver: {
+    backgroundColor: 'rgba(192, 192, 192, 0.15)',
+    borderColor: 'rgba(192, 192, 192, 0.4)'
   },
+  rankBadgeBronze: {
+    backgroundColor: 'rgba(205, 127, 50, 0.15)',
+    borderColor: 'rgba(205, 127, 50, 0.4)'
+  },
+  rankBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold'
+  },
+  iconBox: { 
+    width: 44, 
+    height: 44, 
+    borderRadius: 12, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginBottom: 8 
+  },
+  cardTitle: { 
+    color: '#eee', 
+    fontSize: 12, 
+    fontWeight: '600', 
+    textAlign: 'center' 
+  },
+  badge: { 
+    position: 'absolute', 
+    top: 8, 
+    left: 8, 
+    backgroundColor: '#50c878', 
+    paddingHorizontal: 5, 
+    paddingVertical: 1, 
+    borderRadius: 4 
+  },
+  badgeText: { 
+    color: '#000', 
+    fontSize: 8, 
+    fontWeight: '900' 
+  }
 });
 
 export default ServicesScreen;
