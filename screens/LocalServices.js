@@ -229,42 +229,71 @@ const Localservices = ({ navigation }) => {
     }
   };
 
-  const openAIChat = () => {
-    setShowAIChatbot(true);
-    
-    // Welcome message only on first open
-    if (chatMessages.length === 0) {
-      setChatMessages([{
-        type: 'bot',
-        text: '👋 Hi! I can help you find services around Moi University. Try asking:\n\n• "Find boda boda near main gate"\n• "Best kinyozi in hostel area"\n• "Mama fua available today"\n• "Matatu to town"',
-        suggestions: [
-          'boda boda near gate',
-          'best kinyozi',
-          'mama fua available today',
-          'matatu to town'
-        ]
-      }]);
-    }
-  };
+
+const openAIChat = () => {
+  setShowAIChatbot(true);
+  
+  // Welcome message only on first open
+  if (chatMessages.length === 0) {
+    setChatMessages([{
+      type: 'bot',
+      text: '👋 Hi! I\'m your AI assistant for Moi University services.\n\nI can help you find:\n• Transport (boda boda, matatu, tuktuk)\n• Grooming services (kinyozi, saloons)\n• Laundry services\n• And much more!\n\nJust tell me what you need in natural language.',
+      suggestions: [
+        'boda boda near main gate',
+        'best kinyozi in hostel',
+        'cheap mama fua',
+        'matatu to town now'
+      ]
+    }]);
+  }
+};
+
 
   // ============== RENDER PROVIDER CARD ==============
-  const renderProviderCard = (card) => (
+
+const renderProviderCard = (card) => {
+  // Determine badge color based on match score
+  const getBadgeColor = () => {
+    if (card.matchScore >= 85) return '#10B981'; // Green - Best Match
+    if (card.matchScore >= 70) return '#3B82F6'; // Blue - Great Match
+    if (card.matchScore >= 55) return '#F59E0B'; // Orange - Good Option
+    return '#6B7280'; // Gray
+  };
+
+  return (
     <View key={card.providerId} style={styles.providerCard}>
+      {/* Header with Name and Badge */}
       <View style={styles.cardHeader}>
         <View style={{ flex: 1 }}>
           <Text style={styles.cardName}>{card.name}</Text>
           <Text style={styles.cardCategory}>{card.category}</Text>
         </View>
         {card.badge && (
-          <View style={[
-            styles.badge,
-            { backgroundColor: card.matchScore >= 80 ? '#10B981' : '#F59E0B' }
-          ]}>
+          <View style={[styles.badge, { backgroundColor: getBadgeColor() }]}>
             <Text style={styles.badgeText}>{card.badge}</Text>
           </View>
         )}
       </View>
       
+      {/* Match Score Bar - Visual indicator */}
+      {card.matchScore && (
+        <View style={styles.matchScoreContainer}>
+          <View style={styles.matchScoreBackground}>
+            <View 
+              style={[
+                styles.matchScoreFill, 
+                { 
+                  width: `${card.matchScore}%`,
+                  backgroundColor: getBadgeColor()
+                }
+              ]} 
+            />
+          </View>
+          <Text style={styles.matchScoreText}>{card.matchScore}% match</Text>
+        </View>
+      )}
+      
+      {/* Info Section */}
       <View style={styles.cardInfo}>
         <View style={styles.infoRow}>
           <Ionicons name="location" size={14} color={Colors.textSecondary} />
@@ -275,23 +304,35 @@ const Localservices = ({ navigation }) => {
         
         {card.rating > 0 && (
           <View style={styles.infoRow}>
-            <Ionicons name="star" size={14} color={Colors.warning} />
+            <Ionicons name="star" size={14} color="#F59E0B" />
             <Text style={styles.infoText}>
-              {card.rating.toFixed(1)} ({card.totalReviews} reviews)
+              {card.rating.toFixed(1)} ⭐ ({card.totalReviews} {card.totalReviews === 1 ? 'review' : 'reviews'})
             </Text>
           </View>
         )}
 
         <View style={styles.infoRow}>
-          <Ionicons name="call" size={14} color={Colors.success} />
+          <Ionicons name="call" size={14} color="#10B981" />
           <Text style={styles.infoText}>{card.phone}</Text>
         </View>
+
+        {/* Availability indicator if urgent */}
+        {card.quickInfo?.availability && (
+          <View style={styles.infoRow}>
+            <View style={styles.availableDot} />
+            <Text style={[styles.infoText, { color: '#10B981', fontWeight: '600' }]}>
+              {card.quickInfo.availability}
+            </Text>
+          </View>
+        )}
       </View>
       
+      {/* Action Buttons */}
       <View style={styles.cardActions}>
         <TouchableOpacity
           style={[styles.ctaButton, styles.ctaButtonPrimary]}
           onPress={() => handleCallProvider(card.phone)}
+          activeOpacity={0.7}
         >
           <Ionicons name="call" size={16} color="#FFFFFF" />
           <Text style={[styles.ctaText, styles.ctaTextPrimary]}>Call Now</Text>
@@ -301,6 +342,7 @@ const Localservices = ({ navigation }) => {
           <TouchableOpacity
             style={styles.ctaButton}
             onPress={() => handleViewDetails(card.providerId)}
+            activeOpacity={0.7}
           >
             <Ionicons name="eye" size={16} color={Colors.primary} />
             <Text style={styles.ctaText}>View</Text>
@@ -309,88 +351,121 @@ const Localservices = ({ navigation }) => {
         
         {card.canBook && (
           <TouchableOpacity
-            style={styles.ctaButton}
+            style={[styles.ctaButton, styles.ctaButtonBook]}
             onPress={() => handleBookNow(card.providerId)}
+            activeOpacity={0.7}
           >
-            <Ionicons name="calendar" size={16} color={Colors.primary} />
-            <Text style={styles.ctaText}>Book</Text>
+            <Ionicons name="calendar" size={16} color="#FFFFFF" />
+            <Text style={[styles.ctaText, styles.ctaTextPrimary]}>Book</Text>
           </TouchableOpacity>
         )}
       </View>
-      
-      {card.matchScore && (
-        <View style={styles.matchScore}>
-          <View style={[styles.matchBar, { width: `${card.matchScore}%` }]} />
-        </View>
-      )}
     </View>
   );
+};
 
   // ============== RENDER CHAT MESSAGE ==============
-  const renderChatMessage = (msg, index) => {
-    if (msg.type === 'user') {
-      return (
-        <View key={index} style={styles.userMessageContainer}>
-          <View style={styles.userMessage}>
-            <Text style={styles.userMessageText}>{msg.text}</Text>
-          </View>
-        </View>
-      );
-    }
-    
+const renderChatMessage = (msg, index) => {
+  if (msg.type === 'user') {
     return (
-      <View key={index} style={styles.botMessageContainer}>
-        <View style={styles.botMessage}>
-          <Text style={styles.botMessageText}>{msg.text}</Text>
-          
-          {msg.understood && (
-            <View style={styles.understoodBox}>
-              <Text style={styles.understoodTitle}>📋 I understood:</Text>
-              <Text style={styles.understoodText}>
-                • Service: {msg.understood.service || 'Any'}
-              </Text>
-              {msg.understood.location !== 'Any location' && (
-                <Text style={styles.understoodText}>
-                  • Location: {msg.understood.location}
-                </Text>
-              )}
-              {msg.understood.minRating && (
-                <Text style={styles.understoodText}>
-                  • Rating: {msg.understood.minRating}+ stars
-                </Text>
-              )}
-            </View>
-          )}
-          
-          {msg.cards && msg.cards.length > 0 && (
-            <View style={styles.cardsContainer}>
-              <Text style={styles.cardsTitle}>
-                Found {msg.cards.length} provider{msg.cards.length > 1 ? 's' : ''}:
-              </Text>
-              {msg.cards.map(card => renderProviderCard(card))}
-            </View>
-          )}
-          
-          {msg.suggestions && msg.suggestions.length > 0 && (
-            <View style={styles.suggestionsContainer}>
-              <Text style={styles.suggestionsTitle}>💡 Try asking:</Text>
-              <View style={styles.suggestionChips}>
-                {msg.suggestions.map((suggestion, idx) => (
-                  <TouchableOpacity
-                    key={idx}
-                    style={styles.suggestionChip}
-                    onPress={() => handleSuggestion(suggestion)}
-                  >
-                    <Text style={styles.suggestionText}>{suggestion}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          )}
+      <View key={index} style={styles.userMessageContainer}>
+        <View style={styles.userMessage}>
+          <Text style={styles.userMessageText}>{msg.text}</Text>
         </View>
       </View>
     );
-  };
+  }
+  
+  return (
+    <View key={index} style={styles.botMessageContainer}>
+      <View style={styles.botMessage}>
+        {/* Main Message Text */}
+        <Text style={styles.botMessageText}>{msg.text}</Text>
+        
+        {/* Understanding Summary Box - Shows what AI extracted */}
+        {msg.understood && (
+          <View style={styles.understoodBox}>
+            <View style={styles.understoodHeader}>
+              <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+              <Text style={styles.understoodTitle}>I understood:</Text>
+            </View>
+            
+            <View style={styles.understoodItems}>
+              <View style={styles.understoodItem}>
+                <Text style={styles.understoodLabel}>Service:</Text>
+                <Text style={styles.understoodValue}>{msg.understood.service || 'Any'}</Text>
+              </View>
+              
+              {msg.understood.location !== 'Any location' && (
+                <View style={styles.understoodItem}>
+                  <Text style={styles.understoodLabel}>Location:</Text>
+                  <Text style={styles.understoodValue}>{msg.understood.location}</Text>
+                </View>
+              )}
+              
+              {msg.understood.priceRange !== 'Any price' && (
+                <View style={styles.understoodItem}>
+                  <Text style={styles.understoodLabel}>Price:</Text>
+                  <Text style={styles.understoodValue}>{msg.understood.priceRange}</Text>
+                </View>
+              )}
+              
+              {msg.understood.minRating && (
+                <View style={styles.understoodItem}>
+                  <Text style={styles.understoodLabel}>Rating:</Text>
+                  <Text style={styles.understoodValue}>{msg.understood.minRating}+ stars</Text>
+                </View>
+              )}
+              
+              {msg.understood.urgency !== 'Flexible' && (
+                <View style={styles.understoodItem}>
+                  <Text style={styles.understoodLabel}>When:</Text>
+                  <Text style={styles.understoodValue}>{msg.understood.urgency}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+        
+        {/* Provider Cards */}
+        {msg.cards && msg.cards.length > 0 && (
+          <View style={styles.cardsContainer}>
+            <View style={styles.cardsHeader}>
+              <Ionicons name="business" size={16} color={Colors.primary} />
+              <Text style={styles.cardsTitle}>
+                {msg.cards.length} provider{msg.cards.length > 1 ? 's' : ''} found
+              </Text>
+            </View>
+            {msg.cards.map(card => renderProviderCard(card))}
+          </View>
+        )}
+        
+        {/* Suggestion Chips */}
+        {msg.suggestions && msg.suggestions.length > 0 && (
+          <View style={styles.suggestionsContainer}>
+            <View style={styles.suggestionsHeader}>
+              <Ionicons name="bulb" size={14} color="#F59E0B" />
+              <Text style={styles.suggestionsTitle}>Try asking:</Text>
+            </View>
+            <View style={styles.suggestionChips}>
+              {msg.suggestions.map((suggestion, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.suggestionChip}
+                  onPress={() => handleSuggestion(suggestion)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="arrow-forward-circle" size={14} color={Colors.primary} />
+                  <Text style={styles.suggestionText}>{suggestion}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+};
 
   // ============== RENDER AI CHAT MODAL ==============
   const renderAIChatModal = () => (
@@ -1062,7 +1137,114 @@ const styles = StyleSheet.create({
   clearButton: {
     padding: Spacing.xs,
   },
+   // Match Score Styles
+  matchScoreContainer: {
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  matchScoreBackground: {
+    height: 4,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  matchScoreFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  matchScoreText: {
+    fontSize: 10,
+    color: Colors.textSecondary,
+    marginTop: 4,
+    textAlign: 'right',
+  },
   
+  // Available Dot
+  availableDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+    marginRight: 4,
+  },
+  
+  // CTA Button Book
+  ctaButtonBook: {
+    backgroundColor: Colors.primary,
+  },
+  
+  // Understood Box Improvements
+  understoodHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  understoodTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.text,
+    marginLeft: 6,
+  },
+  understoodItems: {
+    gap: 6,
+  },
+  understoodItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  understoodLabel: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+    width: 70,
+  },
+  understoodValue: {
+    fontSize: 12,
+    color: Colors.text,
+    fontWeight: '600',
+    flex: 1,
+  },
+  
+  // Cards Header
+  cardsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  cardsTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text,
+    marginLeft: 6,
+  },
+  
+  // Suggestions Header
+  suggestionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  
+  // Suggestion Chip Improvements
+  suggestionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    gap: 6,
+  },
+  suggestionText: {
+    fontSize: 13,
+    color: Colors.primary,
+    fontWeight: '500',
+  },
   // Section Styles
   section: {
     paddingHorizontal: Spacing.lg,
