@@ -1244,7 +1244,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.primary,
     fontWeight: '500',
-  },
+  }, 
   // Section Styles
   section: {
     paddingHorizontal: Spacing.lg,
