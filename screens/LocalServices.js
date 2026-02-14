@@ -901,8 +901,8 @@ const renderChatMessage = (msg, index) => {
                   {category.name}
                 </Text>
                 <Text style={styles.featuredGridCardDescription} numberOfLines={2}>
-                  {category.description}
-                </Text>
+                  
+                </Text>  
                 {category.providerCount > 0 && (
                   <View style={styles.featuredGridStats}>
                     <View style={styles.featuredGridStatItem}>
