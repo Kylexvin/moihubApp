@@ -871,10 +871,10 @@ const renderChatMessage = (msg, index) => {
             <Ionicons name="star" size={20} color={Colors.warning} />
             <Text style={styles.featuredTitle}>Featured Services</Text>
           </View>
-          <View style={styles.featuredBadge}>
+          {/* <View style={styles.featuredBadge}>
             <Ionicons name="pin" size={12} color={Colors.text} />
             <Text style={styles.featuredBadgeText}>PINNED</Text>
-          </View>
+          </View> */}
         </View>
         
         <View style={styles.featuredGrid}>
