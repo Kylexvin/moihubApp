@@ -167,7 +167,7 @@ const VendorOnboardingScreen = () => {
 
     setLoading(true);
     try {
-      const response = await axios.post('/api/localservices/application/apply', {
+      const response = await axios.post('/api/services/application/apply', {
         providerName: serviceProviderForm.providerName,
         category: serviceProviderForm.category,
         phoneNumber: serviceProviderForm.phoneNumber,
