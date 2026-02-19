@@ -1,126 +1,141 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  FlatList, 
+import {
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  FlatList,
   Dimensions,
-  BackHandler 
+  BackHandler,
+  StatusBar,
 } from 'react-native';
+import { Image } from 'react-native';
 import * as Animatable from 'react-native-animatable';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Colors, Typography, Spacing, BorderRadius } from './theme/Theme';
 
 const { width, height } = Dimensions.get('window');
+
+const slides = [
+  {
+    id: '1',
+    title: 'Welcome to MoiHub',
+    description: 'Your all-in-one student platform for life at Moi University.',
+    icon: 'school-outline',
+    accent: Colors.primary,
+    features: ['Find Rentals', 'Shop Marketplace', 'Order Food'],
+  },
+  {
+    id: '2',
+    title: 'Live & Connect',
+    description: 'Book verified rentals, find roommates, and settle in fast.',
+    icon: 'home-outline',
+    accent: Colors.secondary,
+    features: ['Verified Rooms', 'Roommate Finder', 'Secure Booking'],
+  },
+  {
+    id: '3',
+    title: 'Shop & Discover',
+    description: 'Buy, sell, order food, and explore student-run e-shops.',
+    icon: 'storefront-outline',
+    accent: Colors.accent,
+    features: ['Marketplace', 'Food Orders', 'E-Shops'],
+  },
+  {
+    id: '4',
+    title: 'Build Your Network',
+    description: 'Study groups, campus dating, blogs, and real-time chat — all here.',
+    icon: 'people-outline',
+    accent: '#3498db',
+    features: ['LinkMe Dating', 'Study Groups', 'Campus Blogs'],
+  },
+];
 
 const OnboardingScreen = ({ onComplete }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef(null);
-  
-  // Add BackHandler to prevent back button during onboarding
+  const iconRef = useRef(null);
+
   useEffect(() => {
-    console.log("Onboarding screen mounted");
-    
-    const backHandler = BackHandler.addEventListener(
-      'hardwareBackPress',
-      () => {
-        // Prevent going back during onboarding
-        return true;
-      }
-    );
-
-    return () => {
-      console.log("Onboarding screen unmounting");
-      backHandler.remove();
-    };
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => backHandler.remove();
   }, []);
-  
-const slides = [
-  {
-    id: '1',
-    title: 'Find Rentals Easily',
-    description: 'Browse and book verified student accommodations near Moi University with ease.',
-    icon: 'home-outline', // Ionicons
-  },
-  {
-    id: '2',
-    title: 'Shop Smart',
-    description: 'Access second-hand items, groceries, and campus essentials.',
-    icon: 'cart-outline', // Ionicons replacement for shopping
-  },
-  {
-    id: '3',
-    title: 'Connect & Collaborate',
-    description: 'Find roommates, join study groups, and build your campus network.',
-    icon: 'people-outline', // Ionicons replacement for group
-  },
-];
 
-
-  // Handle next slide
   const goToNextSlide = () => {
     if (currentIndex < slides.length - 1) {
-      console.log(`Moving to slide ${currentIndex + 1}`);
       flatListRef.current.scrollToIndex({ index: currentIndex + 1 });
       setCurrentIndex(currentIndex + 1);
     } else {
-      // Last slide, complete onboarding
-      console.log("Last slide reached, completing onboarding");
       onComplete();
     }
   };
 
-  // Handle skip
-  const handleSkip = () => {
-    console.log("Onboarding skipped");
-    onComplete();
+  const goToSlide = (index) => {
+    flatListRef.current.scrollToIndex({ index });
+    setCurrentIndex(index);
   };
 
-  // Render individual slide
-  const renderSlide = ({ item }) => {
-    return (
-      <View style={styles.slide}>
-        <Animatable.View 
-          animation="fadeIn"
-          duration={1000}
-          style={styles.iconContainer}
-        >
-          <Ionicons name={item.icon} size={100} color="#005f4b" />
-        </Animatable.View>
-        <Animatable.View animation="fadeInUp" delay={300}>
-          <Text style={styles.title}>{item.title}</Text>
-          <Text style={styles.description}>{item.description}</Text>
-        </Animatable.View>
-      </View>
-    );
-  };
+  const currentSlide = slides[currentIndex];
 
-  // Render pagination dots
-  const renderPagination = () => {
-    return (
-      <View style={styles.paginationContainer}>
-        {slides.map((_, index) => (
-          <View
-            key={index}
-            style={[
-              styles.dot,
-              { backgroundColor: index === currentIndex ? '#005f4b' : '#cccccc' }
-            ]}
-          />
+  const renderSlide = ({ item }) => (
+    <View style={styles.slide}>
+      <Animatable.View
+        animation="zoomIn"
+        duration={600}
+        style={[styles.iconRing, { borderColor: item.accent + '40' }]}
+      >
+        <View style={[styles.iconInner, { backgroundColor: item.accent + '18' }]}>
+          <Ionicons name={item.icon} size={64} color={item.accent} />
+        </View>
+      </Animatable.View>
+
+      <Animatable.Text animation="fadeInUp" delay={200} style={styles.title}>
+        {item.title}
+      </Animatable.Text>
+
+      <Animatable.Text animation="fadeInUp" delay={300} style={styles.description}>
+        {item.description}
+      </Animatable.Text>
+
+      <Animatable.View animation="fadeInUp" delay={400} style={styles.featuresRow}>
+        {item.features.map((f, i) => (
+          <View key={i} style={[styles.featureChip, { borderColor: item.accent + '60' }]}>
+            <View style={[styles.featureDot, { backgroundColor: item.accent }]} />
+            <Text style={[styles.featureText, { color: item.accent }]}>{f}</Text>
+          </View>
         ))}
-      </View>
-    );
-  };
+      </Animatable.View>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity 
-        style={styles.skipButton} 
-        onPress={handleSkip}
-      >
-        <Text style={styles.skipText}>Skip</Text>
-      </TouchableOpacity>
-      
+      <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
+
+      {/* Background gradient accent */}
+      <View style={[styles.bgGlow, { backgroundColor: currentSlide.accent + '12' }]} />
+
+      {/* Header */}
+      <View style={styles.header}>
+<View style={styles.logoContainer}>
+  <Image 
+                source={require('../assets/moihublogo.png')}
+
+    style={styles.logo}
+    resizeMode="contain"
+  />
+  <Text style={styles.logoText}>
+    <Text style={{ color: Colors.primary }}>Moi</Text>Hub
+  </Text>
+</View>
+        <TouchableOpacity onPress={onComplete} style={styles.skipButton}>
+          <Text style={styles.skipText}>Skip</Text>
+          <Ionicons name="chevron-forward" size={14} color={Colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Slides */}
       <FlatList
         ref={flatListRef}
         data={slides}
@@ -129,23 +144,57 @@ const slides = [
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         keyExtractor={(item) => item.id}
-        onMomentumScrollEnd={(event) => {
-          const index = Math.round(event.nativeEvent.contentOffset.x / width);
-          console.log(`Scrolled to index ${index}`);
+        scrollEnabled={true}
+        onMomentumScrollEnd={(e) => {
+          const index = Math.round(e.nativeEvent.contentOffset.x / width);
           setCurrentIndex(index);
         }}
       />
-      
-      {renderPagination()}
-      
-      <TouchableOpacity 
-        style={styles.nextButton}
-        onPress={goToNextSlide}
-      >
-        <Text style={styles.nextButtonText}>
-          {currentIndex === slides.length - 1 ? 'Get Started' : 'Next'}
+
+      {/* Bottom controls */}
+      <View style={styles.bottomContainer}>
+        {/* Pagination dots */}
+        <View style={styles.pagination}>
+          {slides.map((s, i) => (
+            <TouchableOpacity key={i} onPress={() => goToSlide(i)}>
+              <View
+                style={[
+                  styles.dot,
+                  i === currentIndex && [styles.dotActive, { backgroundColor: currentSlide.accent }],
+                ]}
+              />
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Next / Get Started button */}
+        <TouchableOpacity onPress={goToNextSlide} activeOpacity={0.85}>
+          <LinearGradient
+            colors={
+              currentIndex === slides.length - 1
+                ? [Colors.primary, '#083028']
+                : [currentSlide.accent, currentSlide.accent + 'cc']
+            }
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.nextButton}
+          >
+            <Text style={styles.nextButtonText}>
+              {currentIndex === slides.length - 1 ? 'Get Started' : 'Continue'}
+            </Text>
+            <Ionicons
+              name={currentIndex === slides.length - 1 ? 'checkmark' : 'arrow-forward'}
+              size={18}
+              color="#000"
+            />
+          </LinearGradient>
+        </TouchableOpacity>
+
+        {/* Step counter */}
+        <Text style={styles.stepText}>
+          {currentIndex + 1} / {slides.length}
         </Text>
-      </TouchableOpacity>
+      </View>
     </View>
   );
 };
@@ -153,76 +202,150 @@ const slides = [
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'ivory',
+    backgroundColor: Colors.background,
+  },
+  bgGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: height * 0.5,
+    borderBottomLeftRadius: width,
+    borderBottomRightRadius: width,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: 52,
+    paddingBottom: Spacing.md,
+  },
+logoContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 8,
+},
+logo: {
+  width: 28,
+  height: 28,
+},
+logoText: {
+  fontSize: 22,
+  fontWeight: '800',
+  color: Colors.text,
+  letterSpacing: 0.5,
+}, 
+  skipButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  skipText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '500',
   },
   slide: {
     width,
-    height,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: 20,
+  },
+  iconRing: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 1.5,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    marginBottom: Spacing.xl,
   },
-  image: {
-    width: width * 0.8,
-    height: height * 0.4,
-    marginBottom: 40,
-  },
-  iconContainer: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(0, 95, 75, 0.1)',
+  iconInner: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 40,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#005f4b',
+    fontSize: 28,
+    fontWeight: '800',
+    color: Colors.text,
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: Spacing.md,
+    letterSpacing: -0.5,
   },
   description: {
     fontSize: 16,
-    color: '#555555',
+    color: Colors.textSecondary,
     textAlign: 'center',
-    paddingHorizontal: 20,
+    lineHeight: 24,
+    marginBottom: Spacing.xl,
   },
-  paginationContainer: {
+  featuresRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
-    marginBottom: 30,
+    gap: Spacing.sm,
+  },
+  featureChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: BorderRadius.round,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  featureDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  featureText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  bottomContainer: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: 48,
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  pagination: {
+    flexDirection: 'row',
+    gap: 8,
   },
   dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginHorizontal: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
-  skipButton: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-    zIndex: 10,
-  },
-  skipText: {
-    color: '#005f4b',
-    fontSize: 16,
-    fontWeight: '600',
+  dotActive: {
+    width: 24,
+    borderRadius: 4,
   },
   nextButton: {
-    backgroundColor: '#005f4b',
-    paddingVertical: 15,
-    paddingHorizontal: 40,
-    borderRadius: 30,
-    marginBottom: 50,
-    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingVertical: 14,
+    paddingHorizontal: 36,
+    borderRadius: BorderRadius.round,
   },
   nextButtonText: {
-    color: '#ffffff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: '#000',
+  },
+  stepText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
   },
 });
 

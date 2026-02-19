@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "440940724570-5af9vrdpg9e6q81sb675pctvbgbpqhqm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.kylexvin.moihub",
+            "certificate_hash": "607512dbcee3c7566f6eeff0f292455e38e0d3f4"
+          }
+        },
+        {
           "client_id": "440940724570-q2oimhoge0bre1curvl7h8glbnp6rbma.apps.googleusercontent.com",
           "client_type": 3
         }

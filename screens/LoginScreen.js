@@ -66,10 +66,11 @@ const LoginScreen = ({ navigation }) => {
     }
   };
 
-  // Google Auth Hook Configuration
+  
+// Google Auth Hook Configuration
 const [googleRequest, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
-  androidClientId: '440940724570-q2oimhoge0bre1curvl7h8glbnp6rbma.apps.googleusercontent.com',
-  webClientId: '440940724570-q2oimhoge0bre1curvl7h8glbnp6rbma.apps.googleusercontent.com', // Same as androidClientId for now
+  androidClientId: '440940724570-5af9vrdpg9e6q81sb675pctvbgbpqhqm.apps.googleusercontent.com',
+  webClientId: '440940724570-q2oimhoge0bre1curvl7h8glbnp6rbma.apps.googleusercontent.com',
   redirectUri: makeRedirectUri({
     native: 'com.kylexvin.moihub:/oauth2redirect',
   }),

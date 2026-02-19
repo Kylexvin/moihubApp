@@ -784,10 +784,9 @@ const renderChatMessage = (msg, index) => {
     });
   };
 
-  const handleAddService = () => {
-    Alert.alert('Coming Soon', 'Service addition feature is under development');
-  };
-
+const handleAddService = () => {
+  navigation.navigate('OnboardingNavigator');  // ← Just like FoodScreen
+};
   const getPinnedCategories = () => {
     return categories.filter(cat => cat.isPinned);
   };

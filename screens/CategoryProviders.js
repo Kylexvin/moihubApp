@@ -104,7 +104,7 @@ const CategoryProvidersScreen = ({ route, navigation }) => {
 
   const fetchFreshProviders = async () => {
     try {
-      // Mock API endpoint - replace with your actual API
+
       const response = await axios.get(`/api/services/providers/${categoryId}`, {
         timeout: 10000,
       });

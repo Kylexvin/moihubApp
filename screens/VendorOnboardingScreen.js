@@ -10,10 +10,19 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
+  Dimensions
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { useNavigation } from '@react-navigation/native';
 import RNPickerSelect from 'react-native-picker-select';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Theme from './theme/Theme';
+
+const { width } = Dimensions.get('window');
+const { Colors, Typography, Spacing, BorderRadius, Components, Shadows, Gradients } = Theme;
 
 const VendorOnboardingScreen = () => {
   const navigation = useNavigation();
@@ -49,6 +58,9 @@ const VendorOnboardingScreen = () => {
     phoneNumber: '',
     areasOfOperation: '',
   });
+
+  // 🔥 NEW: Dashboard choice state (moved to top level)
+  const [wantsDashboard, setWantsDashboard] = useState(false);
 
   // Fetch categories based on selected role
   useEffect(() => {
@@ -91,6 +103,8 @@ const VendorOnboardingScreen = () => {
 
   const handleRoleSelection = (role) => {
     setSelectedRole(role);
+    // Reset dashboard choice when changing roles
+    setWantsDashboard(false);
   };
 
   const handleVendorRegistration = async () => {
@@ -159,7 +173,8 @@ const VendorOnboardingScreen = () => {
     }
   };
 
-  const handleServiceProviderApplication = async () => {
+  // 🔥 UPDATED: Accept wantsDashboard parameter
+  const handleServiceProviderApplication = async (dashboardChoice) => {
     if (!serviceProviderForm.providerName || !serviceProviderForm.category || !serviceProviderForm.phoneNumber) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
@@ -174,19 +189,12 @@ const VendorOnboardingScreen = () => {
         areasOfOperation: serviceProviderForm.areasOfOperation 
           ? serviceProviderForm.areasOfOperation.split(',').map(area => area.trim()).filter(area => area)
           : [],
+        wantsDashboard: dashboardChoice // Send user's choice
       });
 
-      // Check if the selected category has dashboard access
-      const selectedCategory = serviceCategories.find(cat => cat._id === serviceProviderForm.category);
-      const hasDashboard = selectedCategory?.allowDashboard || false;
-
-      let message = 'Application submitted successfully. ';
-      
-      if (hasDashboard) {
-        message += 'This service includes a business dashboard. ';
-      }
-      
-      message += 'Please wait for admin approval.';
+      const message = dashboardChoice 
+        ? 'Application submitted! Awaiting admin approval for dashboard access.'
+        : 'Service created successfully! Your listing is now live.';
 
       Alert.alert(
         'Success!',
@@ -213,389 +221,665 @@ const VendorOnboardingScreen = () => {
     }
   };
 
+  const handleBack = () => {
+    setSelectedRole(null);
+    setWantsDashboard(false); // Reset dashboard choice
+  };
+
+  const handleClose = () => {
+    navigation.goBack();
+  };
+
   const renderRoleSelection = () => (
-    <View style={styles.container}>
-      <Text style={styles.title}>Choose Your Business Type</Text>
-      <Text style={styles.subtitle}>Select how you want to start your business journey</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <LinearGradient colors={Gradients.primary} style={StyleSheet.absoluteFill} />
+      
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
+      
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+            <Ionicons name="close" size={24} color={Colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
 
-      <View style={styles.roleContainer}>
-        <TouchableOpacity
-          style={[
-            styles.roleCard,
-            selectedRole === 'food_vendor' && styles.selectedCard,
-          ]}
-          onPress={() => handleRoleSelection('food_vendor')}
-        >
-          <Text style={styles.roleIcon}>🍔</Text>
-          <Text style={styles.roleTitle}>Food Vendor</Text>
-          <Text style={styles.roleDescription}>
-            Sell food items and manage your food business
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.titleContainer}>
+          <View style={styles.iconCircle}>
+            <Ionicons name="business" size={40} color={Colors.primary} />
+          </View>
+          <Text style={styles.title}>Start Your Journey</Text>
+          <Text style={styles.subtitle}>Choose how you want to grow your business with MoiHub</Text>
+        </View>
 
-        <TouchableOpacity
-          style={[
-            styles.roleCard,
-            selectedRole === 'shop_owner' && styles.selectedCard,
-          ]}
-          onPress={() => handleRoleSelection('shop_owner')}
-        >
-          <Text style={styles.roleIcon}>🏪</Text>
-          <Text style={styles.roleTitle}>Shop Owner</Text>
-          <Text style={styles.roleDescription}>
-            Own and manage your retail shop or store
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.roleContainer}>
+          {/* Food Vendor Card */}
+          <TouchableOpacity
+            style={[
+              Components.card,
+              styles.roleCard,
+              selectedRole === 'food_vendor' && styles.selectedCard,
+            ]}
+            onPress={() => handleRoleSelection('food_vendor')}
+            activeOpacity={0.7}
+          >
+            <LinearGradient
+              colors={selectedRole === 'food_vendor' ? ['#ff7f5020', 'transparent'] : ['transparent', 'transparent']}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            />
+            <View style={[styles.roleIconContainer, { backgroundColor: '#ff7f5020' }]}>
+              <Text style={styles.roleIcon}>🍔</Text>
+            </View>
+            <View style={styles.roleContent}>
+              <Text style={styles.roleTitle}>Food Vendor</Text>
+              <Text style={styles.roleDescription}>
+                Sell food items, manage your menu, and accept orders online
+              </Text>
+              <View style={styles.roleFeatures}>
+                <View style={styles.featurePill}>
+                  <Ionicons name="checkmark-circle" size={14} color={Colors.primary} />
+                  <Text style={styles.featurePillText}>Menu Management</Text>
+                </View>
+                <View style={styles.featurePill}>
+                  <Ionicons name="checkmark-circle" size={14} color={Colors.primary} />
+                  <Text style={styles.featurePillText}>Order Tracking</Text>
+                </View>
+              </View>
+            </View>
+            {selectedRole === 'food_vendor' && (
+              <View style={styles.selectedBadge}>
+                <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
+              </View>
+            )}
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.roleCard,
-            selectedRole === 'service_provider' && styles.selectedCard,
-          ]}
-          onPress={() => handleRoleSelection('service_provider')}
-        >
-          <Text style={styles.roleIcon}>💈</Text>
-          <Text style={styles.roleTitle}>Service Provider</Text>
-          <Text style={styles.roleDescription}>
-            Provide local services like saloon, spa, etc. with dashboard
-          </Text>
-        </TouchableOpacity>
-      </View>
+          {/* Shop Owner Card */}
+          <TouchableOpacity
+            style={[
+              Components.card,
+              styles.roleCard,
+              selectedRole === 'shop_owner' && styles.selectedCard,
+            ]}
+            onPress={() => handleRoleSelection('shop_owner')}
+            activeOpacity={0.7}
+          >
+            <LinearGradient
+              colors={selectedRole === 'shop_owner' ? ['#50c87820', 'transparent'] : ['transparent', 'transparent']}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            />
+            <View style={[styles.roleIconContainer, { backgroundColor: '#50c87820' }]}>
+              <Text style={styles.roleIcon}>🏪</Text>
+            </View>
+            <View style={styles.roleContent}>
+              <Text style={styles.roleTitle}>Shop Owner</Text>
+              <Text style={styles.roleDescription}>
+                List your products, manage inventory, and reach more customers
+              </Text>
+              <View style={styles.roleFeatures}>
+                <View style={styles.featurePill}>
+                  <Ionicons name="checkmark-circle" size={14} color={Colors.primary} />
+                  <Text style={styles.featurePillText}>Product Listings</Text>
+                </View>
+                <View style={styles.featurePill}>
+                  <Ionicons name="checkmark-circle" size={14} color={Colors.primary} />
+                  <Text style={styles.featurePillText}>Inventory</Text>
+                </View>
+              </View>
+            </View>
+            {selectedRole === 'shop_owner' && (
+              <View style={styles.selectedBadge}>
+                <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
+              </View>
+            )}
+          </TouchableOpacity>
 
-      {selectedRole && (
-        <TouchableOpacity
-          style={styles.continueButton}
-          onPress={() => setSelectedRole(selectedRole)}
-        >
-          <Text style={styles.continueButtonText}>Continue</Text>
-        </TouchableOpacity>
-      )}
-    </View>
+          {/* Service Provider Card */}
+          <TouchableOpacity
+            style={[
+              Components.card,
+              styles.roleCard,
+              selectedRole === 'service_provider' && styles.selectedCard,
+            ]}
+            onPress={() => handleRoleSelection('service_provider')}
+            activeOpacity={0.7}
+          >
+            <LinearGradient
+              colors={selectedRole === 'service_provider' ? ['#9370db20', 'transparent'] : ['transparent', 'transparent']}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            />
+            <View style={[styles.roleIconContainer, { backgroundColor: '#9370db20' }]}>
+              <Text style={styles.roleIcon}>💈</Text>
+            </View>
+            <View style={styles.roleContent}>
+              <Text style={styles.roleTitle}>Service Provider</Text>
+              <Text style={styles.roleDescription}>
+                Offer local services on MoiHub
+              </Text>
+              <View style={styles.roleFeatures}>
+                <View style={styles.featurePill}>
+                  <Ionicons name="checkmark-circle" size={14} color={Colors.primary} />
+                  <Text style={styles.featurePillText}>Basic Listing</Text>
+                </View>
+                <View style={styles.featurePill}>
+                  <Ionicons name="checkmark-circle" size={14} color={Colors.primary} />
+                  <Text style={styles.featurePillText}>Dashboard Option</Text>
+                </View>
+              </View>
+            </View>
+            {selectedRole === 'service_provider' && (
+              <View style={styles.selectedBadge}>
+                <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {selectedRole && (
+          <TouchableOpacity
+            style={[Components.buttonPrimary, styles.continueButton]}
+            onPress={() => setSelectedRole(selectedRole)}
+            activeOpacity={0.8}
+          >
+            <Text style={Components.buttonTextPrimary}>Continue</Text>
+            <Ionicons name="arrow-forward" size={20} color={Colors.black} style={styles.buttonIcon} />
+          </TouchableOpacity>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 
   const renderFoodVendorForm = () => (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <Text style={styles.formTitle}>🍔 Food Vendor Registration</Text>
-        <Text style={styles.formSubtitle}>Let's set up your food business</Text>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Shop Name *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your shop name"  
-            placeholderTextColor="#d8861aff"
-            value={vendorForm.shopName}
-            onChangeText={(text) => setVendorForm({ ...vendorForm, shopName: text })}
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Phone Number *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your phone number" 
-            placeholderTextColor="#d8861aff"
-            value={vendorForm.phone}
-            onChangeText={(text) => setVendorForm({ ...vendorForm, phone: text })}
-            keyboardType="phone-pad"
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Location *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your business location"  
-            placeholderTextColor="#d8861aff"
-            value={vendorForm.location}
-            onChangeText={(text) => setVendorForm({ ...vendorForm, location: text })}
-          />
-        </View>
-
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => setSelectedRole(null)}
-          >
-            <Text style={styles.backButtonText}>Back</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <LinearGradient colors={Gradients.primary} style={StyleSheet.absoluteFill} />
+      
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
+      
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <View style={styles.formHeader}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={Colors.text} />
           </TouchableOpacity>
+          <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+            <Ionicons name="close" size={24} color={Colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
 
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.formScrollContent}
+        >
+          <View style={styles.formTitleContainer}>
+            <View style={[styles.formIconCircle, { backgroundColor: '#ff7f5020' }]}>
+              <Text style={styles.formIcon}>🍔</Text>
+            </View>
+            <Text style={styles.formTitle}>Food Vendor Registration</Text>
+            <Text style={styles.formSubtitle}>Set up your food business on MoiHub</Text>
+          </View>
+
+          <View style={styles.formCard}>
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Shop Name <Text style={styles.requiredStar}>*</Text></Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="restaurant-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., Campus Bites, Student Café"
+                  placeholderTextColor={Colors.textTertiary}
+                  value={vendorForm.shopName}
+                  onChangeText={(text) => setVendorForm({ ...vendorForm, shopName: text })}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Phone Number <Text style={styles.requiredStar}>*</Text></Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="call-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., 0712345678"
+                  placeholderTextColor={Colors.textTertiary}
+                  value={vendorForm.phone}
+                  onChangeText={(text) => setVendorForm({ ...vendorForm, phone: text })}
+                  keyboardType="phone-pad"
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Location <Text style={styles.requiredStar}>*</Text></Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="location-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., Main Campus, West Side"
+                  placeholderTextColor={Colors.textTertiary}
+                  value={vendorForm.location}
+                  onChangeText={(text) => setVendorForm({ ...vendorForm, location: text })}
+                />
+              </View>
+            </View>
+
+            <View style={styles.infoBox}>
+              <Ionicons name="information-circle" size={20} color={Colors.primary} />
+              <Text style={styles.infoText}>
+                Your application will be reviewed by our team. You'll receive a notification once approved.
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
+
+        <View style={styles.formFooter}>
           <TouchableOpacity
-            style={[styles.submitButton, loading && styles.disabledButton]}
+            style={[Components.buttonPrimary, styles.submitButton, loading && styles.disabledButton]}
             onPress={handleVendorRegistration}
             disabled={loading}
+            activeOpacity={0.8}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={Colors.black} />
             ) : (
-              <Text style={styles.submitButtonText}>Register</Text>
+              <>
+                <Text style={Components.buttonTextPrimary}>Register Business</Text>
+                <Ionicons name="checkmark-circle" size={20} color={Colors.black} style={styles.buttonIcon} />
+              </>
             )}
           </TouchableOpacity>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 
   const renderShopOwnerForm = () => (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <Text style={styles.formTitle}>🏪 Shop Owner Application</Text>
-        <Text style={styles.formSubtitle}>Tell us about your retail business</Text>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Shop Name *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your shop name"  
-            placeholderTextColor="#d8861aff"
-            value={shopOwnerForm.shopName}
-            onChangeText={(text) => setShopOwnerForm({ ...shopOwnerForm, shopName: text })}
-          />
+    <SafeAreaView style={styles.safeArea}>
+      <LinearGradient colors={Gradients.primary} style={StyleSheet.absoluteFill} />
+      
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
+      
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <View style={styles.formHeader}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+            <Ionicons name="close" size={24} color={Colors.textSecondary} />
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Category *</Text>
-          {loadingCategories ? (
-            <View style={[styles.input, styles.loadingContainer]}>
-              <ActivityIndicator size="small" color="#db820eff" />
-              <Text style={styles.loadingText}>Loading categories...</Text>
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.formScrollContent}
+        >
+          <View style={styles.formTitleContainer}>
+            <View style={[styles.formIconCircle, { backgroundColor: '#50c87820' }]}>
+              <Text style={styles.formIcon}>🏪</Text>
             </View>
-          ) : (
-            <View style={styles.dropdownContainer}>
-              <RNPickerSelect
-                onValueChange={(value) => setShopOwnerForm({ ...shopOwnerForm, category: value })}
-                items={categories.map(cat => ({
-                  label: cat.name,
-                  value: cat.name,
-                  key: cat._id,
-                }))}
-                value={shopOwnerForm.category}
-                placeholder={{
-                  label: 'Select a category...',
-                  value: null,
-                  color: '#d8b20bff',
-                }}
-                style={pickerSelectStyles}
-                useNativeAndroidPickerStyle={false}
+            <Text style={styles.formTitle}>Shop Owner Application</Text>
+            <Text style={styles.formSubtitle}>List your retail business on MoiHub</Text>
+          </View>
+
+          <View style={styles.formCard}>
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Shop Name <Text style={styles.requiredStar}>*</Text></Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="storefront-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., Campus Mart, Student Store"
+                  placeholderTextColor={Colors.textTertiary}
+                  value={shopOwnerForm.shopName}
+                  onChangeText={(text) => setShopOwnerForm({ ...shopOwnerForm, shopName: text })}
+                />
+              </View>
+            </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Business Category <Text style={styles.requiredStar}>*</Text></Text>
+            <Text style={styles.inputHint}>Select the category that best describes your business</Text>
+            
+            {loadingCategories ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.loadingText}>Loading categories...</Text>
+              </View>
+            ) : (
+              <View style={styles.categoriesContainer}>
+                {categories.map((cat) => (
+                  <TouchableOpacity
+                    key={cat._id}
+                    style={[
+                      styles.categoryChip,
+                      shopOwnerForm.category === cat.name && styles.categoryChipSelected
+                    ]}
+                    onPress={() => setShopOwnerForm({ ...shopOwnerForm, category: cat.name })}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      styles.categoryChipText,
+                      shopOwnerForm.category === cat.name && styles.categoryChipTextSelected
+                    ]}>
+                      {cat.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            
+            {shopOwnerForm.category ? (
+              <View style={styles.selectedIndicator}>
+                <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
+                <Text style={styles.selectedText}>Selected: {shopOwnerForm.category}</Text>
+              </View>
+            ) : (
+              <Text style={styles.selectHint}>Tap a category above to select it</Text>
+            )}
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Phone Number <Text style={styles.requiredStar}>*</Text></Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="call-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., 0712345678"
+                placeholderTextColor={Colors.textTertiary}
+                value={shopOwnerForm.phoneNumber}
+                onChangeText={(text) => setShopOwnerForm({ ...shopOwnerForm, phoneNumber: text })}
+                keyboardType="phone-pad"
               />
             </View>
-          )}
-        </View>
+          </View>
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Phone Number *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your phone number"  
-            placeholderTextColor="#d8861aff"
-            value={shopOwnerForm.phoneNumber}
-            onChangeText={(text) => setShopOwnerForm({ ...shopOwnerForm, phoneNumber: text })}
-            keyboardType="phone-pad"
-          />
-        </View>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Address <Text style={styles.requiredStar}>*</Text></Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="location-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="e.g., Room 12, KDB House"
+                placeholderTextColor={Colors.textTertiary}
+                value={shopOwnerForm.address}
+                onChangeText={(text) => setShopOwnerForm({ ...shopOwnerForm, address: text })}
+                multiline
+                numberOfLines={2}
+                textAlignVertical="top"
+              />
+            </View>
+          </View>
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Address *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your shop address"  
-            placeholderTextColor="#d8861aff"
-            value={shopOwnerForm.address}
-            onChangeText={(text) => setShopOwnerForm({ ...shopOwnerForm, address: text })}
-            multiline
-            numberOfLines={2}
-          />
-        </View>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Description</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="document-text-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Brief description of your business (optional)"
+                placeholderTextColor={Colors.textTertiary}
+                value={shopOwnerForm.description}
+                onChangeText={(text) => setShopOwnerForm({ ...shopOwnerForm, description: text })}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
+          </View>
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Description</Text>
-          <TextInput
-            style={[styles.input, { height: 80 }]}
-            placeholder="Brief description of your business"  
-            placeholderTextColor="#d8861aff"
-            value={shopOwnerForm.description}
-            onChangeText={(text) => setShopOwnerForm({ ...shopOwnerForm, description: text })}
-            multiline
-            numberOfLines={3}
-            textAlignVertical="top"
-          />
-        </View>
-
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => setSelectedRole(null)}
-          >
-            <Text style={styles.backButtonText}>Back</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.submitButton, loading && styles.disabledButton]}
-            onPress={handleShopOwnerApplication}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.submitButtonText}>Apply</Text>
-            )}
-          </TouchableOpacity>
+          <View style={styles.infoBox}>
+            <Ionicons name="information-circle" size={20} color={Colors.primary} />
+            <Text style={styles.infoText}>
+              Your application will be reviewed by our team. Once approved, you can start listing products.
+            </Text>
+          </View>
         </View>
       </ScrollView>
+
+      <View style={styles.formFooter}>
+        <TouchableOpacity
+          style={[Components.buttonPrimary, styles.submitButton, loading && styles.disabledButton]}
+          onPress={handleShopOwnerApplication}
+          disabled={loading}
+          activeOpacity={0.8}
+        >
+          {loading ? (
+            <ActivityIndicator color={Colors.black} />
+          ) : (
+            <>
+              <Text style={Components.buttonTextPrimary}>Submit Application</Text>
+              <Ionicons name="checkmark-circle" size={20} color={Colors.black} style={styles.buttonIcon} />
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
     </KeyboardAvoidingView>
-  );
+  </SafeAreaView>
+);
 
   const renderServiceProviderForm = () => (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <Text style={styles.formTitle}>💈 Service Provider Application</Text>
-        <Text style={styles.formSubtitle}>Apply for local services like saloon, spa, etc.</Text>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Business Name *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your business/service name"  
-            placeholderTextColor="#d8861aff"
-            value={serviceProviderForm.providerName}
-            onChangeText={(text) => setServiceProviderForm({ ...serviceProviderForm, providerName: text })}
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Service Type *</Text>
-          {loadingServiceCategories ? (
-            <View style={[styles.input, styles.loadingContainer]}>
-              <ActivityIndicator size="small" color="#db820eff" />
-              <Text style={styles.loadingText}>Loading service categories...</Text>
-            </View>
-          ) : (
-            <View style={styles.dropdownContainer}>
-              <RNPickerSelect
-                onValueChange={(value) => {
-                  setServiceProviderForm({ 
-                    ...serviceProviderForm, 
-                    category: value,
-                  });
-                }}
-                items={serviceCategories.map(cat => ({
-                  label: cat.name,
-                  value: cat._id,
-                  key: cat._id,
-                  allowDashboard: cat.allowDashboard,
-                }))}
-                value={serviceProviderForm.category}
-                placeholder={{
-                  label: 'Select service type...',
-                  value: null,
-                  color: '#d8b20bff',
-                }}
-                style={pickerSelectStyles}
-                useNativeAndroidPickerStyle={false}
-              />
-            </View>
-          )}
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Phone Number *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your business phone number"  
-            placeholderTextColor="#d8861aff"
-            value={serviceProviderForm.phoneNumber}
-            onChangeText={(text) => setServiceProviderForm({ ...serviceProviderForm, phoneNumber: text })}
-            keyboardType="phone-pad"
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Areas of Operation</Text>
-          <TextInput
-            style={[styles.input, { height: 80 }]}
-            placeholder="Enter areas separated by commas (e.g., Downtown, West Side, East End)"  
-            placeholderTextColor="#d8861aff"
-            value={serviceProviderForm.areasOfOperation}
-            onChangeText={(text) => setServiceProviderForm({ ...serviceProviderForm, areasOfOperation: text })}
-            multiline
-            numberOfLines={3}
-            textAlignVertical="top"
-          />
-          <Text style={styles.helperText}>Leave empty if you serve city-wide</Text>
-        </View>
-
-        {serviceProviderForm.category && (
-          <View style={styles.categoryInfoContainer}>
-            <Text style={styles.categoryInfoTitle}>Service Information:</Text>
-            {(() => {
-              const selectedCat = serviceCategories.find(cat => cat._id === serviceProviderForm.category);
-              if (selectedCat) {
-                return (
-                  <>
-                    <Text style={styles.categoryInfoText}>
-                      • {selectedCat.description}
-                    </Text>
-                    {selectedCat.allowDashboard && (
-                      <Text style={styles.dashboardNote}>
-                        ✅ This service comes with a business dashboard
-                      </Text>
-                    )}
-                    {selectedCat.allowBooking && (
-                      <Text style={styles.bookingNote}>
-                        ✅ Customers can book appointments online
-                      </Text>
-                    )}
-                  </>
-                );
-              }
-              return null;
-            })()}
-          </View>
-        )}
-
-        <View style={styles.noteContainer}>
-          <Text style={styles.noteTitle}>Application Process:</Text>
-          <Text style={styles.noteText}>
-            • Fill in all required fields marked with *
-            • Some services require admin approval
-            • Services with dashboards allow you to manage bookings and customers
-            • You'll receive notification once your application is processed
-            • After approval, access your dashboard from the main menu
-          </Text>
-        </View>
-
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => setSelectedRole(null)}
-          >
-            <Text style={styles.backButtonText}>Back</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <LinearGradient colors={Gradients.primary} style={StyleSheet.absoluteFill} />
+      
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
+      
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <View style={styles.formHeader}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={Colors.text} />
           </TouchableOpacity>
+          <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+            <Ionicons name="close" size={24} color={Colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
 
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.formScrollContent}
+        >
+          <View style={styles.formTitleContainer}>
+            <View style={[styles.formIconCircle, { backgroundColor: '#9370db20' }]}>
+              <Text style={styles.formIcon}>💈</Text>
+            </View>
+            <Text style={styles.formTitle}>Service Provider Application</Text>
+            <Text style={styles.formSubtitle}>Offer local services on MoiHub</Text>
+          </View>
+
+          <View style={styles.formCard}>
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Business Name <Text style={styles.requiredStar}>*</Text></Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="business-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., Campus Cuts, Student Spa"
+                  placeholderTextColor={Colors.textTertiary}
+                  value={serviceProviderForm.providerName}
+                  onChangeText={(text) => setServiceProviderForm({ ...serviceProviderForm, providerName: text })}
+                />
+              </View>
+            </View>
+
+            {/* Service Type Selection */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Service Type <Text style={styles.requiredStar}>*</Text></Text>
+              <Text style={styles.inputHint}>Choose the type of service you provide</Text>
+              
+              {loadingServiceCategories ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                  <Text style={styles.loadingText}>Loading service categories...</Text>
+                </View>
+              ) : (
+                <View style={styles.categoriesContainer}>
+                  {serviceCategories.map((cat) => (
+                    <TouchableOpacity
+                      key={cat._id}
+                      style={[
+                        styles.categoryChip,
+                        serviceProviderForm.category === cat._id && styles.categoryChipSelected
+                      ]}
+                      onPress={() => setServiceProviderForm({ 
+                        ...serviceProviderForm, 
+                        category: cat._id 
+                      })}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[
+                        styles.categoryChipText,
+                        serviceProviderForm.category === cat._id && styles.categoryChipTextSelected
+                      ]}>
+                        {cat.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+              
+              {serviceProviderForm.category && (
+                <View style={styles.selectedIndicator}>
+                  <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
+                  <Text style={styles.selectedText}>
+                    Selected: {serviceCategories.find(c => c._id === serviceProviderForm.category)?.name}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Dashboard Choice Checkbox - using top-level state */}
+            <View style={styles.checkboxContainer}>
+              <TouchableOpacity
+                style={[styles.checkbox, wantsDashboard && styles.checkboxChecked]}
+                onPress={() => setWantsDashboard(!wantsDashboard)}
+                activeOpacity={0.7}
+              >
+                {wantsDashboard && (
+                  <Ionicons name="checkmark" size={16} color={Colors.primary} />
+                )}
+              </TouchableOpacity>
+              <View style={styles.checkboxTextContainer}>
+                <Text style={styles.checkboxLabel}>Enable business dashboard</Text>
+                <Text style={styles.checkboxSubLabel}>
+                  Manage bookings, track customers, and grow your business
+                </Text>
+                <View style={styles.checkboxPill}>
+                  <Ionicons name="speedometer" size={14} color={Colors.primary} />
+                  <Text style={styles.checkboxPillText}>Paid feature • Admin approval required</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Dashboard Info Box - Shows when dashboard is selected */}
+            {wantsDashboard && (
+              <View style={styles.dashboardInfoBox}>
+                <Ionicons name="information-circle" size={20} color={Colors.primary} />
+                <Text style={styles.dashboardInfoText}>
+                  Your application will be reviewed by admin. Once approved, you'll get access to:
+                </Text>
+                <View style={styles.dashboardFeatures}>
+                  <View style={styles.dashboardFeature}>
+                    <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
+                    <Text style={styles.dashboardFeatureText}>Booking management</Text>
+                  </View>
+                  <View style={styles.dashboardFeature}>
+                    <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
+                    <Text style={styles.dashboardFeatureText}>Customer tracking</Text>
+                  </View>
+                  <View style={styles.dashboardFeature}>
+                    <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
+                    <Text style={styles.dashboardFeatureText}>Analytics dashboard</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Phone Number <Text style={styles.requiredStar}>*</Text></Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="call-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., 0712345678"
+                  placeholderTextColor={Colors.textTertiary}
+                  value={serviceProviderForm.phoneNumber}
+                  onChangeText={(text) => setServiceProviderForm({ ...serviceProviderForm, phoneNumber: text })}
+                  keyboardType="phone-pad"
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Areas of Operation</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="map-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="e.g., Main Campus, West Side, Town (comma separated)"
+                  placeholderTextColor={Colors.textTertiary}
+                  value={serviceProviderForm.areasOfOperation}
+                  onChangeText={(text) => setServiceProviderForm({ ...serviceProviderForm, areasOfOperation: text })}
+                  multiline
+                  numberOfLines={2}
+                  textAlignVertical="top"
+                />
+              </View>
+              <Text style={styles.helperText}>Leave empty if you serve anywhere</Text>
+            </View>
+
+            {/* Info Box - Changes based on dashboard choice */}
+            <View style={[styles.infoBox, wantsDashboard && styles.infoBoxDashboard]}>
+              <Ionicons 
+                name={wantsDashboard ? "bulb-outline" : "information-circle"} 
+                size={20} 
+                color={wantsDashboard ? Colors.warning : Colors.primary} 
+              />
+              <Text style={styles.infoText}>
+                {wantsDashboard 
+                  ? 'Dashboard applications require admin approval. You\'ll be notified once approved.'
+                  : 'Your basic listing will be live immediately after submission.'}
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
+
+        <View style={styles.formFooter}>
           <TouchableOpacity
-            style={[styles.submitButton, loading && styles.disabledButton]}
-            onPress={handleServiceProviderApplication}
+            style={[Components.buttonPrimary, styles.submitButton, loading && styles.disabledButton]}
+            onPress={() => handleServiceProviderApplication(wantsDashboard)}
             disabled={loading}
+            activeOpacity={0.8}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={Colors.black} />
             ) : (
-              <Text style={styles.submitButtonText}>Submit Application</Text>
+              <>
+                <Text style={Components.buttonTextPrimary}>
+                  {wantsDashboard ? 'Submit for Approval' : 'Create Basic Listing'}
+                </Text>
+                <Ionicons name="checkmark-circle" size={20} color={Colors.black} style={styles.buttonIcon} />
+              </>
             )}
           </TouchableOpacity>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 
   // Main render logic
@@ -610,247 +894,469 @@ const VendorOnboardingScreen = () => {
   }
 };
 
+// ==================== STYLES ====================
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
-    paddingHorizontal: 20,
-    paddingTop: 50,
+    backgroundColor: Colors.background,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    color: '#2c3e50',
-    marginBottom: 10,
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: Spacing.xxl,
   },
-  subtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    color: '#7f8c8d',
-    marginBottom: 40,
-  },
-  roleContainer: {
-    gap: 20,
-    marginBottom: 40,
-  },
-  roleCard: {
-    backgroundColor: '#fff',
-    padding: 25,
-    borderRadius: 15,
-    borderWidth: 2,
-    borderColor: '#e9ecef',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  selectedCard: {
-    borderColor: '#3498db',
-    backgroundColor: '#ebf3fd',
-  },
-  roleIcon: {
-    fontSize: 50,
-    marginBottom: 15,
-  },
-  roleTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-    marginBottom: 8,
-  },
-  roleDescription: {
-    fontSize: 14,
-    color: '#7f8c8d',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  continueButton: {
-    backgroundColor: '#3498db',
-    paddingVertical: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  continueButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  formTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    color: '#2c3e50',
-    marginBottom: 8,
-  },
-  formSubtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    color: '#7f8c8d',
-    marginBottom: 30,
-  },
-  inputContainer: {
-    marginBottom: 20,
-  },
-  inputLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2c3e50',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    fontSize: 16,
-  },
-  buttonContainer: {
+  header: {
     flexDirection: 'row',
-    gap: 15,
-    marginTop: 20,
-    marginBottom: 40,
+    justifyContent: 'flex-end',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+  },
+  closeButton: {
+    padding: Spacing.xs,
   },
   backButton: {
+    padding: Spacing.xs,
+  },
+  titleContainer: {
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.xl,
+  },
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+    borderWidth: 2,
+    borderColor: Colors.primary + '30',
+  },
+  title: {
+    ...Typography.h1,
+    fontSize: 28,
+    textAlign: 'center',
+    marginBottom: Spacing.sm,
+  },
+  subtitle: {
+    ...Typography.body,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  roleContainer: {
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.md,
+    marginBottom: Spacing.xl,
+  },
+  roleCard: {
+    flexDirection: 'row',
+    padding: Spacing.md,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  selectedCard: {
+    borderColor: Colors.primary,
+    borderWidth: 2,
+  },
+  roleIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Spacing.md,
+  },
+  roleIcon: {
+    fontSize: 30,
+  },
+  roleContent: {
     flex: 1,
-    backgroundColor: '#ecf0f1',
-    paddingVertical: 15,
-    borderRadius: 10,
+  },
+  roleTitle: {
+    ...Typography.h3,
+    fontSize: 18,
+    marginBottom: 4,
+  },
+  roleDescription: {
+    ...Typography.bodySmall,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.sm,
+    lineHeight: 18,
+  },
+  roleFeatures: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+  },
+  featurePill: {
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  backButtonText: {
-    color: '#2c3e50',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  submitButton: {
-    flex: 2,
-    backgroundColor: '#27ae60',
-    paddingVertical: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  disabledButton: {
-    backgroundColor: '#bdc3c7',
-  },
-  dropdownContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: Colors.card,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.round,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
+    borderColor: Colors.cardBorder,
+    gap: 4,
   },
-  loadingContainer: {
+  featurePillText: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: Colors.textSecondary,
+  },
+  selectedBadge: {
+    position: 'absolute',
+    top: Spacing.sm,
+    right: Spacing.sm,
+  },
+  continueButton: {
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 15,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
   },
-  loadingText: {
-    marginLeft: 10,
-    color: '#666',
-    fontSize: 16,
+  buttonIcon: {
+    marginLeft: Spacing.sm,
   },
-  helperText: {
-    fontSize: 12,
-    color: '#7f8c8d',
-    marginTop: 5,
+  
+  // Form Styles
+  formHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
+  formScrollContent: {
+    flexGrow: 1,
+    paddingBottom: Spacing.xxl,
+  },
+  formTitleContainer: {
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.lg,
+  },
+  formIconCircle: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+    borderWidth: 2,
+    borderColor: Colors.cardBorder,
+  },
+  formIcon: {
+    fontSize: 35,
+  },
+  formTitle: {
+    ...Typography.h2,
+    fontSize: 24,
+    textAlign: 'center',
+    marginBottom: Spacing.xs,
+  },
+  formSubtitle: {
+    ...Typography.body,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+  },
+  formCard: {
+    ...Components.card,
+    marginHorizontal: Spacing.lg,
+    padding: Spacing.lg,
+  },
+  inputContainer: {
+    marginBottom: Spacing.md,
+  },
+  inputLabel: {
+    ...Typography.bodySmall,
+    fontWeight: '600',
+    marginBottom: Spacing.xs,
+    color: Colors.text,
+  },
+  requiredStar: {
+    color: Colors.danger,
+  },
+  inputHint: {
+    ...Typography.caption,
+    color: Colors.textTertiary,
+    marginBottom: Spacing.sm,
     fontStyle: 'italic',
   },
-  categoryInfoContainer: {
-    backgroundColor: '#e8f5e9',
-    padding: 15,
-    borderRadius: 10,
-    borderLeftWidth: 4,
-    borderLeftColor: '#4caf50',
-    marginTop: 15,
-    marginBottom: 10,
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    paddingHorizontal: Spacing.sm,
+  },
+  inputIcon: {
+    marginRight: Spacing.sm,
+  },
+  input: {
+    flex: 1,
+    ...Typography.body,
+    color: Colors.text,
+    paddingVertical: Platform.OS === 'ios' ? Spacing.sm : Spacing.xs,
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+    paddingTop: Spacing.sm,
+  },
+  pickerWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    paddingHorizontal: Spacing.sm,
+  },
+  pickerIcon: {
+    marginRight: Spacing.sm,
+  },
+  loadingContainer: {
+    paddingVertical: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  loadingText: {
+    ...Typography.bodySmall,
+    color: Colors.textSecondary,
+  },
+  categoriesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.xs,
+  },
+  categoryChip: {
+    backgroundColor: Colors.card,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.round,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    ...Shadows.small,
+  },
+  categoryChipSelected: {
+    backgroundColor: Colors.primary + '20',
+    borderColor: Colors.primary,
+    borderWidth: 2,
+  },
+  categoryChipText: {
+    ...Typography.bodySmall,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  categoryChipTextSelected: {
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  selectedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Spacing.sm,
+    gap: Spacing.xs,
+  },
+  selectedText: {
+    ...Typography.bodySmall,
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  selectHint: {
+    ...Typography.caption,
+    color: Colors.textTertiary,
+    marginTop: Spacing.xs,
+    fontStyle: 'italic',
+  },
+  helperText: {
+    ...Typography.caption,
+    color: Colors.textTertiary,
+    marginTop: 4,
+    marginLeft: Spacing.xs,
+    fontStyle: 'italic',
+  },
+  infoBox: {
+    flexDirection: 'row',
+    backgroundColor: Colors.primary + '10',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginTop: Spacing.sm,
+    gap: Spacing.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.primary,
+  },
+  infoBoxDashboard: {
+    borderLeftColor: Colors.warning,
+    backgroundColor: Colors.warning + '10',
+  },
+  infoText: {
+    ...Typography.bodySmall,
+    color: Colors.textSecondary,
+    flex: 1,
+    lineHeight: 18,
+  },
+  categoryInfoBox: {
+    backgroundColor: Colors.primary + '08',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginTop: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.primary + '20',
+  },
+  categoryInfoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   categoryInfoTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#2e7d32',
-    marginBottom: 5,
+    ...Typography.bodySmall,
+    fontWeight: '600',
+    color: Colors.primary,
   },
   categoryInfoText: {
-    fontSize: 13,
-    color: '#1b5e20',
+    ...Typography.bodySmall,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.sm,
     lineHeight: 18,
-    marginBottom: 8,
   },
-  dashboardNote: {
-    fontSize: 12,
-    color: '#388e3c',
+  featureTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginTop: Spacing.xs,
+  },
+  featureTagText: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+  },
+  formFooter: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.cardBorder,
+    backgroundColor: Colors.card,
+  },
+  submitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  
+  // New styles for dashboard checkbox
+  checkboxContainer: {
+    flexDirection: 'row',
+    marginVertical: Spacing.md,
+    padding: Spacing.md,
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Spacing.md,
+  },
+  checkboxChecked: {
+    backgroundColor: Colors.primary + '20',
+  },
+  checkboxTextContainer: {
+    flex: 1,
+  },
+  checkboxLabel: {
+    ...Typography.body,
     fontWeight: '600',
-    marginTop: 5,
+    color: Colors.text,
+    marginBottom: 2,
   },
-  bookingNote: {
-    fontSize: 12,
-    color: '#388e3c',
+  checkboxSubLabel: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.xs,
+  },
+  checkboxPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary + '10',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.round,
+    alignSelf: 'flex-start',
+    gap: 4,
+  },
+  checkboxPillText: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: Colors.primary,
     fontWeight: '600',
-    marginTop: 3,
   },
-  noteContainer: {
-    backgroundColor: '#fff8e1',
-    padding: 15,
-    borderRadius: 10,
-    borderLeftWidth: 4,
-    borderLeftColor: '#ffc107',
-    marginTop: 20,
-    marginBottom: 10,
+  dashboardInfoBox: {
+    backgroundColor: Colors.primary + '10',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.primary,
   },
-  noteTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#d84315',
-    marginBottom: 5,
+  dashboardInfoText: {
+    ...Typography.bodySmall,
+    color: Colors.textSecondary,
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.sm,
   },
-  noteText: {
-    fontSize: 13,
-    color: '#5d4037',
-    lineHeight: 18,
+  dashboardFeatures: {
+    gap: Spacing.xs,
+  },
+  dashboardFeature: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  dashboardFeatureText: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
   },
 });
 
 // Picker select styles
 const pickerSelectStyles = {
   inputIOS: {
-    fontSize: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 15,
-    borderWidth: 0,
-    borderRadius: 10,
-    color: '#2c3e50',
-    paddingRight: 30,
-    backgroundColor: 'transparent',
+    ...Typography.body,
+    color: Colors.text,
+    paddingVertical: Platform.OS === 'ios' ? Spacing.sm : 0,
+    paddingHorizontal: 0,
     minHeight: 50,
+    backgroundColor: 'transparent',
   },
   inputAndroid: {
-    fontSize: 16,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    borderWidth: 0,
-    borderRadius: 10,
-    color: '#2c3e50',
-    paddingRight: 30,
-    backgroundColor: 'transparent',
+    ...Typography.body,
+    color: Colors.text,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
     minHeight: 50,
+    backgroundColor: 'transparent',
   },
   placeholder: {
-    color: '#7f8c8d',
-    fontSize: 16,
+    color: Colors.textTertiary,
+    ...Typography.body,
   },
   iconContainer: {
     top: 15,
