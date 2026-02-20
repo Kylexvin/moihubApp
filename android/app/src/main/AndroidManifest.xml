@@ -49,10 +49,13 @@
       </intent-filter>
 
       <intent-filter>
-       <action android:name="android.intent.action.VIEW"/>
-       <category android:name="android.intent.category.DEFAULT"/>
-       <category android:name="android.intent.category.BROWSABLE"/>
-       <data android:scheme="com.kylexvin.moihub" android:host="oauth2redirect"/>
+         <action android:name="android.intent.action.VIEW"/>
+         <category android:name="android.intent.category.DEFAULT"/>
+         <category android:name="android.intent.category.BROWSABLE"/>
+      <data 
+       android:scheme="com.kylexvin.moihub" 
+       android:host="oauth2redirect"
+       android:pathPrefix="/" />
      </intent-filter>
 
       <intent-filter>
@@ -64,4 +67,4 @@
     </activity>
     
   </application> 
-</manifest>
+</manifest> 
