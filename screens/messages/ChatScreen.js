@@ -1,4 +1,3 @@
-// screens/messages/ChatScreen.js
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -17,10 +16,11 @@ import {
   Animated,
   StatusBar,
   Dimensions,
+  Image,
 } from 'react-native';
 import { TouchableWithoutFeedback } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import io from 'socket.io-client';
 import Svg, { Path } from 'react-native-svg';
@@ -204,6 +204,11 @@ const ChatScreen = ({ route, navigation }) => {
 
       socketRef.current.on('message_read', (data) => {
         updateMessageReadStatus(data.messageId, data.readBy);
+      });
+
+      socketRef.current.on('message_deleted', (data) => {
+        // Remove deleted message from UI
+        setMessages(prev => prev.filter(msg => msg._id !== data.messageId));
       });
 
       socketRef.current.on('user_typing', (data) => {
@@ -530,7 +535,7 @@ const ChatScreen = ({ route, navigation }) => {
 
     Alert.alert(
       'Delete Message',
-      'Are you sure you want to delete this message?',
+      'Are you sure you want to delete this message? This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -548,10 +553,21 @@ const ChatScreen = ({ route, navigation }) => {
               });
 
               if (response.ok) {
+                // Remove message from local state
                 setMessages(prev => prev.filter(msg => msg._id !== selectedMessage._id));
+                
+                // Notify others via socket
+                if (socketRef.current?.connected) {
+                  socketRef.current.emit('delete_message', {
+                    messageId: selectedMessage._id,
+                    conversationId,
+                  });
+                }
+                
                 Alert.alert('Success', 'Message deleted');
               } else {
-                Alert.alert('Error', 'Failed to delete message');
+                const error = await response.json();
+                Alert.alert('Error', error.message || 'Failed to delete message');
               }
             } catch (error) {
               Alert.alert('Error', 'Failed to delete message');
@@ -813,7 +829,11 @@ const ChatScreen = ({ route, navigation }) => {
         ]}>
           {!isOwnMessage && (
             <View style={styles.otherAvatar}>
-              <Text style={styles.avatarText}>{avatarText}</Text>
+              {derivedOtherUser?.avatar ? (
+                <Image source={{ uri: derivedOtherUser.avatar }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarText}>{avatarText}</Text>
+              )}
             </View>
           )}
 
@@ -854,9 +874,13 @@ const ChatScreen = ({ route, navigation }) => {
       <View style={[styles.messageContainer, styles.otherMessageContainer]}>
         <View style={styles.messageWrapper}>
           <View style={styles.otherAvatar}>
-            <Text style={styles.avatarText}>
-              {derivedOtherUser.username?.charAt(0).toUpperCase() || '?'}
-            </Text>
+            {derivedOtherUser?.avatar ? (
+              <Image source={{ uri: derivedOtherUser.avatar }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>
+                {derivedOtherUser.username?.charAt(0).toUpperCase() || '?'}
+              </Text>
+            )}
           </View>
           <View style={[styles.messageBubble, styles.otherBubble, styles.typingBubble]}>
             <View style={styles.typingDots}>
@@ -1099,7 +1123,7 @@ const ChatScreen = ({ route, navigation }) => {
   );
 };
 
-const styles =  StyleSheet.create({
+const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#083028',
@@ -1177,6 +1201,12 @@ const styles =  StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   avatarText: {
     color: 'white',
@@ -1381,4 +1411,4 @@ const styles =  StyleSheet.create({
   },
 });
 
-export default ChatScreen; 
+export default ChatScreen;

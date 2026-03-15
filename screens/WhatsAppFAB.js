@@ -14,10 +14,11 @@ const WhatsAppChannelFAB = () => {
 
   return (
     <TouchableOpacity style={styles.fab} onPress={openChannel}>
-      <Ionicons name="logo-whatsapp" size={28} color="#fff" />
+      <Ionicons name="logo-whatsapp" size={20} color="#fff" />
     </TouchableOpacity>
   );
 };
+
 
 const styles = StyleSheet.create({
   fab: {
@@ -26,8 +27,8 @@ const styles = StyleSheet.create({
     right: 20,
     backgroundColor: '#135029ff',
     borderRadius: 50,
-    width: 60,
-    height: 60,
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 8,

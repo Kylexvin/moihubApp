@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
-import Icon from 'react-native-vector-icons/Ionicons';
+import { Ionicons as Icon } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 const API_URL = 'https://moihub.onrender.com/api';

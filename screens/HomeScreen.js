@@ -332,7 +332,7 @@ const HomeScreen = () => {
       id: 1,
       title: "Welcome to MoiHub",
       subtitle: "Your campus companion for everything you need",
-      image: require('../assets/hero.jpg'),
+      image: require('../assets/moiunny.jpg'),
       backgroundColor: '#2C5F2D',
       buttonText: "Get Started",
       buttonAction: () => {
@@ -354,7 +354,7 @@ const HomeScreen = () => {
       id: 3,
       title: "E-Shop Marketplace",
       subtitle: "Shop from campus stores online",
-      image: require('../assets/hero.jpg'),
+      image: require('../assets/moiunny.jpg'),
       backgroundColor: '#7B1FA2',
       buttonText: "Shop Now",
       buttonAction: () => {
@@ -910,16 +910,7 @@ const HomeScreen = () => {
             {/* Services Showcase - Only show if not empty */}
             {servicesShowcase.length > 0 && (
               <View style={styles.sectionContainer}>
-                <View style={styles.showcaseHeader}>
-                  <Text style={styles.sectionTitle}>Featured Services</Text>
-                  <TouchableOpacity 
-                    style={styles.viewAllButton}
-                    onPress={() => navigation.navigate('ServicesStack', { screen: 'LocalServices' })}
-                  >
-                    <Text style={styles.viewAllText}>View All</Text>
-                    <Ionicons name="arrow-forward" size={14} color="#01604c" />
-                  </TouchableOpacity>
-                </View>
+               
                 <ServicesShowcase 
                   items={servicesShowcase}
                   loading={showcaseLoading}
@@ -1149,7 +1140,7 @@ const HomeScreen = () => {
       </ScrollView>
     </View>
   );
-};
+}; 
 
 const styles = StyleSheet.create({
   container: {
@@ -1158,8 +1149,8 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#edeedf',
-    paddingTop: 10,
-    paddingBottom: 15,
+    paddingTop: 8, // Reduced from 10
+    paddingBottom: 10, // Reduced from 15
     paddingHorizontal: 20,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
@@ -1173,7 +1164,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 8, // Reduced from 15
   },
   logoTextContainer: {
     flexDirection: 'row',
@@ -1193,7 +1184,7 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: 14,
     color: '#000',
-    marginTop: 2,
+    marginTop: 0, // Reduced from 2
   },
   notificationButton: {
     backgroundColor: '#E8F5E8',
@@ -1201,7 +1192,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   
-  // Slideshow Styles
+  // Slideshow Styles - UNCHANGED (as requested)
   slideshowContainer: {
     marginHorizontal: 20,
     marginTop: 20,
@@ -1284,25 +1275,25 @@ const styles = StyleSheet.create({
 
   // Loading content container
   loadingContentContainer: {
-    marginTop: 40,
+    marginTop: 20, // Reduced from 40
     alignItems: 'center',
-    paddingVertical: 30,
+    paddingVertical: 15, // Reduced from 30
   },
   loadingText: {
-    marginTop: 12,
+    marginTop: 8, // Reduced from 12
     fontSize: 14,
     color: '#666',
   },
 
   sectionContainer: {
-    marginTop: 24,
+    marginTop: 16, // Reduced from 24
     paddingHorizontal: 20,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#000',
-    marginBottom: 16,
+    marginBottom: 10, // Reduced from 16
   },
 
   // NEW: Showcase Header with View All
@@ -1310,7 +1301,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 1,
   },
   viewAllButton: {
     flexDirection: 'row',
@@ -1335,7 +1326,7 @@ const styles = StyleSheet.create({
   categoryItem: {
     width: '22%',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12, // Reduced from 16
   },
   categoryIcon: {
     width: 50,
@@ -1343,7 +1334,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 4, // Reduced from 8
   },
   categoryText: {
     fontSize: 12,
@@ -1362,12 +1353,12 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   missionGradient: {
-    padding: 20,
+    padding: 15, // Reduced from 20
   },
   missionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8, // Reduced from 12
   },
   missionTitle: {
     fontSize: 18,
@@ -1378,15 +1369,15 @@ const styles = StyleSheet.create({
   missionContent: {
     fontSize: 16,
     color: '#FFFFFF',
-    lineHeight: 24,
-    marginBottom: 12,
+    lineHeight: 22, // Reduced from 24
+    marginBottom: 8, // Reduced from 12
     textAlign: 'center',
   },
   missionFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    marginTop: 4, // Reduced from 8
   },
   missionFooterText: {
     fontSize: 14,
@@ -1411,22 +1402,22 @@ const styles = StyleSheet.create({
   },
   highlightImage: {
     width: '100%',
-    height: 160,
+    height: 140, // Reduced from 160
   },
   highlightImageOverlay: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 60,
+    height: 40, // Reduced from 60
   },
   highlightContent: {
-    padding: 20,
+    padding: 15, // Reduced from 20
   },
   highlightTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 6, // Reduced from 12
   },
   highlightTitle: {
     fontSize: 18,
@@ -1437,14 +1428,14 @@ const styles = StyleSheet.create({
   highlightText: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 16,
-    lineHeight: 22,
+    marginBottom: 10, // Reduced from 16
+    lineHeight: 20, // Reduced from 22
   },
   highlightButton: {
     backgroundColor: '#01604c',
     borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingVertical: 8, // Reduced from 12
+    paddingHorizontal: 16, // Reduced from 20
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
@@ -1461,7 +1452,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
 
-  // Ads Carousel Styles
+  // Ads Carousel Styles - UNCHANGED (as requested since it's a carousel)
   adsContainer: {
     borderRadius: 12,
     overflow: 'hidden',
@@ -1523,7 +1514,7 @@ const styles = StyleSheet.create({
   vendorCallContainer: {
     backgroundColor: '#01604c',
     borderRadius: 12,
-    padding: 16,
+    padding: 12, // Reduced from 16
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
@@ -1537,21 +1528,21 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    marginBottom: 8,
+    marginBottom: 4, // Reduced from 8
     textAlign: 'center',
   },
   vendorCallText: {
     fontSize: 14,
     color: '#FFFFFF',
-    marginBottom: 16,
+    marginBottom: 10, // Reduced from 16
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 18, // Reduced from 20
   },
   vendorCallButton: {
     backgroundColor: '#FFFFFF',
     borderRadius: 25,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingVertical: 8, // Reduced from 12
+    paddingHorizontal: 16, // Reduced from 20
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -1574,14 +1565,14 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   feedItem: {
-    padding: 16,
+    padding: 12, // Reduced from 16
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
   feedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 4, // Reduced from 8
   },
   feedType: {
     fontSize: 12,
@@ -1592,12 +1583,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#000',
-    marginBottom: 8,
+    marginBottom: 4, // Reduced from 8
   },
   feedDescription: {
     fontSize: 14,
     color: '#666',
-    lineHeight: 20,
+    lineHeight: 18, // Reduced from 20
   },
 
   // Explore Sections Styles
@@ -1612,7 +1603,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   exploreItem: {
-    padding: 16,
+    padding: 12, // Reduced from 16
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
@@ -1623,7 +1614,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 4, // Reduced from 8
   },
   exploreTitle: {
     fontSize: 16,
@@ -1639,7 +1630,7 @@ const styles = StyleSheet.create({
   exploreSubtitle: {
     fontSize: 14,
     color: '#666',
-    lineHeight: 20,
+    lineHeight: 18, // Reduced from 20
   },
 
   // Recently Viewed Styles
@@ -1654,7 +1645,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   recentItem: {
-    padding: 16,
+    padding: 12, // Reduced from 16
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
@@ -1664,7 +1655,7 @@ const styles = StyleSheet.create({
   recentHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 2, // Reduced from 4
   },
   recentTitle: {
     fontSize: 14,
@@ -1677,14 +1668,14 @@ const styles = StyleSheet.create({
   },
 
   footer: {
-    marginTop: 30,
-    marginBottom: 40,
+    marginTop: 20, // Reduced from 30
+    marginBottom: 20, // Reduced from 40
     alignItems: 'center',
     paddingHorizontal: 20,
   },
   footerLinks: {
     flexDirection: 'row',
-    marginBottom: 8,
+    marginBottom: 4, // Reduced from 8
   },
   footerLink: {
     fontSize: 12,
@@ -1693,19 +1684,18 @@ const styles = StyleSheet.create({
   footerDivider: {
     fontSize: 12,
     color: '#7F8C8D',
-    marginHorizontal: 8,
+    marginHorizontal: 6, // Reduced from 8
   },
   footerText: {
     fontSize: 10,
     color: '#95A5A6',
-    marginTop: 2,
+    marginTop: 1, // Reduced from 2
   },
   footerCopyright: {
     fontSize: 10,
     fontWeight: 'bold',
     color: '#4CAF50',
-    marginTop: 6,
+    marginTop: 3, // Reduced from 6
   },
 });
-
 export default HomeScreen; 

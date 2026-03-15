@@ -361,7 +361,7 @@ const VendorOnboardingScreen = () => {
             <View style={styles.roleContent}>
               <Text style={styles.roleTitle}>Service Provider</Text>
               <Text style={styles.roleDescription}>
-                Offer local services on MoiHub
+                Offer services on MoiHub
               </Text>
               <View style={styles.roleFeatures}>
                 <View style={styles.featurePill}>
@@ -908,7 +908,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
+    paddingTop: 0,
   },
   closeButton: {
     padding: Spacing.xs,
@@ -919,7 +919,7 @@ const styles = StyleSheet.create({
   titleContainer: {
     alignItems: 'center',
     paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.lg,
+    paddingTop: 0,
     paddingBottom: Spacing.xl,
   },
   iconCircle: {

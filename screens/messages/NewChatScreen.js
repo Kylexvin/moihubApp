@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  SafeAreaView, TextInput, ActivityIndicator, Alert
+  SafeAreaView, TextInput, ActivityIndicator, Alert, Image
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 
 const NewChatScreen = ({ navigation }) => {
@@ -62,7 +62,6 @@ const NewChatScreen = ({ navigation }) => {
 
   const searchUsers = async () => {
     if (searchQuery.trim().length < 2) return;
-
     if (!token) return handleAuthError();
 
     setLoading(true);
@@ -89,38 +88,41 @@ const NewChatScreen = ({ navigation }) => {
     }
   };
 
-const startConversation = async (user) => {
-  try {
-    const res = await fetch(`${BASE_URL}/messages/conversations`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ participantId: user._id, chatType: 'normal' }),
-    }); 
-
-    if (res.ok) {
-      const convo = await res.json();
-      navigation.replace('ChatScreen', {
-        conversationId: convo._id,
-        conversation: convo,
-        otherUser: user,
-        chatType: convo.chatType || 'normal'
+  const startConversation = async (user) => {
+    try {
+      const res = await fetch(`${BASE_URL}/messages/conversations`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ participantId: user._id, chatType: 'normal' }),
       });
-    } else if (res.status === 401) {
-      handleAuthError();
-    }
-  } catch (err) {
-    console.error('Conversation error:', err);
-  }
-};
 
+      if (res.ok) {
+        const convo = await res.json();
+        navigation.replace('ChatScreen', {
+          conversationId: convo._id,
+          conversation: convo,
+          otherUser: user,
+          chatType: convo.chatType || 'normal'
+        });
+      } else if (res.status === 401) {
+        handleAuthError();
+      }
+    } catch (err) {
+      console.error('Conversation error:', err);
+    }
+  };
 
   const renderUserItem = ({ item }) => (
     <TouchableOpacity style={styles.userItem} onPress={() => startConversation(item)}>
       <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{item.username.charAt(0).toUpperCase()}</Text>
+        {item.avatar ? (
+          <Image source={{ uri: item.avatar }} style={styles.avatarImage} />
+        ) : (
+          <Text style={styles.avatarText}>{item.username.charAt(0).toUpperCase()}</Text>
+        )}
       </View>
       <View style={styles.userInfo}>
         <Text style={styles.username}>{item.username}</Text>
@@ -140,10 +142,8 @@ const startConversation = async (user) => {
           <Icon name="arrow-back" size={24} color="#007AFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>New Chat</Text>
-
+        <View style={{ width: 24 }} />
       </View>
-
- 
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
@@ -165,7 +165,7 @@ const startConversation = async (user) => {
       {/* List */}
       <View style={styles.resultsContainer}>
         {loading ? (
-          <ActivityIndicator size="small" color="black" />
+          <ActivityIndicator size="small" color="white" style={{ marginTop: 20 }} />
         ) : (
           <FlatList
             data={dataToRender}
@@ -188,7 +188,7 @@ const startConversation = async (user) => {
 };
 
 const styles = StyleSheet.create({
-   container: {
+  container: {
     flex: 1,
     backgroundColor: '#083028',
   },
@@ -201,78 +201,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#2A2A2A',
   },
-  backButton: {
-    padding: 4,
-  },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#FFFFFF',
   },
-  logoutButton: {
-    padding: 4,
-  },
-  profileContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#1A1A1A',
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A2A2A',
-  },
-  avatarCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#4CAF50',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  profileTextContainer: {
-    flexDirection: 'column',
-  },
-  profileName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  profileUsername: {
-    fontSize: 12,
-    color: '#AAAAAA',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  connectionStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#2D1B2E',
-  },
-  connectedStatus: {
-    backgroundColor: '#1B2D1B',
-  },
-  connectionDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#FF6B6B',
-    marginRight: 4,
-  },
-  connectedDot: {
-    backgroundColor: '#4CAF50',
-  },
-  connectionText: {
-    fontSize: 10,
-    color: '#4CAF50',
-    fontWeight: '500',
-  },
-
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -310,6 +243,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   avatarText: {
     color: 'white',
@@ -328,22 +267,6 @@ const styles = StyleSheet.create({
   email: {
     fontSize: 14,
     color: '#AAAAAA',
-  },
-  centerLoadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 20,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#888888',
   },
   emptyContainer: {
     flex: 1,

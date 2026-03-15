@@ -13,10 +13,34 @@ import {
   ScrollView,
   Linking,
   Image,
+  RefreshControl,
+  StatusBar
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { MaterialIcons as Icon } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Animatable from 'react-native-animatable';
 
 const { width } = Dimensions.get('window');
+
+// Royal Purple & Gold theme colors
+const ShopColors = {
+  primary: '#6B4EFF',      // Royal Purple
+  secondary: '#9F7AEA',     // Lavender
+  accent: '#FFD700',        // Gold
+  success: '#4CAF50',       // Green
+  warning: '#FF9800',       // Orange
+  error: '#F44336',         // Red
+  background: '#0A0A0F',    // Deep Dark
+  surface: '#1A1A2E',       // Dark Purple
+  card: '#26264D',          // Royal Card
+  text: '#FFFFFF',          // White
+  textSecondary: '#E0B0FF', // Light Purple
+  textMuted: '#9F8BB3',     // Muted Purple
+  border: '#3D3D6B',        // Purple Border
+  gold: '#FFD700',          // Pure Gold
+  goldLight: '#FFE55C',     // Light Gold
+  purpleLight: '#8B6FF6',   // Light Purple
+};
 
 const EshopHomeScreen = ({ navigation }) => {
   const [categories, setCategories] = useState([]);
@@ -83,7 +107,6 @@ const EshopHomeScreen = ({ navigation }) => {
   const getIconName = (categoryName) => {
     const name = categoryName.toLowerCase();
     
-    // Check for specific keywords in category names
     if (name.includes('boutique') || name.includes('fashion') || name.includes('clothing') || name.includes('apparel')) {
       return 'checkroom';
     }
@@ -130,353 +153,645 @@ const EshopHomeScreen = ({ navigation }) => {
       return 'shopping-bag';
     }
     
-    // Default fallback icon
     return 'storefront';
   };
 
   const renderQuickActions = () => (
-    <View style={styles.quickActionsContainer}>
-      <View style={styles.quickActionsRow}>
-        <TouchableOpacity 
-          style={styles.quickActionButton}
-          onPress={() => navigation.navigate('Orders')}
-        >
-          <Icon name="receipt-long" size={24} color="#059669" />
-          <Text style={styles.quickActionText}>My Orders</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.quickActionButton}
-          onPress={() => navigation.navigate('Cart')}
-        >
-          <Icon name="shopping-cart" size={24} color="#059669" />
-          <Text style={styles.quickActionText}>Cart</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.quickActionButton}
-          onPress={handleWhatsAppPress}
-        >
-          <Icon name="chat" size={24} color="#059669" />
-          <Text style={styles.quickActionText}>Support</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+    <Animatable.View animation="fadeInUp" delay={200} duration={500}>
+      <LinearGradient
+        colors={[ShopColors.surface, ShopColors.card]}
+        style={styles.quickActionsContainer}
+      >
+        <View style={styles.quickActionsRow}>
+          <TouchableOpacity 
+            style={styles.quickActionButton}
+            onPress={() => navigation.navigate('Orders')}
+          >
+            <View style={styles.quickActionIcon}>
+              <Icon name="receipt-long" size={24} color={ShopColors.gold} />
+            </View>
+            <Text style={styles.quickActionText}>My Orders</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.quickActionButton}
+            onPress={() => navigation.navigate('Cart')}
+          >
+            <View style={styles.quickActionIcon}>
+              <Icon name="shopping-cart" size={24} color={ShopColors.gold} />
+            </View>
+            <Text style={styles.quickActionText}>Cart</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.quickActionButton}
+            onPress={handleWhatsAppPress}
+          >
+            <View style={styles.quickActionIcon}>
+              <Icon name="chat" size={24} color={ShopColors.gold} />
+            </View>
+            <Text style={styles.quickActionText}>Support</Text>
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+    </Animatable.View>
   );
 
   const renderCategoryItem = ({ item, index }) => (
-    <TouchableOpacity
-      style={[styles.categoryCard, { backgroundColor: getCategoryColor(index) }]}
-      onPress={() => handleCategoryPress(item)}
-      activeOpacity={0.8}
+    <Animatable.View 
+      animation="fadeInUp" 
+      delay={300 + (index * 100)}
+      duration={500}
+      style={styles.categoryCardWrapper}
     >
-      <View style={styles.categoryIconContainer}>
-        <Icon
-          name={getIconName(item.name)}
-          size={32}
-          color="#fff"
-        />
-      </View>
-      <Text style={styles.categoryName}>{item.name}</Text>
-      <Text style={styles.categoryDescription} numberOfLines={2}>
-        {item.description}
-      </Text>
-      <View style={styles.categoryFooter}>
-       
-      </View>
-    </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.categoryCard}
+        onPress={() => handleCategoryPress(item)}
+        activeOpacity={0.9}
+      >
+        <LinearGradient
+          colors={[ShopColors.card, ShopColors.surface]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.categoryGradient}
+        >
+          {/* Gold Accent Line */}
+          <View style={styles.categoryGoldAccent} />
+          
+          {/* Decorative Pattern */}
+          <View style={styles.categoryPattern}>
+            <Text style={styles.patternIcon}>👑</Text>
+            <Text style={styles.patternIcon}>✨</Text>
+          </View>
+
+          <View style={styles.categoryIconContainer}>
+            <LinearGradient
+              colors={[ShopColors.primary, ShopColors.secondary]}
+              style={styles.iconGradient}
+            >
+              <Icon name={getIconName(item.name)} size={32} color={ShopColors.gold} />
+            </LinearGradient>
+          </View>
+          
+          <Text style={styles.categoryName}>{item.name}</Text>
+          <Text style={styles.categoryDescription} numberOfLines={2}>
+            {item.description || 'Explore our collection'}
+          </Text>
+          
+          <View style={styles.categoryFooter}>
+            <Text style={styles.shopNowText}>Shop Now</Text>
+            <Icon name="arrow-forward" size={16} color={ShopColors.gold} />
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+    </Animatable.View>
   );
 
-  const getCategoryColor = (index) => {
-    const emeraldColors = [
-      '#059669', // Emerald 600
-      '#047857', // Emerald 700
-      '#065f46', // Emerald 800
-      '#10b981', // Emerald 500
-      '#34d399', // Emerald 400
-      '#6ee7b7', // Emerald 300
-      '#0d9488', // Teal 600
-      '#0f766e', // Teal 700
-      '#059669', // Emerald 600
-      '#047857', // Emerald 700
-      '#065f46', // Emerald 800
-      '#10b981', // Emerald 500
-      '#34d399', // Emerald 400
-      '#6ee7b7', // Emerald 300
-      '#0d9488', // Teal 600
-      '#0f766e', // Teal 700
-    ];
-    return emeraldColors[index % emeraldColors.length];
-  };
+  const renderQuickActionsRow = () => (
+    <Animatable.View animation="fadeInUp" delay={400} duration={500}>
+      <LinearGradient
+        colors={[ShopColors.surface, ShopColors.card]}
+        style={styles.quickActionsRowContainer}
+      >
+        <TouchableOpacity 
+          style={styles.quickActionItem}
+          onPress={() => navigation.navigate('Orders')}
+        >
+          <LinearGradient
+            colors={[ShopColors.primary + '20', ShopColors.secondary + '10']}
+            style={styles.quickActionItemGradient}
+          >
+            <Icon name="receipt-long" size={28} color={ShopColors.gold} />
+            <Text style={styles.quickActionItemText}>Orders</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.quickActionItem}
+          onPress={() => navigation.navigate('Cart')}
+        >
+          <LinearGradient
+            colors={[ShopColors.primary + '20', ShopColors.secondary + '10']}
+            style={styles.quickActionItemGradient}
+          >
+            <Icon name="shopping-cart" size={28} color={ShopColors.gold} />
+            <Text style={styles.quickActionItemText}>Cart</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.quickActionItem}
+          onPress={handleWhatsAppPress}
+        >
+          <LinearGradient
+            colors={[ShopColors.primary + '20', ShopColors.secondary + '10']}
+            style={styles.quickActionItemGradient}
+          >
+            <Icon name="chat" size={28} color={ShopColors.gold} />
+            <Text style={styles.quickActionItemText}>Support</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+        <TouchableOpacity
+  style={styles.quickActionItem}
+  onPress={() => navigation.navigate('EshopAI')}
+>
+  <LinearGradient
+    colors={[ShopColors.primary + '20', ShopColors.secondary + '10']}
+    style={styles.quickActionItemGradient}
+  >
+    <Icon name="auto-awesome" size={28} color={ShopColors.gold} />
+    <Text style={styles.quickActionItemText}>AI Search</Text>
+  </LinearGradient>
+</TouchableOpacity>
+      </LinearGradient>
+    </Animatable.View>
+  );
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#059669" />
-        <Text style={styles.loadingText}>Loading your shopping experience...</Text>
-      </View>
+      <LinearGradient colors={[ShopColors.background, ShopColors.surface]} style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={ShopColors.primary} />
+        <View style={styles.loadingContainer}>
+          <Animatable.View animation="pulse" iterationCount="infinite">
+            <View style={styles.loadingIcon}>
+              <Icon name="storefront" size={60} color={ShopColors.gold} />
+            </View>
+          </Animatable.View>
+          <ActivityIndicator size="large" color={ShopColors.gold} />
+          <Text style={styles.loadingText}>Loading your shopping experience...</Text>
+        </View>
+      </LinearGradient>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView 
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <ScrollView
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#059669']}
-            tintColor="#059669"
-          />
-        }
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Discover Amazing Deals</Text>
-        </View>
+    <LinearGradient colors={[ShopColors.background, ShopColors.surface]} style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={ShopColors.primary} />
+      
+      {/* Floating Icons */}
+      <View style={styles.floatingIcons}>
+        <Text style={[styles.floatingIcon, styles.icon1]}>👑</Text>
+        <Text style={[styles.floatingIcon, styles.icon2]}>✨</Text>
+        <Text style={[styles.floatingIcon, styles.icon3]}>🛍️</Text>
+        <Text style={[styles.floatingIcon, styles.icon4]}>💎</Text>
+      </View>
 
-        {/* Quick Actions */}
-        {renderQuickActions()}
-
-        {/* Categories Section */}
-        <View style={styles.categoriesSection}>
-          <Text style={styles.sectionTitle}>Shop by Category</Text>
-          {categories.length > 0 ? (
-            <FlatList
-              data={categories}
-              renderItem={renderCategoryItem}
-              keyExtractor={(item) => item._id}
-              numColumns={2}
-              contentContainerStyle={styles.categoriesContainer}
-              columnWrapperStyle={styles.row}
-              showsVerticalScrollIndicator={false}
-              scrollEnabled={false}
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[ShopColors.gold]}
+              tintColor={ShopColors.gold}
             />
-          ) : (
-            <View style={styles.emptyContainer}>
-              <Icon name="storefront" size={60} color="#9ca3af" />
-              <Text style={styles.emptyText}>No categories available</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={fetchCategories}>
-                <Text style={styles.retryText}>Retry</Text>
+          }
+        >
+          {/* Header */}
+          <Animatable.View animation="fadeInDown" duration={800}>
+            <LinearGradient
+              colors={[ShopColors.primary, ShopColors.secondary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.header}
+            >
+              <View style={styles.headerContent}>
+                <Icon name="storefront" size={32} color={ShopColors.gold} />
+                <Text style={styles.headerTitle}>E-Shop</Text>
+              </View>
+              <Text style={styles.headerSubtitle}>Discover amazing deals from trusted vendors</Text>
+              
+              {/* Gold Glow Effect */}
+              <View style={styles.headerGlow} />
+            </LinearGradient>
+          </Animatable.View>
+
+          {/* Quick Actions Row */}
+          {renderQuickActionsRow()}
+
+          {/* Categories Section */}
+          <View style={styles.categoriesSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Shop by Category</Text>
+              <Icon name="arrow-forward" size={20} color={ShopColors.gold} />
+            </View>
+            
+            {categories.length > 0 ? (
+              <FlatList
+                data={categories}
+                renderItem={renderCategoryItem}
+                keyExtractor={(item) => item._id}
+                numColumns={2}
+                contentContainerStyle={styles.categoriesContainer}
+                columnWrapperStyle={styles.row}
+                showsVerticalScrollIndicator={false}
+                scrollEnabled={false}
+              />
+            ) : (
+              <Animatable.View animation="fadeIn" duration={500} style={styles.emptyContainer}>
+                <View style={styles.emptyIconContainer}>
+                  <Icon name="storefront" size={60} color={ShopColors.textMuted} />
+                </View>
+                <Text style={styles.emptyText}>No categories available</Text>
+                <TouchableOpacity style={styles.retryButton} onPress={fetchCategories}>
+                  <LinearGradient
+                    colors={[ShopColors.primary, ShopColors.secondary]}
+                    style={styles.retryGradient}
+                  >
+                    <Text style={styles.retryText}>Retry</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </Animatable.View>
+            )}
+          </View>
+
+          {/* Want Your Shop Here Section */}
+          <Animatable.View animation="fadeInUp" delay={600} duration={500}>
+            <View style={styles.shopHereSection}>
+              <TouchableOpacity 
+                style={styles.shopHereCard}
+                onPress={handleOnboardingPress}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={[ShopColors.card, ShopColors.surface]}
+                  style={styles.shopHereGradient}
+                >
+                  {/* Gold Accent */}
+                  <View style={styles.shopHereGoldAccent} />
+                  
+                  <View style={styles.shopHereIconContainer}>
+                    <LinearGradient
+                      colors={[ShopColors.primary, ShopColors.secondary]}
+                      style={styles.shopHereIcon}
+                    >
+                      <Icon name="store" size={28} color={ShopColors.gold} />
+                    </LinearGradient>
+                  </View>
+                  
+                  <View style={styles.shopHereContent}>
+                    <Text style={styles.shopHereTitle}>Want Your Shop Here?</Text>
+                    <Text style={styles.shopHereSubtitle}>
+                      Join our marketplace and start selling to thousands of customers
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.shopHereArrow}>
+                    <Icon name="arrow-forward" size={20} color={ShopColors.gold} />
+                  </View>
+                </LinearGradient>
               </TouchableOpacity>
             </View>
-          )}
-        </View>
+          </Animatable.View>
 
-        {/* Want Your Shop Here Section */}
-        <View style={styles.shopHereSection}>
+          <View style={styles.bottomPadding} />
+        </ScrollView>
+
+        {/* Floating My Orders Button */}
+        <Animatable.View 
+          animation="bounceIn"
+          duration={1000}
+          delay={800}
+          style={styles.floatingButtonContainer}
+        >
           <TouchableOpacity 
-            style={styles.shopHereCard}
-            onPress={handleOnboardingPress}
+            style={styles.floatingButton}
+            onPress={handleMyOrdersPress}
             activeOpacity={0.8}
           >
-            <Icon name="store" size={40} color="#059669" />
-            <View style={styles.shopHereContent}>
-              <Text style={styles.shopHereTitle}>Want Your Shop Here?</Text>
-              <Text style={styles.shopHereSubtitle}>
-                Join our marketplace and start selling to thousands of customers
-              </Text>
-            </View>
-            <Icon name="arrow-forward" size={20} color="#059669" />
+            <LinearGradient
+              colors={[ShopColors.primary, ShopColors.secondary]}
+              style={styles.floatingButtonGradient}
+            >
+              <Icon name="receipt-long" size={24} color={ShopColors.gold} />
+            </LinearGradient>
           </TouchableOpacity>
-        </View>
-
-      </ScrollView>
-
-      {/* Floating My Orders Button */}
-      <TouchableOpacity 
-        style={styles.floatingButton}
-        onPress={handleMyOrdersPress}
-        activeOpacity={0.8}
-      >
-        <Icon name="receipt-long" size={24} color="#fff" />
-      </TouchableOpacity>
-    </SafeAreaView>
+        </Animatable.View>
+      </SafeAreaView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'ivory',
+  },
+  safeArea: {
+    flex: 1,
+  },
+  floatingIcons: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    zIndex: 0,
+  },
+  floatingIcon: {
+    position: 'absolute',
+    fontSize: 24,
+    opacity: 0.1,
+    color: ShopColors.gold,
+  },
+  icon1: {
+    top: '10%',
+    right: '5%',
+    transform: [{ rotate: '15deg' }],
+  },
+  icon2: {
+    top: '30%',
+    left: '5%',
+    transform: [{ rotate: '-10deg' }],
+  },
+  icon3: {
+    bottom: '20%',
+    right: '10%',
+    transform: [{ rotate: '25deg' }],
+  },
+  icon4: {
+    bottom: '40%',
+    left: '8%',
+    transform: [{ rotate: '-15deg' }],
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#D1D5DB',
+  },
+  loadingIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: ShopColors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: ShopColors.gold + '40',
   },
   loadingText: {
-    marginTop: 16,
+    marginTop: 15,
     fontSize: 16,
-    color: '#6b7280',
-    fontWeight: '500',
+    color: ShopColors.textSecondary,
   },
   header: {
-    backgroundColor: '#02604c',
     paddingHorizontal: 20,
-    paddingVertical: 24,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    paddingVertical: 30,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 8,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8,
+    fontSize: 32,
+    fontWeight: '800',
+    color: ShopColors.gold,
+  },
+  headerSubtitle: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.9)',
     textAlign: 'center',
-    alignSelf: 'center',
   },
-  quickActionsContainer: {
-    marginHorizontal: 20,
-    marginTop: 24,
+  headerGlow: {
+    position: 'absolute',
+    top: -20,
+    right: -20,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: ShopColors.gold + '10',
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 16,
-  },
-  quickActionsRow: {
+  quickActionsRowContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    marginHorizontal: 20,
+    marginTop: -20,
+    marginBottom: 20,
+    borderRadius: 30,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: ShopColors.gold + '30',
   },
-  quickActionButton: {
-    backgroundColor: '#fff',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    alignItems: 'center',
+  quickActionItem: {
     flex: 1,
     marginHorizontal: 4,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
   },
-  quickActionText: {
+  quickActionItemGradient: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: ShopColors.gold + '20',
+  },
+  quickActionItemText: {
     fontSize: 12,
-    color: '#374151',
-    marginTop: 8,
-    fontWeight: '500',
+    color: ShopColors.gold,
+    marginTop: 4,
+    fontWeight: '600',
   },
   categoriesSection: {
-    marginHorizontal: 20,
-    marginTop: 24,
+    marginHorizontal: 16,
+    marginBottom: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: ShopColors.gold,
   },
   categoriesContainer: {
-    paddingBottom: 16,
+    paddingBottom: 8,
   },
   row: {
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 12,
+  },
+  categoryCardWrapper: {
+    width: (width - 44) / 2,
   },
   categoryCard: {
-    width: (width - 56) / 2,
-    borderRadius: 16,
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: ShopColors.gold + '20',
+  },
+  categoryGradient: {
     padding: 16,
-    alignItems: 'center',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    position: 'relative',
+  },
+  categoryGoldAccent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: ShopColors.gold,
+  },
+  categoryPattern: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    opacity: 0.1,
+  },
+  patternIcon: {
+    fontSize: 16,
+    marginHorizontal: 1,
   },
   categoryIconContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 20,
-    padding: 12,
+    alignItems: 'center',
     marginBottom: 12,
+  },
+  iconGradient: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   categoryName: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontWeight: '700',
+    color: ShopColors.gold,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   categoryDescription: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 11,
+    color: ShopColors.textSecondary,
     textAlign: 'center',
     marginBottom: 12,
-    lineHeight: 16,
+    lineHeight: 14,
   },
   categoryFooter: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  shopNowText: {
+    fontSize: 12,
+    color: ShopColors.gold,
+    fontWeight: '600',
   },
   emptyContainer: {
     alignItems: 'center',
     paddingVertical: 40,
   },
+  emptyIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: ShopColors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: ShopColors.gold + '20',
+  },
   emptyText: {
     fontSize: 16,
-    color: '#6b7280',
-    marginTop: 16,
+    color: ShopColors.textMuted,
     marginBottom: 20,
   },
   retryButton: {
-    backgroundColor: '#059669',
-    paddingHorizontal: 24,
+    borderRadius: 25,
+    overflow: 'hidden',
+  },
+  retryGradient: {
+    paddingHorizontal: 30,
     paddingVertical: 12,
-    borderRadius: 8,
   },
   retryText: {
-    color: '#fff',
+    color: ShopColors.gold,
+    fontSize: 14,
     fontWeight: '600',
   },
   shopHereSection: {
-    marginHorizontal: 20,
-    marginTop: 24,
-    marginBottom: 100,
+    marginHorizontal: 16,
+    marginBottom: 30,
   },
   shopHereCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: ShopColors.gold + '30',
+  },
+  shopHereGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    padding: 16,
+    position: 'relative',
+  },
+  shopHereGoldAccent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: ShopColors.gold,
+  },
+  shopHereIconContainer: {
+    marginRight: 12,
+  },
+  shopHereIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   shopHereContent: {
     flex: 1,
-    marginLeft: 16,
   },
   shopHereTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 4,
+    fontWeight: '700',
+    color: ShopColors.gold,
+    marginBottom: 2,
   },
   shopHereSubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-    lineHeight: 20,
+    fontSize: 12,
+    color: ShopColors.textMuted,
+    lineHeight: 16,
   },
-  floatingButton: {
+  shopHereArrow: {
+    marginLeft: 8,
+  },
+  floatingButtonContainer: {
     position: 'absolute',
     bottom: 20,
     right: 20,
-    backgroundColor: '#059669',
+  },
+  floatingButton: {
     width: 56,
     height: 56,
     borderRadius: 28,
+    overflow: 'hidden',
+    shadowColor: ShopColors.gold,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  floatingButtonGradient: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
+  },
+  bottomPadding: {
+    height: 60,
   },
 });
 

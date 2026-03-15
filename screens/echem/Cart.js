@@ -16,12 +16,33 @@ import {
   StatusBar,
   Dimensions,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { MaterialIcons as Icon, FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 
 const { width } = Dimensions.get('window');
- 
+
+// Pharmacy/Medical Theme (matching PharmacyProducts)
+const PharmacyColors = {
+  primary: '#1B5E20',      // Dark Green
+  secondary: '#2E7D32',     // Medium Green
+  accent: '#00ACC1',        // Dark Cyan
+  success: '#43A047',       // Green
+  warning: '#FB8C00',       // Orange
+  error: '#E53935',         // Red
+  whatsapp: '#25D366',      // WhatsApp Green
+  background: '#0A1F0A',    // Very Dark Green
+  surface: '#1A2E1A',       // Dark Green Surface
+  card: '#1E3A1E',          // Card Background
+  text: '#FFFFFF',          // White
+  textSecondary: '#A5D6A7', // Light Green
+  textMuted: '#558B55',     // Muted Green
+  border: '#2E5A2E',        // Border Green
+  gradient: ['#1B5E20', '#2E7D32', '#43A047'],
+};
+
 const Cart = ({ navigation }) => {
   const { token, currentUser, isAuthenticated } = useAuth();
   const { 
@@ -36,10 +57,15 @@ const Cart = ({ navigation }) => {
   const [contactNumber, setContactNumber] = useState('');
   const [placingOrder, setPlacingOrder] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
+  const [prescriptionItems, setPrescriptionItems] = useState([]);
 
   useEffect(() => {
     StatusBar.setBarStyle('light-content', true);
     
+    // Identify prescription items
+    const rxItems = cartItems.filter(item => item.requiresPrescription);
+    setPrescriptionItems(rxItems);
+
     // Fade in animation
     Animated.timing(fadeAnim, {
       toValue: 1,
@@ -49,7 +75,7 @@ const Cart = ({ navigation }) => {
 
     if (!isAuthenticated) {
       Alert.alert(
-        'Authentication Required',
+        '🔐 Authentication Required',
         'Please log in to view your cart and place orders.',
         [
           {
@@ -63,7 +89,7 @@ const Cart = ({ navigation }) => {
         ]
       );
     }
-  }, [isAuthenticated, navigation, fadeAnim]);
+  }, [isAuthenticated, navigation, fadeAnim, cartItems]);
 
   const formatPrice = (price) => {
     return `KSh ${price.toLocaleString()}`;
@@ -80,7 +106,7 @@ const Cart = ({ navigation }) => {
   const handleRemoveItem = (productId) => {
     const item = cartItems.find(item => item.productId === productId);
     Alert.alert(
-      'Remove Item',
+      '🗑️ Remove Item',
       `Remove "${item?.name}" from your cart?`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -119,6 +145,13 @@ const Cart = ({ navigation }) => {
       Alert.alert('Missing Information', 'Please enter your contact number');
       return false;
     }
+
+    // Validate Kenyan phone number
+    const cleanNumber = contactNumber.replace(/\s/g, '');
+    if (!/^\+254\d{9}$/.test(cleanNumber) && !/^0\d{9}$/.test(cleanNumber)) {
+      Alert.alert('Invalid Number', 'Please enter a valid Kenyan phone number (e.g., +254712345678 or 0712345678)');
+      return false;
+    }
     
     return true;
   };
@@ -141,7 +174,8 @@ const Cart = ({ navigation }) => {
         }
         groups[shopId].items.push({
           productId: item.productId,
-          quantity: item.quantity
+          quantity: item.quantity,
+          requiresPrescription: item.requiresPrescription || false
         });
         return groups;
       }, {});
@@ -160,6 +194,7 @@ const Cart = ({ navigation }) => {
             shippingAddress: shippingAddress.trim(),
             contactNumber: contactNumber.trim(),
             userId: currentUser?.id || currentUser?._id,
+            requiresPrescription: shopOrder.items.some(item => item.requiresPrescription),
           }),
         });
 
@@ -182,8 +217,10 @@ const Cart = ({ navigation }) => {
       await Promise.all(orderPromises);
       
       Alert.alert(
-        'Order Placed Successfully! 🎉',
-        'Your order has been submitted. The shop owner will contact you shortly to confirm details and arrange delivery.',
+        prescriptionItems.length > 0 ? '✅ Order Placed - Prescription Required' : '✅ Order Placed Successfully!',
+        prescriptionItems.length > 0 
+          ? 'Your order has been submitted. A pharmacist will review your prescription and contact you shortly.'
+          : 'Your order has been submitted. The shop will contact you shortly to confirm details.',
         [
           {
             text: 'Track Orders',
@@ -196,7 +233,7 @@ const Cart = ({ navigation }) => {
             text: 'Continue Shopping',
             onPress: () => {
               clearCart();
-               navigation.navigate('Echem'); 
+              navigation.navigate('Echem'); 
             }
           }
         ]
@@ -226,6 +263,7 @@ const Cart = ({ navigation }) => {
 
   const CartItem = ({ item, index }) => {
     const [scaleAnim] = useState(new Animated.Value(1));
+    const isRx = item.requiresPrescription;
 
     const animatePress = () => {
       Animated.sequence([
@@ -244,64 +282,76 @@ const Cart = ({ navigation }) => {
 
     return (
       <Animated.View style={[styles.cartItem, { transform: [{ scale: scaleAnim }] }]}>
-        <View style={styles.itemImageContainer}>
-          <Image
-            source={{ 
-              uri: item.image || 'https://via.placeholder.com/80x80?text=Product'
-            }}
-            style={styles.itemImage}
-            defaultSource={{ uri: 'https://via.placeholder.com/80x80?text=Product' }}
-          />
-        </View>
-        
-        <View style={styles.itemInfo}>
-          <Text style={styles.itemName} numberOfLines={2}>
-            {item.name}
-          </Text>
-          <View style={styles.shopContainer}>
-            <Icon name="store" size={14} color="#6ee7b7" />
-            <Text style={styles.itemShop}>{item.shopName}</Text>
-          </View>
-          <Text style={styles.itemPrice}>{formatPrice(item.price)}</Text>
-          <Text style={styles.itemTotal}>
-            Total: {formatPrice(item.price * item.quantity)}
-          </Text>
-        </View>
-        
-        <View style={styles.itemActions}>
-          <View style={styles.quantityContainer}>
-            <TouchableOpacity
-              style={styles.quantityButton}
-              onPress={() => {
-                animatePress();
-                handleUpdateQuantity(item.productId, item.quantity - 1);
+        <LinearGradient
+          colors={[PharmacyColors.card, PharmacyColors.surface]}
+          style={styles.itemGradient}
+        >
+          {/* Rx Badge for prescription items */}
+          {isRx && (
+            <View style={styles.rxBadge}>
+              <Text style={styles.rxText}>Rx</Text>
+            </View>
+          )}
+
+          <View style={styles.itemImageContainer}>
+            <Image
+              source={{ 
+                uri: item.image || 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=200'
               }}
-            >
-              <Icon name="remove" size={18} color="#10b981" />
-            </TouchableOpacity>
-            
-            <View style={styles.quantityDisplay}>
-              <Text style={styles.quantityText}>{item.quantity}</Text>
+              style={styles.itemImage}
+              defaultSource={{ uri: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=200' }}
+            />
+          </View>
+          
+          <View style={styles.itemInfo}>
+            <Text style={styles.itemName} numberOfLines={2}>
+              {item.name}
+            </Text>
+            <View style={styles.shopContainer}>
+              <Icon name="store" size={14} color={PharmacyColors.accent} />
+              <Text style={styles.itemShop}>{item.shopName}</Text>
+            </View>
+            <Text style={styles.itemPrice}>{formatPrice(item.price)}</Text>
+            <Text style={styles.itemTotal}>
+              Total: {formatPrice(item.price * item.quantity)}
+            </Text>
+          </View>
+          
+          <View style={styles.itemActions}>
+            <View style={styles.quantityContainer}>
+              <TouchableOpacity
+                style={styles.quantityButton}
+                onPress={() => {
+                  animatePress();
+                  handleUpdateQuantity(item.productId, item.quantity - 1);
+                }}
+              >
+                <Icon name="remove" size={16} color={PharmacyColors.accent} />
+              </TouchableOpacity>
+              
+              <BlurView intensity={40} tint="dark" style={styles.quantityDisplay}>
+                <Text style={styles.quantityText}>{item.quantity}</Text>
+              </BlurView>
+              
+              <TouchableOpacity
+                style={styles.quantityButton}
+                onPress={() => {
+                  animatePress();
+                  handleUpdateQuantity(item.productId, item.quantity + 1);
+                }}
+              >
+                <Icon name="add" size={16} color={PharmacyColors.accent} />
+              </TouchableOpacity>
             </View>
             
             <TouchableOpacity
-              style={styles.quantityButton}
-              onPress={() => {
-                animatePress();
-                handleUpdateQuantity(item.productId, item.quantity + 1);
-              }}
+              style={styles.removeButton}
+              onPress={() => handleRemoveItem(item.productId)}
             >
-              <Icon name="add" size={18} color="#10b981" />
+              <Icon name="delete-outline" size={18} color={PharmacyColors.error} />
             </TouchableOpacity>
           </View>
-          
-          <TouchableOpacity
-            style={styles.removeButton}
-            onPress={() => handleRemoveItem(item.productId)}
-          >
-            <Icon name="delete-outline" size={20} color="#ef4444" />
-          </TouchableOpacity>
-        </View>
+        </LinearGradient>
       </Animated.View>
     );
   };
@@ -310,13 +360,29 @@ const Cart = ({ navigation }) => {
     <CartItem item={item} index={index} />
   );
 
+  // Floating medical icons background
+  const renderFloatingIcons = () => (
+    <View style={styles.floatingIcons}>
+      <Text style={[styles.floatingIcon, styles.icon1]}>💊</Text>
+      <Text style={[styles.floatingIcon, styles.icon2]}>🩺</Text>
+      <Text style={[styles.floatingIcon, styles.icon3]}>💉</Text>
+    </View>
+  );
+
   // Show loading or login prompt if not authenticated
   if (!isAuthenticated) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar backgroundColor="#064e3b" barStyle="light-content" />
+        <StatusBar backgroundColor={PharmacyColors.primary} barStyle="light-content" />
+        {renderFloatingIcons()}
+        <LinearGradient
+          colors={[PharmacyColors.background, PharmacyColors.surface]}
+          style={StyleSheet.absoluteFill}
+        />
         <View style={styles.emptyContainer}>
-          <Icon name="account-circle" size={80} color="#374151" />
+          <View style={styles.emptyIconContainer}>
+            <Icon name="account-circle" size={80} color={PharmacyColors.textMuted} />
+          </View>
           <Text style={styles.emptyTitle}>Login Required</Text>
           <Text style={styles.emptyText}>
             Please log in to view your cart and place orders
@@ -325,8 +391,13 @@ const Cart = ({ navigation }) => {
             style={styles.actionButton}
             onPress={() => navigation.navigate('Login')}
           >
-            <Icon name="login" size={20} color="#fff" />
-            <Text style={styles.actionButtonText}>Go to Login</Text>
+            <LinearGradient
+              colors={[PharmacyColors.primary, PharmacyColors.secondary]}
+              style={styles.actionButtonGradient}
+            >
+              <Icon name="login" size={20} color="#fff" />
+              <Text style={styles.actionButtonText}>Go to Login</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -336,19 +407,31 @@ const Cart = ({ navigation }) => {
   if (cartItems.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar backgroundColor="#064e3b" barStyle="light-content" />
+        <StatusBar backgroundColor={PharmacyColors.primary} barStyle="light-content" />
+        {renderFloatingIcons()}
+        <LinearGradient
+          colors={[PharmacyColors.background, PharmacyColors.surface]}
+          style={StyleSheet.absoluteFill}
+        />
         <View style={styles.emptyContainer}>
-          <Icon name="shopping-cart" size={80} color="#374151" />
+          <View style={styles.emptyIconContainer}>
+            <Icon name="shopping-cart" size={80} color={PharmacyColors.textMuted} />
+          </View>
           <Text style={styles.emptyTitle}>Your Cart is Empty</Text>
           <Text style={styles.emptyText}>
-            Discover amazing products from local shops and add them to your cart
+            Discover medical supplies and healthcare products from trusted pharmacies
           </Text>
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => navigation.navigate('EshopHome')}
+            onPress={() => navigation.navigate('Echem')}
           >
-            <Icon name="storefront" size={20} color="#fff" />
-            <Text style={styles.actionButtonText}>Start Shopping</Text>
+            <LinearGradient
+              colors={[PharmacyColors.primary, PharmacyColors.secondary]}
+              style={styles.actionButtonGradient}
+            >
+              <Icon name="local-pharmacy" size={20} color="#fff" />
+              <Text style={styles.actionButtonText}>Browse Pharmacy</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -357,31 +440,80 @@ const Cart = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar backgroundColor="#064e3b" barStyle="light-content" />
+      <StatusBar backgroundColor={PharmacyColors.primary} barStyle="light-content" />
+      {renderFloatingIcons()}
+      
+      <LinearGradient
+        colors={[PharmacyColors.background, PharmacyColors.surface]}
+        style={StyleSheet.absoluteFill}
+      />
+
       <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+        {/* Header */}
+        <LinearGradient
+          colors={[PharmacyColors.primary, PharmacyColors.secondary]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.header}
+        >
+          <View style={styles.headerContent}>
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Icon name="arrow-back" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Shopping Cart</Text>
+            <View style={styles.cartBadge}>
+              <BlurView intensity={60} tint="dark" style={styles.cartBadgeBlur}>
+                <Text style={styles.cartBadgeText}>{cartItems.length}</Text>
+              </BlurView>
+            </View>
+          </View>
+          <Text style={styles.headerSubtitle}>{cartItems.length} items in your cart</Text>
+        </LinearGradient>
+
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-         
+          {/* Prescription Warning */}
+          {prescriptionItems.length > 0 && (
+            <View style={styles.prescriptionWarning}>
+              <Icon name="warning" size={24} color={PharmacyColors.warning} />
+              <View style={styles.prescriptionWarningContent}>
+                <Text style={styles.prescriptionWarningTitle}>
+                  Prescription Required
+                </Text>
+                <Text style={styles.prescriptionWarningText}>
+                  {prescriptionItems.length} item(s) in your cart require a valid prescription
+                </Text>
+              </View>
+            </View>
+          )}
 
           {/* User Info */}
           {currentUser && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                
+                <View style={styles.iconContainer}>
+                  <Icon name="person" size={18} color={PharmacyColors.accent} />
+                </View>
+                <Text style={styles.sectionTitle}>Patient Information</Text>
               </View>
-              <View style={styles.userInfoCard}>
+              <BlurView intensity={30} tint="dark" style={styles.userInfoCard}>
                 <Text style={styles.userInfo}>
                   {currentUser.name || currentUser.username}
                 </Text>
                 <Text style={styles.userEmail}>{currentUser.email}</Text>
-              </View>
+              </BlurView>
             </View>
           )}
 
           {/* Cart Items */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Icon name="inventory" size={20} color="#6ee7b7" />
-              <Text style={styles.sectionTitle}>Items</Text>
+              <View style={styles.iconContainer}>
+                <Icon name="inventory" size={18} color={PharmacyColors.accent} />
+              </View>
+              <Text style={styles.sectionTitle}>Medications & Products</Text>
             </View>
             <FlatList
               data={cartItems}
@@ -395,65 +527,88 @@ const Cart = ({ navigation }) => {
           {/* Delivery Address */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Icon name="location-on" size={20} color="#6ee7b7" />
+              <View style={styles.iconContainer}>
+                <Icon name="location-on" size={18} color={PharmacyColors.accent} />
+              </View>
               <Text style={styles.sectionTitle}>Delivery Address</Text>
             </View>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Enter your where to be delivered"
-              placeholderTextColor="#94a3b8"
-              value={shippingAddress}
-              onChangeText={setShippingAddress}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
+            <BlurView intensity={30} tint="dark" style={styles.inputBlur}>
+              <View style={styles.inputContainer}>
+                <Icon name="location-on" size={18} color={PharmacyColors.textSecondary} />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Enter your delivery address"
+                  placeholderTextColor={PharmacyColors.textMuted}
+                  value={shippingAddress}
+                  onChangeText={setShippingAddress}
+                  multiline
+                  numberOfLines={2}
+                  textAlignVertical="top"
+                />
+              </View>
+            </BlurView>
           </View>
 
           {/* Contact Number */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Icon name="phone" size={20} color="#6ee7b7" />
+              <View style={styles.iconContainer}>
+                <Icon name="phone" size={18} color={PharmacyColors.accent} />
+              </View>
               <Text style={styles.sectionTitle}>Contact Number</Text>
             </View>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Enter your phone number (calls)"
-              placeholderTextColor="#94a3b8"
-              value={contactNumber}
-              onChangeText={setContactNumber}
-              keyboardType="phone-pad"
-            />
+            <BlurView intensity={30} tint="dark" style={styles.inputBlur}>
+              <View style={styles.inputContainer}>
+                <Icon name="phone" size={18} color={PharmacyColors.textSecondary} />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="e.g., +254712345678"
+                  placeholderTextColor={PharmacyColors.textMuted}
+                  value={contactNumber}
+                  onChangeText={setContactNumber}
+                  keyboardType="phone-pad"
+                />
+              </View>
+            </BlurView>
           </View>
 
           {/* Order Summary */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Icon name="receipt" size={20} color="#6ee7b7" />
+              <View style={styles.iconContainer}>
+                <Icon name="receipt" size={18} color={PharmacyColors.accent} />
+              </View>
               <Text style={styles.sectionTitle}>Order Summary</Text>
             </View>
-            <View style={styles.summaryContainer}>
+            <BlurView intensity={30} tint="dark" style={styles.summaryContainer}>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Items Total</Text>
+                <Text style={styles.summaryLabel}>Subtotal</Text>
                 <Text style={styles.summaryValue}>{formatPrice(getSubtotal())}</Text>
               </View>
+              {prescriptionItems.length > 0 && (
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Prescription Items</Text>
+                  <Text style={styles.summaryValue}>{prescriptionItems.length}</Text>
+                </View>
+              )}
               <View style={styles.summaryDivider} />
               <View style={[styles.summaryRow, styles.totalRow]}>
                 <Text style={styles.totalLabel}>Total Amount</Text>
                 <Text style={styles.totalValue}>{formatPrice(getSubtotal())}</Text>
               </View>
-            </View>
+            </BlurView>
           </View>
 
-          {/* Information Notice */}
+          {/* Pharmacy Information Notice */}
           <View style={styles.infoNotice}>
-            <Icon name="info" size={20} color="#6ee7b7" />
+            <Icon name="info" size={24} color={PharmacyColors.accent} />
             <View style={styles.infoContent}>
               <Text style={styles.infoTitle}>What happens next?</Text>
               <Text style={styles.infoText}>
-                • Shop owners will contact you to confirm your order{'\n'}
-                • Payment and delivery details will be arranged directly{'\n'}
-                • Track your orders in the "Orders" section
+                • Pharmacist will verify your order{'\n'}
+                • You'll receive a confirmation call{'\n'}
+                • Prescription items require verification{'\n'}
+                • Track your order status
               </Text>
             </View>
           </View>
@@ -463,25 +618,34 @@ const Cart = ({ navigation }) => {
 
         {/* Place Order Button */}
         <View style={styles.bottomContainer}>
-          <TouchableOpacity
-            style={[styles.placeOrderButton, placingOrder && styles.buttonDisabled]}
-            onPress={placeOrder}
-            disabled={placingOrder}
-          >
-            {placingOrder ? (
-              <>
-                <ActivityIndicator size={20} color="#fff" />
-                <Text style={styles.placeOrderText}>Placing Order...</Text>
-              </>
-            ) : (
-              <>
-                <Icon name="send" size={20} color="#fff" />
-                <Text style={styles.placeOrderText}>
-                  Place Order - {formatPrice(getSubtotal())}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
+          <BlurView intensity={60} tint="dark" style={styles.bottomBlur}>
+            <TouchableOpacity
+              style={[styles.placeOrderButton, placingOrder && styles.buttonDisabled]}
+              onPress={placeOrder}
+              disabled={placingOrder}
+            >
+              <LinearGradient
+                colors={placingOrder 
+                  ? [PharmacyColors.border, PharmacyColors.border]
+                  : [PharmacyColors.primary, PharmacyColors.secondary]}
+                style={styles.placeOrderGradient}
+              >
+                {placingOrder ? (
+                  <>
+                    <ActivityIndicator size="small" color="#fff" />
+                    <Text style={styles.placeOrderText}>Processing...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Icon name="check-circle" size={20} color="#fff" />
+                    <Text style={styles.placeOrderText}>
+                      Place Order • {formatPrice(getSubtotal())}
+                    </Text>
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </BlurView>
         </View>
       </Animated.View>
     </SafeAreaView>
@@ -491,7 +655,34 @@ const Cart = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: PharmacyColors.background,
+  },
+  floatingIcons: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    zIndex: 0,
+  },
+  floatingIcon: {
+    position: 'absolute',
+    fontSize: 24,
+    opacity: 0.1,
+    color: PharmacyColors.textSecondary,
+  },
+  icon1: {
+    top: '10%',
+    right: '5%',
+    transform: [{ rotate: '15deg' }],
+  },
+  icon2: {
+    top: '30%',
+    left: '5%',
+    transform: [{ rotate: '-10deg' }],
+  },
+  icon3: {
+    bottom: '20%',
+    right: '10%',
+    transform: [{ rotate: '25deg' }],
   },
   content: {
     flex: 1,
@@ -500,70 +691,149 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    backgroundColor: '#064e3b',
-    padding: 20,
-    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    elevation: 4,
+    shadowColor: PharmacyColors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 8,
   },
+  backButton: {
+    padding: 8,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 20,
+  },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#fff',
-    marginLeft: 12,
+    color: '#FFFFFF',
+  },
+  cartBadge: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  cartBadgeBlur: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    minWidth: 28,
+    alignItems: 'center',
+  },
+  cartBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#a7f3d0',
-    marginLeft: 36,
+    color: 'rgba(255,255,255,0.8)',
+    marginLeft: 40,
+  },
+  prescriptionWarning: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(251, 140, 0, 0.1)',
+    margin: 16,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: PharmacyColors.warning + '40',
+    alignItems: 'center',
+    gap: 12,
+  },
+  prescriptionWarningContent: {
+    flex: 1,
+  },
+  prescriptionWarningTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: PharmacyColors.warning,
+    marginBottom: 4,
+  },
+  prescriptionWarningText: {
+    fontSize: 13,
+    color: PharmacyColors.textSecondary,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 20,
     paddingHorizontal: 16,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
+    gap: 8,
+  },
+  iconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,172,193,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#f1f5f9',
-    marginLeft: 8,
+    color: PharmacyColors.text,
   },
   userInfoCard: {
-    backgroundColor: '#1e293b',
     padding: 16,
     borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(30, 58, 30, 0.5)',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: PharmacyColors.border,
   },
   userInfo: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#f1f5f9',
+    color: PharmacyColors.text,
     marginBottom: 4,
   },
   userEmail: {
     fontSize: 14,
-    color: '#94a3b8',
+    color: PharmacyColors.textSecondary,
   },
   cartItem: {
-    flexDirection: 'row',
-    backgroundColor: '#1e293b',
     borderRadius: 12,
-    padding: 12,
+    overflow: 'hidden',
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: PharmacyColors.border,
+  },
+  itemGradient: {
+    flexDirection: 'row',
+    padding: 12,
+    position: 'relative',
+  },
+  rxBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: PharmacyColors.accent,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    zIndex: 1,
+  },
+  rxText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   itemImageContainer: {
     borderRadius: 8,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: PharmacyColors.border,
   },
   itemImage: {
     width: 70,
@@ -576,11 +846,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   itemName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#f1f5f9',
+    color: PharmacyColors.text,
     marginBottom: 6,
     lineHeight: 20,
+    paddingRight: 30,
   },
   shopContainer: {
     flexDirection: 'row',
@@ -589,18 +860,18 @@ const styles = StyleSheet.create({
   },
   itemShop: {
     fontSize: 12,
-    color: '#6ee7b7',
+    color: PharmacyColors.accent,
     marginLeft: 4,
   },
   itemPrice: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#10b981',
+    color: PharmacyColors.success,
     marginBottom: 2,
   },
   itemTotal: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: PharmacyColors.textMuted,
   },
   itemActions: {
     alignItems: 'center',
@@ -609,57 +880,64 @@ const styles = StyleSheet.create({
   quantityContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0f172a',
     borderRadius: 20,
-    padding: 4,
     marginBottom: 8,
   },
   quantityButton: {
-    backgroundColor: 'white',
     width: 28,
     height: 28,
     borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
   quantityDisplay: {
-    backgroundColor: '#1e293b',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
     marginHorizontal: 4,
+    overflow: 'hidden',
   },
   quantityText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#f1f5f9',
+    color: PharmacyColors.text,
   },
   removeButton: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
     width: 32,
     height: 32,
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(229, 57, 53, 0.1)',
     borderWidth: 1,
-    borderColor: '#ef4444',
+    borderColor: 'rgba(229, 57, 53, 0.3)',
+  },
+  inputBlur: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(30, 58, 30, 0.3)',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    gap: 8,
   },
   textInput: {
-    backgroundColor: '#1e293b',
-    borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#f1f5f9',
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: PharmacyColors.text,
     minHeight: 50,
   },
   summaryContainer: {
-    backgroundColor: '#1e293b',
     borderRadius: 12,
     padding: 16,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(30, 58, 30, 0.3)',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: PharmacyColors.border,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -669,53 +947,54 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 14,
-    color: '#94a3b8',
+    color: PharmacyColors.textSecondary,
   },
   summaryValue: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#f1f5f9',
+    color: PharmacyColors.text,
   },
   summaryDivider: {
     height: 1,
-    backgroundColor: '#334155',
+    backgroundColor: PharmacyColors.border,
     marginVertical: 8,
   },
   totalRow: {
-    paddingTop: 12,
+    paddingTop: 8,
   },
   totalLabel: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: '#f1f5f9',
+    color: PharmacyColors.text,
   },
   totalValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#10b981',
+    color: PharmacyColors.accent,
   },
   infoNotice: {
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0, 172, 193, 0.1)',
     borderRadius: 12,
     padding: 16,
-    margin: 16,
-    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 20,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
+    borderColor: PharmacyColors.accent + '40',
+    gap: 12,
   },
   infoContent: {
     flex: 1,
-    marginLeft: 12,
   },
   infoTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#6ee7b7',
+    color: PharmacyColors.accent,
     marginBottom: 8,
   },
   infoText: {
-    fontSize: 14,
-    color: '#a7f3d0',
+    fontSize: 13,
+    color: PharmacyColors.textSecondary,
     lineHeight: 20,
   },
   bottomSpacing: {
@@ -726,34 +1005,34 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#0f172a',
     padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#334155',
+  },
+  bottomBlur: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(10, 31, 10, 0.8)',
+    borderWidth: 1,
+    borderColor: PharmacyColors.border,
   },
   placeOrderButton: {
-    backgroundColor: '#10b981',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  placeOrderGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
-    borderRadius: 12,
-    elevation: 4,
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    gap: 8,
   },
   buttonDisabled: {
-    backgroundColor: '#6b7280',
-    elevation: 0,
-    shadowOpacity: 0,
+    opacity: 0.6,
   },
   placeOrderText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
-    marginLeft: 8,
+    marginLeft: 4,
   },
   emptyContainer: {
     flex: 1,
@@ -761,33 +1040,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 32,
   },
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(30, 58, 30, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: PharmacyColors.border,
+  },
   emptyTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#f1f5f9',
-    marginTop: 16,
+    color: PharmacyColors.text,
     marginBottom: 8,
   },
   emptyText: {
-    fontSize: 16,
-    color: '#94a3b8',
+    fontSize: 15,
+    color: PharmacyColors.textMuted,
     textAlign: 'center',
     marginBottom: 32,
     lineHeight: 22,
   },
   actionButton: {
-    backgroundColor: '#10b981',
+    borderRadius: 30,
+    overflow: 'hidden',
+  },
+  actionButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
+    paddingVertical: 14,
+    gap: 8,
   },
   actionButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-    marginLeft: 8,
   },
 });
 

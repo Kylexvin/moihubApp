@@ -9,7 +9,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { MaterialIcons as Icon } from '@expo/vector-icons';
 
 const PortalScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);

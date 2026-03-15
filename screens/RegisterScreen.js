@@ -1,32 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  Animated,
-  Dimensions,
-  Image,
-  Linking,
-  Modal
-} from 'react-native';
-import Icon from 'react-native-vector-icons/FontAwesome';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, ScrollView, Animated, Dimensions, Image, Linking, Modal } from 'react-native';
+import { FontAwesome as Icon } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
-import * as AuthSession from 'expo-auth-session';
 import { makeRedirectUri } from 'expo-auth-session';
 import { useAuth } from '../context/AuthContext';
 import * as Notifications from 'expo-notifications';
+import axios from 'axios';
 
 WebBrowser.maybeCompleteAuthSession();
 
 const { width } = Dimensions.get('window');
-const BACKEND_URL = 'https://moihub.onrender.com';
+const isExpoGo = Constants?.appOwnership === 'expo';
+const messaging = !isExpoGo ? require('@react-native-firebase/messaging').default : null;
 
 const RegisterScreen = ({ navigation }) => {
   const { register, socialLogin, loading } = useAuth(); 
@@ -84,14 +71,9 @@ const RegisterScreen = ({ navigation }) => {
   };
 
 // Google Auth Hook Configuration - Fixed for Register
-const [googleRequest, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
+const [googleRequest, googleResponse, googlePromptAsync] = Google.useAuthRequest({
   androidClientId: '440940724570-5af9vrdpg9e6q81sb675pctvbgbpqhqm.apps.googleusercontent.com',
-  webClientId: '440940724570-q2oimhoge0bre1curvl7h8glbnp6rbma.apps.googleusercontent.com',
-  redirectUri: makeRedirectUri({
-    scheme: 'com.kylexvin.moihub',
-    path: 'oauth2redirect',
-    native: 'com.kylexvin.moihub://oauth2redirect',
-  }),
+  redirectUri: makeRedirectUri({ native: 'com.kylexvin.moihub:/oauth2redirect/google' }),
   prompt: 'select_account',
 });
 
@@ -121,41 +103,39 @@ const [googleRequest, googleResponse, googlePromptAsync] = Google.useIdTokenAuth
   }, []);
 
   // Handle Google Auth Response
-  useEffect(() => {
-    if (googleResponse?.type === 'success') {
-      const { id_token } = googleResponse.params;
-      
-      if (id_token) {
-        handleBackendSocialLogin('google', id_token);
-      } else {
-        setGoogleLoading(false);
-        Alert.alert('Error', 'Google did not return credentials.');
-      }
-    } else if (googleResponse?.type === 'error') {
+useEffect(() => {
+  if (googleResponse?.type === 'success') {
+    const access_token = googleResponse.authentication?.accessToken;
+    if (access_token) {
+      handleBackendSocialLogin('google', access_token);
+    } else {
       setGoogleLoading(false);
-      Alert.alert('Google Error', 'Authentication failed.');
+      Alert.alert('Error', 'Google did not return credentials.');
     }
-  }, [googleResponse]);
+  } else if (googleResponse?.type === 'error') {
+    setGoogleLoading(false);
+    Alert.alert('Google Error', 'Authentication failed.');
+  }
+}, [googleResponse]);
 
-  const handleBackendSocialLogin = async (provider, token = null) => {
-    if (!permissionGranted) {
-      setShowPermissionModal(true);
-      return;
+const handleBackendSocialLogin = async (provider, token = null) => {
+  if (!permissionGranted) {
+    setShowPermissionModal(true);
+    return;
+  }
+  try {
+    setGoogleLoading(true);
+    const user = await socialLogin(provider, token);
+    if (user?._id) {
+      await syncPushToken(user._id);
     }
-    
-    try {
-      setGoogleLoading(true);
-      
-      // Use AuthContext's socialLogin which will make the API call and handle navigation
-      await socialLogin(provider, token);
-      
-    } catch (err) {
-      console.error('Social login error:', err);
-      Alert.alert('Social Login Failed', err.message || 'Could not sign in with Google');
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
+  } catch (err) {
+    console.error('Social login error:', err);
+    Alert.alert('Social Login Failed', err.message || 'Could not sign in with Google');
+  } finally {
+    setGoogleLoading(false);
+  }
+};
 
   const handleGoogleBtnPress = () => {
     if (!permissionGranted) {
@@ -169,6 +149,18 @@ const [googleRequest, googleResponse, googlePromptAsync] = Google.useIdTokenAuth
       console.log('Google Prompt Error:', err);
     });
   };
+
+  const syncPushToken = async (userId) => {
+  if (!messaging) return;
+  try {
+    const fcmToken = await messaging().getToken();
+    if (fcmToken) {
+      await axios.post(`/api/auth/update-push-token`, { userId, fcmToken });
+    }
+  } catch (err) {
+    console.error('Failed to sync push token:', err);
+  }
+};
 
   const handleChange = (name, value) => {
     setFormData(prev => ({ ...prev, [name]: value }));

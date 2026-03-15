@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/appicon.png",
     "userInterfaceStyle": "dark",
-    "scheme": "moihubapp",
+    "scheme": "com.kylexvin.moihub",
     "splash": {
       "backgroundColor": "#093028",
       "resizeMode": "contain",
@@ -33,7 +33,9 @@
         "VIBRATE",
         "ACCESS_NETWORK_STATE",
         "WAKE_LOCK",
-        "FOREGROUND_SERVICE"
+        "FOREGROUND_SERVICE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "intentFilters": [
         {
@@ -44,7 +46,10 @@
               "host": "oauth2redirect"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         },
         {
           "action": "VIEW",
@@ -54,7 +59,10 @@
               "host": "github-auth"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ],
       "googleServicesFile": "./android/app/google-services.json",
@@ -94,9 +102,9 @@
     "extra": {
       "backendUrl": "https://moihub.onrender.com",
       "eas": {
-        "projectId": "2fe67dfd-7c68-4c43-a61f-5fb4ce28cc1d"
+        "projectId": "c9a06100-7122-42d8-bbca-f9f28e3d7cc2"
       }
     },
-    "owner": "kylexvinny"
+    "owner": "kylexvinny3"
   }
-} 
+}

@@ -52,75 +52,78 @@ const  ReviewsTab = ({
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
-  // Fetch reviews data
-  const fetchReviews = useCallback(async (isRefreshing = false) => {
-    try {
-      if (isRefreshing) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
 
-      // Fetch reviews for this provider
-      const response = await axios.get(
-        `/api/services/reviews/providers/${providerId}/reviews?page=${page}&limit=10`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          }
-        }
-      );
-
-      const data = response.data.data;
-      
-      if (isRefreshing || page === 1) {
-        setReviews(data.reviews || []);
-      } else {
-        setReviews(prev => [...prev, ...(data.reviews || [])]);
-      }
-
-      // Update stats
-      if (data.summary) {
-        setStats({
-          averageRating: data.summary.average || 0,
-          totalReviews: data.summary.total || 0,
-          ratingBreakdown: calculateRatingBreakdown(data.summary.distribution)
-        });
-        setDistribution(data.summary.distribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
-      }
-
-      setHasMore(data.reviews?.length === 10);
-
-    } catch (error) {
-      console.error('Error fetching reviews:', error);
-      Alert.alert('Error', 'Failed to load reviews');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+const fetchReviews = useCallback(async (isRefreshing = false) => {
+  try {
+    if (isRefreshing) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
     }
-  }, [providerId, token, page]);
 
-  // Check if user has already reviewed
-  const checkUserReviewStatus = useCallback(async () => {
-    try {
-      const response = await axios.get(
-        `/api/services/reviews/check/${providerId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          }
+    const response = await axios.get(
+      `/api/services/providers/${providerId}/reviews?page=${page}&limit=10`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
         }
-      );
-
-      const data = response.data.data;
-      setHasUserReviewed(data.hasReviewed);
-      if (data.review) {
-        setUserReview(data.review);
       }
-    } catch (error) {
-      console.error('Error checking review status:', error);
+    );
+
+    const data = response.data.data;
+    
+    // FIX: Update reviews state
+    if (isRefreshing || page === 1) {
+      setReviews(data.reviews || []);
+    } else {
+      setReviews(prev => [...prev, ...(data.reviews || [])]);
     }
-  }, [providerId, token]);
+
+    // FIX: Update stats
+    if (data.summary) {
+      setStats({
+        averageRating: data.summary.average || 0,
+        totalReviews: data.summary.total || 0,
+        ratingBreakdown: calculateRatingBreakdown(data.summary.distribution)
+      });
+      setDistribution(data.summary.distribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+    }
+
+    setHasMore(data.reviews?.length === 10);
+
+  } catch (error) {
+    console.error('Error fetching reviews:', error);
+    Alert.alert('Error', 'Failed to load reviews');
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+}, [providerId, token, page]);
+
+// Check if user has already reviewed
+const checkUserReviewStatus = useCallback(async () => {
+  try {
+    // REMOVED "reviews/" from the path
+    const response = await axios.get(
+      `/api/services/check/${providerId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        }
+      }
+    );
+
+    const data = response.data?.data || response.data;
+    setHasUserReviewed(data?.hasReviewed || false);
+    if (data?.review) {
+      setUserReview(data.review);
+    }
+  } catch (error) {
+    console.error('Error checking review status:', error);
+    setHasUserReviewed(false);
+    setUserReview(null);
+  }
+}, [providerId, token]);
 
   // Calculate rating breakdown from distribution
   const calculateRatingBreakdown = (distribution) => {

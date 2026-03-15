@@ -29,7 +29,7 @@ const ServicesScreen = () => {
   // Original services array (this remains your default order)
   const originalServices = [
     { id: "uni", title: "My University", icon: "school", category: "uni", color: "#50c878" },
-    { id: "rental", title: "Rental Booking", icon: "home", category: "accom", color: "#50c878", badge: 'New' },
+    { id: "rental", title: "Rental Booking", icon: "home", category: "accom", color: "#50c878"  },
     { id: "roommate", title: "Roommate Finder", icon: "people", category: "accom", color: "#50c878" },
     { id: "secondhand", title: "Second Hand Items", icon: "pricetag", category: "accom", color: "#50c878" },
     { id: "pharmacy", title: "Pharmacy", icon: "medkit", category: "pharma", color: "#8e44ad" },
