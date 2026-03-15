@@ -80,12 +80,13 @@ const MySchoolLanding = ({ navigation }) => {
       tab: 'university',
       priority: 2
     },
+    
     {
       id: "musomi",
       name: 'Musomi Learning',
       description: 'E-learning platform',
       icon: 'library-outline',
-      url: 'https://elearning.mu.ac.ke/',
+      url: 'https://elearning.mu.ac.ke/login/index.php',
       color: Colors.info,
       bgColor: Colors.info + '20',
       tab: 'university',

@@ -16,11 +16,11 @@ const ServiceProviderDashboardNavigator = () => {
         animationEnabled: true,
       }}
     >
-      <Stack.Screen 
-        name="ServiceProviderDashboard" 
-        component={ServiceProviderDashboard}
-        options={{ headerShown: false }}
-      />
+     <Stack.Screen 
+  name="ServiceProviderDashboardHome"   // <-- change this
+  component={ServiceProviderDashboard}
+  options={{ headerShown: false }}
+/>
       <Stack.Screen 
         name="BusinessProfile" 
         component={BusinessProfile}

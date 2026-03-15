@@ -15,53 +15,80 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
-  RefreshControl
+  RefreshControl,
+  FlatList
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import axios from 'axios';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import Theme from '../../theme/Theme';
 
-const { Colors, Typography, Spacing, BorderRadius, Shadows } = Theme;
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// Dark Green Theme
+const DarkGreenTheme = {
+  primary: '#2E7D5E',      // Emerald Green
+  primaryDark: '#1A4D3A',   // Deep Forest
+  primaryLight: '#A7F0D0',  // Mint
+  accent: '#D4AF37',        // Warm Gold
+  background: '#0A1A12',    // Very Dark Green
+  surface: '#142B1F',       // Dark Green Surface
+  card: '#1E3A2A',          // Card Background
+  text: '#FFFFFF',          // White
+  textSecondary: '#8FBFA0', // Sage Green
+  textMuted: '#5A7A6A',     // Muted Green
+  border: '#2C4A38',        // Border Green
+  success: '#2E7D5E',
+  warning: '#D4A017',
+  error: '#B22222',
+};
 
 const ReviewsManagement = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [reviews, setReviews] = useState([]);
-  const [stats, setStats] = useState(null);
-  const [selectedReview, setSelectedReview] = useState(null);
   const [showReplyModal, setShowReplyModal] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
   const [editingReply, setEditingReply] = useState(false);
-  const [filter, setFilter] = useState('all'); // 'all', 'pending', 'approved'
+  const [selectedReview, setSelectedReview] = useState(null);
+  const [filter, setFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [totalCount, setTotalCount] = useState(0);
 
-  // Filter options
   const filterOptions = [
-    { id: 'all', label: 'All Reviews', icon: 'star-outline' },
+    { id: 'all', label: 'All', icon: 'star-outline' },
     { id: 'pending', label: 'Pending', icon: 'time-outline' },
     { id: 'approved', label: 'Approved', icon: 'checkmark-circle-outline' }
   ];
 
   useEffect(() => {
-    fetchBusinessReviews();
-    fetchReviewStats();
+    fetchReviews();
   }, []);
 
   useEffect(() => {
     if (page === 1) {
-      fetchBusinessReviews(1, true);
+      fetchReviews(1, true);
     }
   }, [filter]);
 
-  const fetchBusinessReviews = async (pageNum = 1, reset = false) => {
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffDays = Math.floor((now - date) / 86400000);
+      
+      if (diffDays === 0) return 'Today';
+      if (diffDays === 1) return 'Yesterday';
+      if (diffDays < 7) return `${diffDays} days ago`;
+      if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    } catch {
+      return '';
+    }
+  };
+
+  const fetchReviews = async (pageNum = 1, reset = false) => {
     try {
       if (reset) setLoading(true);
       
@@ -75,7 +102,6 @@ const ReviewsManagement = ({ navigation }) => {
       
       if (response.data.success) {
         const newReviews = response.data.data.reviews || [];
-        setTotalCount(response.data.data.total || 0);
         
         if (reset || pageNum === 1) {
           setReviews(newReviews);
@@ -87,91 +113,120 @@ const ReviewsManagement = ({ navigation }) => {
         setPage(pageNum);
       }
     } catch (error) {
-      console.error('Fetch business reviews error:', error);
-      if (!reset) {
-        Alert.alert('Error', 'Failed to load reviews');
-      }
+      console.error('Fetch reviews error:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const fetchReviewStats = async () => {
-    try {
-      // You'll need to add this endpoint or use providerId from context
-      const providerId = 'current'; // This should come from auth context
-      const response = await axios.get(`/api/services/reviews/stats/${providerId}`);
-      if (response.data.success) {
-        setStats(response.data.data);
-      }
-    } catch (error) {
-      console.error('Fetch stats error:', error);
-    }
-  };
-
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     setPage(1);
-    fetchBusinessReviews(1, true);
-    fetchReviewStats();
+    fetchReviews(1, true);
   }, []);
 
-  const handleReplyToReview = async () => {
-    if (!replyText.trim() || replyText.trim().length < 2) {
-      Alert.alert('Error', 'Reply must be at least 2 characters');
-      return;
-    }
+const handleReplyToReview = async () => {
+  const trimmedReply = replyText?.trim() || '';
+  
+  if (!trimmedReply || trimmedReply.length < 2) {
+    Alert.alert('Error', 'Reply must be at least 2 characters');
+    return;
+  }
 
-    try {
-      setSaving(true);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  try {
+    setSaving(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-      const endpoint = `/api/services/business/reviews/${replyingTo}/reply`;
-      
-      let response;
-      if (editingReply) {
-        response = await axios.put(endpoint, { reply: replyText.trim() });
-      } else {
-        response = await axios.post(endpoint, { reply: replyText.trim() });
-      }
+    // CORRECT endpoint from your routes
+    const endpoint = `/api/services/business/reviews/${replyingTo}/reply`;
+    
+    // IMPORTANT: Check if a reply actually exists
+    // If there's no providerReply, it's a NEW reply (POST)
+    // If there is a providerReply, it's an EDIT (PUT)
+    const hasExistingReply = selectedReview?.providerReply?.text ? true : false;
+    
+    console.log('Debug:', {
+      hasExistingReply,
+      editingReply: editingReply,
+      method: hasExistingReply ? 'put' : 'post'
+    });
+    
+    const response = await axios({
+      method: hasExistingReply ? 'put' : 'post',
+      url: endpoint,
+      data: { reply: trimmedReply }
+    });
 
-      if (response.data.success) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        
-        // Update the review in local state
-        setReviews(prev => prev.map(review => 
-          review.id === replyingTo 
-            ? { 
-                ...review, 
-                providerReply: {
-                  text: replyText.trim(),
-                  repliedAt: new Date().toISOString()
-                }
+    if (response.data.success) {
+      // Update the review in state
+      setReviews(prev => prev.map(review => 
+        review.id === replyingTo 
+          ? { 
+              ...review, 
+              providerReply: {
+                text: trimmedReply,
+                repliedAt: new Date().toISOString(),
+                ...(hasExistingReply ? { updatedAt: new Date().toISOString() } : {})
               }
-            : review
-        ));
-        
-        setShowReplyModal(false);
-        setReplyText('');
-        setReplyingTo(null);
-        setEditingReply(false);
-        
-        Alert.alert('Success', editingReply ? 'Reply updated' : 'Reply added');
-      }
-    } catch (error) {
-      console.error('Reply error:', error);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', error.response?.data?.message || 'Failed to save reply');
-    } finally {
-      setSaving(false);
+            }
+          : review
+      ));
+      
+      // Reset modal state
+      setShowReplyModal(false);
+      setReplyText('');
+      setReplyingTo(null);
+      setEditingReply(false);
+      setSelectedReview(null);
+      
+      Alert.alert('Success', hasExistingReply ? 'Reply updated' : 'Reply posted');
     }
-  };
+  } catch (error) {
+    console.error('Reply error:', error);
+    
+    if (error.response) {
+      console.log('Error response:', error.response.data);
+      Alert.alert('Error', error.response.data?.message || 'Failed to save reply');
+    } else if (error.request) {
+      Alert.alert('Error', 'Network error. Please check your connection.');
+    } else {
+      Alert.alert('Error', 'An unexpected error occurred');
+    }
+  } finally {
+    setSaving(false);
+  }
+};
+
+// Fix the handleReplyPress function
+const handleReplyPress = (review) => {
+  // Safely set selected review with fallbacks
+  const hasExistingReply = review?.providerReply?.text ? true : false;
+  
+  setSelectedReview({
+    id: review?.id || '',
+    rating: review?.rating || 0,
+    comment: review?.comment || '',
+    user: review?.user || { name: 'Anonymous' },
+    providerReply: review?.providerReply || null
+  });
+  setReplyingTo(review?.id || null);
+  setReplyText(review?.providerReply?.text || '');
+  
+  // Set editingReply based on whether a reply exists
+  setEditingReply(hasExistingReply);
+  setShowReplyModal(true);
+  
+  console.log('Reply press:', {
+    hasExistingReply,
+    replyText: review?.providerReply?.text
+  });
+};
 
   const handleDeleteReply = async (reviewId) => {
     Alert.alert(
       'Delete Reply',
-      'Are you sure you want to delete this reply?',
+      'Are you sure?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -179,27 +234,15 @@ const ReviewsManagement = ({ navigation }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              setLoading(true);
-              const response = await axios.delete(`/api/services/business/reviews/${reviewId}/reply`);
-              
-              if (response.data.success) {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                
-                // Update local state
-                setReviews(prev => prev.map(review => 
-                  review.id === reviewId 
-                    ? { ...review, providerReply: null }
-                    : review
-                ));
-                
-                Alert.alert('Success', 'Reply deleted');
-              }
+              await axios.delete(`/api/services/business/reviews/${reviewId}/reply`);
+              setReviews(prev => prev.map(review => 
+                review.id === reviewId 
+                  ? { ...review, providerReply: null }
+                  : review
+              ));
             } catch (error) {
               console.error('Delete reply error:', error);
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-              Alert.alert('Error', error.response?.data?.message || 'Failed to delete reply');
-            } finally {
-              setLoading(false);
+              Alert.alert('Error', 'Failed to delete reply');
             }
           }
         }
@@ -209,269 +252,137 @@ const ReviewsManagement = ({ navigation }) => {
 
   const handleModerateReview = async (reviewId, action) => {
     try {
-      setLoading(true);
-      const response = await axios.put(`/api/services/business/reviews/${reviewId}/moderate`, {
-        action
-      });
-
-      if (response.data.success) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        
-        if (action === 'reject') {
-          // Remove from list
-          setReviews(prev => prev.filter(r => r.id !== reviewId));
-          setTotalCount(prev => prev - 1);
-        } else {
-          // Update status
-          setReviews(prev => prev.map(review => 
-            review.id === reviewId 
-              ? { ...review, isApproved: true }
-              : review
-          ));
-        }
-        
-        Alert.alert('Success', action === 'approve' ? 'Review approved' : 'Review rejected');
-        fetchReviewStats(); // Refresh stats
+      await axios.put(`/api/services/business/reviews/${reviewId}/moderate`, { action });
+      
+      if (action === 'reject') {
+        setReviews(prev => prev.filter(r => r.id !== reviewId));
+      } else {
+        setReviews(prev => prev.map(review => 
+          review.id === reviewId 
+            ? { ...review, isApproved: true }
+            : review
+        ));
       }
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error('Moderate review error:', error);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', error.response?.data?.message || 'Failed to moderate review');
-    } finally {
-      setLoading(false);
+      Alert.alert('Error', 'Failed to moderate review');
     }
   };
 
   const loadMore = () => {
     if (hasMore && !loading && !refreshing) {
-      fetchBusinessReviews(page + 1);
+      fetchReviews(page + 1);
     }
   };
 
-  const openReplyModal = (review, edit = false) => {
-    setReplyingTo(review.id);
-    if (edit && review.providerReply) {
-      setReplyText(review.providerReply.text);
-      setEditingReply(true);
-    } else {
-      setReplyText('');
-      setEditingReply(false);
-    }
-    setShowReplyModal(true);
-  };
-
-  const renderStars = (rating) => {
+  const renderStars = (rating, size = 14) => {
+    const safeRating = rating || 0;
     return (
       <View style={styles.starsContainer}>
         {[1, 2, 3, 4, 5].map((star) => (
           <Ionicons
             key={star}
-            name={star <= rating ? 'star' : 'star-outline'}
-            size={14}
-            color={Colors.warning}
+            name={star <= safeRating ? 'star' : 'star-outline'}
+            size={size}
+            color={star <= safeRating ? DarkGreenTheme.accent : DarkGreenTheme.textMuted}
           />
         ))}
       </View>
     );
   };
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays}d ago`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
-
-  const renderHeader = () => (
-    <LinearGradient
-      colors={[Colors.primary, Colors.primaryDark]}
-      style={styles.header}
-    >
-      <View style={styles.headerTop}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.white} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Reviews Management</Text>
-        <View style={styles.placeholder} />
-      </View>
-
-      {stats && (
-        <View style={styles.headerStats}>
-          <View style={styles.headerStatItem}>
-            <Text style={styles.headerStatValue}>{stats.summary.average.toFixed(1)}</Text>
-            <View style={styles.headerStars}>
-              {renderStars(Math.round(stats.summary.average))}
-            </View>
-            <Text style={styles.headerStatLabel}>Average Rating</Text>
-          </View>
-          <View style={styles.headerStatDivider} />
-          <View style={styles.headerStatItem}>
-            <Text style={styles.headerStatValue}>{stats.summary.total}</Text>
-            <Text style={styles.headerStatLabel}>Total Reviews</Text>
-            <Text style={styles.headerStatSubtext}>{stats.recentReviews} this month</Text>
-          </View>
-        </View>
-      )}
-    </LinearGradient>
-  );
-
-  const renderFilterTabs = () => (
-    <View style={styles.filterContainer}>
-      {filterOptions.map((option) => {
-        const isActive = filter === option.id;
-        const count = option.id === 'all' 
-          ? totalCount 
-          : option.id === 'pending'
-          ? reviews.filter(r => !r.isApproved).length
-          : reviews.filter(r => r.isApproved).length;
-
-        return (
-          <TouchableOpacity
-            key={option.id}
-            style={[
-              styles.filterTab,
-              isActive && styles.filterTabActive
-            ]}
-            onPress={() => {
-              setFilter(option.id);
-              setPage(1);
-            }}
-          >
-            <Ionicons 
-              name={option.icon} 
-              size={18} 
-              color={isActive ? Colors.primary : Colors.textSecondary} 
-            />
-            <Text style={[
-              styles.filterTabText,
-              isActive && styles.filterTabTextActive
-            ]}>
-              {option.label}
-            </Text>
-            {count > 0 && (
-              <View style={[
-                styles.filterBadge,
-                isActive && styles.filterBadgeActive
-              ]}>
-                <Text style={[
-                  styles.filterBadgeText,
-                  isActive && styles.filterBadgeTextActive
-                ]}>
-                  {count}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-
-  const renderReviewCard = (review) => (
-    <View key={review.id} style={styles.reviewCard}>
-      {/* Review Header */}
-      <View style={styles.reviewHeader}>
-        <View style={styles.reviewUser}>
-          {review.user.avatar ? (
-            <Image source={{ uri: review.user.avatar }} style={styles.reviewAvatar} />
+  const renderReviewCard = ({ item }) => (
+    <View style={styles.reviewCard}>
+      {/* Header */}
+      <View style={styles.cardHeader}>
+        <View style={styles.userInfo}>
+          {item.user?.avatar ? (
+            <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
           ) : (
-            <View style={styles.reviewAvatarPlaceholder}>
-              <Text style={styles.reviewAvatarText}>
-                {review.user.name?.charAt(0).toUpperCase() || 'U'}
+            <LinearGradient
+              colors={[DarkGreenTheme.primary, DarkGreenTheme.primaryDark]}
+              style={styles.avatarPlaceholder}
+            >
+              <Text style={styles.avatarText}>
+                {item.user?.name?.charAt(0).toUpperCase() || 'U'}
               </Text>
-            </View>
+            </LinearGradient>
           )}
-          <View style={styles.reviewUserInfo}>
-            <Text style={styles.reviewUserName}>{review.user.name}</Text>
-            <View style={styles.reviewMeta}>
-              {renderStars(review.rating)}
-              <Text style={styles.reviewTime}>{formatDate(review.date)}</Text>
+          
+          <View>
+            <Text style={styles.userName}>{item.user?.name || 'Anonymous'}</Text>
+            <View style={styles.ratingRow}>
+              {renderStars(item.rating)}
+              <Text style={styles.reviewTime}>{formatDate(item.date)}</Text>
             </View>
           </View>
         </View>
-        
-        {!review.isApproved && (
+
+        {!item.isApproved && (
           <View style={styles.pendingBadge}>
-            <Text style={styles.pendingBadgeText}>Pending</Text>
+            <Text style={styles.pendingText}>Pending</Text>
           </View>
         )}
       </View>
 
-      {/* Review Comment */}
-      <Text style={styles.reviewComment}>{review.comment}</Text>
+      {/* Comment */}
+      <Text style={styles.comment}>{item.comment || ''}</Text>
 
-      {/* Provider Reply Section */}
-      {review.providerReply ? (
+      {/* Reply Section */}
+      {item.providerReply ? (
         <View style={styles.replyContainer}>
-          <LinearGradient
-            colors={[Colors.primary + '10', Colors.primary + '05']}
-            style={styles.replyGradient}
-          >
-            <View style={styles.replyHeader}>
-              <View style={styles.replyUser}>
-                <Ionicons name="business" size={14} color={Colors.primary} />
-                <Text style={styles.replyTitle}>Your Reply</Text>
-              </View>
-              <View style={styles.replyActions}>
-                <TouchableOpacity 
-                  onPress={() => openReplyModal(review, true)}
-                  style={styles.replyActionButton}
-                >
-                  <Ionicons name="create-outline" size={16} color={Colors.primary} />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  onPress={() => handleDeleteReply(review.id)}
-                  style={styles.replyActionButton}
-                >
-                  <Ionicons name="trash-outline" size={16} color={Colors.error} />
-                </TouchableOpacity>
-              </View>
+          <View style={styles.replyHeader}>
+            <View style={styles.replyTitleContainer}>
+              <MaterialCommunityIcons name="reply" size={14} color={DarkGreenTheme.primaryLight} />
+              <Text style={styles.replyTitle}>Your reply</Text>
+              <Text style={styles.replyTime}>{formatDate(item.providerReply.repliedAt)}</Text>
             </View>
-            <Text style={styles.replyText}>{review.providerReply.text}</Text>
-            <Text style={styles.replyDate}>
-              {formatDate(review.providerReply.repliedAt)}
-            </Text>
-          </LinearGradient>
+            <View style={styles.replyActions}>
+              <TouchableOpacity 
+                onPress={() => handleReplyPress(item)}
+                style={styles.replyAction}
+              >
+                <Ionicons name="create-outline" size={16} color={DarkGreenTheme.primaryLight} />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={() => handleDeleteReply(item.id)}
+                style={styles.replyAction}
+              >
+                <Ionicons name="trash-outline" size={16} color={DarkGreenTheme.error} />
+              </TouchableOpacity>
+            </View>
+          </View>
+          <Text style={styles.replyText}>{item.providerReply.text || ''}</Text>
         </View>
       ) : (
         <TouchableOpacity 
           style={styles.replyButton}
-          onPress={() => openReplyModal(review)}
+          onPress={() => handleReplyPress(item)}
         >
-          <Ionicons name="chatbubble-outline" size={16} color={Colors.primary} />
-          <Text style={styles.replyButtonText}>Reply to Review</Text>
+          <MaterialCommunityIcons name="reply" size={16} color={DarkGreenTheme.primaryLight} />
+          <Text style={styles.replyButtonText}>Reply</Text>
         </TouchableOpacity>
       )}
 
-      {/* Moderation Actions for Pending Reviews */}
-      {!review.isApproved && (
-        <View style={styles.moderationContainer}>
+      {/* Moderation for pending */}
+      {!item.isApproved && (
+        <View style={styles.moderationRow}>
           <TouchableOpacity 
-            style={[styles.moderationButton, styles.approveButton]}
-            onPress={() => handleModerateReview(review.id, 'approve')}
+            style={styles.approveButton}
+            onPress={() => handleModerateReview(item.id, 'approve')}
           >
-            <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
-            <Text style={styles.approveButtonText}>Approve</Text>
+            <Ionicons name="checkmark-circle" size={18} color={DarkGreenTheme.primaryLight} />
+            <Text style={styles.approveText}>Approve</Text>
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={[styles.moderationButton, styles.rejectButton]}
-            onPress={() => handleModerateReview(review.id, 'reject')}
+            style={styles.rejectButton}
+            onPress={() => handleModerateReview(item.id, 'reject')}
           >
-            <Ionicons name="close-circle" size={18} color={Colors.error} />
-            <Text style={styles.rejectButtonText}>Reject</Text>
+            <Ionicons name="close-circle" size={18} color={DarkGreenTheme.error} />
+            <Text style={styles.rejectText}>Reject</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -480,92 +391,170 @@ const ReviewsManagement = ({ navigation }) => {
 
   const renderReplyModal = () => (
     <Modal
-      animationType="slide"
-      transparent={true}
       visible={showReplyModal}
+      transparent
+      animationType="fade"
       onRequestClose={() => {
         setShowReplyModal(false);
         setReplyText('');
         setReplyingTo(null);
         setEditingReply(false);
+        setSelectedReview(null);
       }}
     >
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalOverlay}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              {editingReply ? 'Edit Reply' : 'Reply to Review'}
-            </Text>
-            <TouchableOpacity 
-              onPress={() => {
+      <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalContainer}
+        >
+          <View style={styles.modalContent}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {editingReply ? 'Edit Reply' : 'Reply to Review'}
+              </Text>
+              <TouchableOpacity onPress={() => {
                 setShowReplyModal(false);
                 setReplyText('');
                 setReplyingTo(null);
                 setEditingReply(false);
-              }}
-            >
-              <Ionicons name="close" size={24} color={Colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-          
-          <TextInput
-            style={styles.replyInput}
-            value={replyText}
-            onChangeText={setReplyText}
-            placeholder="Write your reply..."
-            placeholderTextColor={Colors.textTertiary}
-            multiline
-            numberOfLines={6}
-            textAlignVertical="top"
-            autoFocus
-          />
+                setSelectedReview(null);
+              }}>
+                <Ionicons name="close" size={24} color={DarkGreenTheme.textSecondary} />
+              </TouchableOpacity>
+            </View>
 
-          <View style={styles.modalFooter}>
-            <TouchableOpacity 
-              style={styles.modalCancelButton}
-              onPress={() => {
-                setShowReplyModal(false);
-                setReplyText('');
-                setReplyingTo(null);
-                setEditingReply(false);
-              }}
-              disabled={saving}
-            >
-              <Text style={styles.modalCancelText}>Cancel</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[
-                styles.modalSubmitButton,
-                (!replyText.trim() || replyText.trim().length < 2) && styles.modalSubmitDisabled
-              ]}
-              onPress={handleReplyToReview}
-              disabled={saving || !replyText.trim() || replyText.trim().length < 2}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color={Colors.white} />
-              ) : (
-                <Text style={styles.modalSubmitText}>
-                  {editingReply ? 'Update Reply' : 'Post Reply'}
+            {/* Review Preview - FIXED: Added fallbacks for undefined values */}
+            {selectedReview && (
+              <View style={styles.previewContainer}>
+                <View style={styles.previewRating}>
+                  {renderStars(selectedReview?.rating || 0, 12)}
+                </View>
+                <Text style={styles.previewComment}>
+                  "{selectedReview?.comment || 'No comment provided'}"
                 </Text>
-              )}
-            </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Reply Input */}
+            <TextInput
+              style={styles.replyInput}
+              value={replyText}
+              onChangeText={setReplyText}
+              placeholder="Write your reply..."
+              placeholderTextColor={DarkGreenTheme.textMuted}
+              multiline
+              numberOfLines={4}
+              autoFocus
+            />
+
+            {/* Actions */}
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                style={styles.cancelButton}
+                onPress={() => {
+                  setShowReplyModal(false);
+                  setReplyText('');
+                  setReplyingTo(null);
+                  setEditingReply(false);
+                  setSelectedReview(null);
+                }}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[
+                  styles.submitButton,
+                  (!replyText?.trim() || replyText.length < 2) && styles.submitDisabled
+                ]}
+                onPress={handleReplyToReview}
+                disabled={!replyText?.trim() || replyText.length < 2 || saving}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" color={DarkGreenTheme.background} />
+                ) : (
+                  <Text style={styles.submitText}>
+                    {editingReply ? 'Update' : 'Post'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
+  );
+
+  const renderEmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <View style={styles.emptyIcon}>
+        <Ionicons name="chatbubble-outline" size={48} color={DarkGreenTheme.textMuted} />
+      </View>
+      <Text style={styles.emptyTitle}>No Reviews Yet</Text>
+      <Text style={styles.emptyText}>
+        {filter === 'pending' 
+          ? 'No pending reviews to moderate'
+          : 'Customer reviews will appear here'}
+      </Text>
+    </View>
+  );
+
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <View style={styles.headerTop}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={DarkGreenTheme.primaryLight} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Reviews</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      {/* Filter Chips */}
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterScroll}
+      >
+        <View style={styles.filterContainer}>
+          {filterOptions.map((option) => (
+            <TouchableOpacity
+              key={option.id}
+              style={[
+                styles.filterChip,
+                filter === option.id && styles.filterChipActive
+              ]}
+              onPress={() => {
+                setFilter(option.id);
+                setPage(1);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+            >
+              <Ionicons 
+                name={option.icon} 
+                size={16} 
+                color={filter === option.id ? DarkGreenTheme.background : DarkGreenTheme.textSecondary} 
+              />
+              <Text style={[
+                styles.filterText,
+                filter === option.id && styles.filterTextActive
+              ]}>
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
+    </View>
   );
 
   if (loading && reviews.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+        <StatusBar barStyle="light-content" backgroundColor={DarkGreenTheme.background} />
         {renderHeader()}
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={DarkGreenTheme.primaryLight} />
           <Text style={styles.loadingText}>Loading reviews...</Text>
         </View>
       </SafeAreaView>
@@ -574,54 +563,33 @@ const ReviewsManagement = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+      <StatusBar barStyle="light-content" backgroundColor={DarkGreenTheme.background} />
       
       {renderHeader()}
-      {renderFilterTabs()}
-      
-      <ScrollView 
-        style={styles.scrollView}
+
+      <FlatList
+        data={reviews}
+        renderItem={renderReviewCard}
+        keyExtractor={(item) => item?.id?.toString() || Math.random().toString()}
+        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
+            tintColor={DarkGreenTheme.primaryLight}
+            colors={[DarkGreenTheme.primaryLight]}
           />
         }
-        onScroll={({ nativeEvent }) => {
-          const isCloseToBottom = nativeEvent.layoutMeasurement.height + nativeEvent.contentOffset.y >= 
-            nativeEvent.contentSize.height - 100;
-          if (isCloseToBottom) loadMore();
-        }}
-        scrollEventThrottle={400}
-      >
-        {reviews.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIcon}>
-              <Ionicons name="star-outline" size={48} color={Colors.primary} />
-            </View>
-            <Text style={styles.emptyTitle}>No Reviews Yet</Text>
-            <Text style={styles.emptyText}>
-              {filter === 'pending' 
-                ? 'No pending reviews to moderate'
-                : 'When customers review your business, they\'ll appear here'}
-            </Text>
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.3}
+        ListEmptyComponent={renderEmptyState}
+        ListFooterComponent={hasMore && reviews.length > 0 ? (
+          <View style={styles.footerLoader}>
+            <ActivityIndicator size="small" color={DarkGreenTheme.primaryLight} />
           </View>
-        ) : (
-          <>
-            {reviews.map(renderReviewCard)}
-            {hasMore && (
-              <View style={styles.loadingMore}>
-                <ActivityIndicator size="small" color={Colors.primary} />
-              </View>
-            )}
-          </>
-        )}
-        
-        <View style={styles.bottomPadding} />
-      </ScrollView>
+        ) : null}
+      />
 
       {renderReplyModal()}
     </SafeAreaView>
@@ -631,18 +599,19 @@ const ReviewsManagement = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: DarkGreenTheme.background,
   },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 0 : StatusBar.currentHeight,
-    paddingBottom: Spacing.lg,
+    backgroundColor: DarkGreenTheme.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: DarkGreenTheme.border,
   },
   headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   backButton: {
     width: 40,
@@ -650,196 +619,94 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: DarkGreenTheme.card,
   },
   headerTitle: {
-    ...Typography.h2,
-    color: Colors.white,
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '600',
+    color: DarkGreenTheme.primaryLight,
   },
-  placeholder: {
-    width: 40,
-  },
-  headerStats: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
-  },
-  headerStatItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerStatDivider: {
-    width: 1,
-    backgroundColor: Colors.white + '30',
-    marginHorizontal: Spacing.md,
-  },
-  headerStatValue: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: Colors.white,
-    marginBottom: 4,
-  },
-  headerStars: {
-    flexDirection: 'row',
-    marginBottom: 4,
-  },
-  headerStatLabel: {
-    fontSize: 12,
-    color: Colors.white + '80',
-  },
-  headerStatSubtext: {
-    fontSize: 10,
-    color: Colors.white + '60',
-    marginTop: 2,
+  filterScroll: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
   filterContainer: {
     flexDirection: 'row',
-    backgroundColor: Colors.card,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.cardBorder,
+    gap: 8,
   },
-  filterTab: {
-    flex: 1,
+  filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.sm,
-    marginHorizontal: 4,
-    borderRadius: BorderRadius.round,
     gap: 6,
-  },
-  filterTabActive: {
-    backgroundColor: Colors.primary + '10',
-  },
-  filterTabText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  filterTabTextActive: {
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  filterBadge: {
-    backgroundColor: Colors.cardBorder,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    minWidth: 20,
-    alignItems: 'center',
-  },
-  filterBadgeActive: {
-    backgroundColor: Colors.primary,
-  },
-  filterBadgeText: {
-    fontSize: 10,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
-  filterBadgeTextActive: {
-    color: Colors.white,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing.xl,
-  },
-  loadingText: {
-    marginTop: Spacing.md,
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  loadingMore: {
-    paddingVertical: Spacing.lg,
-    alignItems: 'center',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.xxl,
-    paddingHorizontal: Spacing.xl,
-  },
-  emptyIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.card,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: DarkGreenTheme.card,
     borderWidth: 1,
-    borderColor: Colors.cardBorder,
+    borderColor: DarkGreenTheme.border,
   },
-  emptyTitle: {
-    ...Typography.h3,
-    color: Colors.text,
-    marginBottom: Spacing.sm,
+  filterChipActive: {
+    backgroundColor: DarkGreenTheme.primaryLight,
+    borderColor: DarkGreenTheme.primaryLight,
   },
-  emptyText: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    textAlign: 'center',
+  filterText: {
+    fontSize: 13,
+    color: DarkGreenTheme.textSecondary,
+  },
+  filterTextActive: {
+    color: DarkGreenTheme.background,
+    fontWeight: '600',
+  },
+  listContent: {
+    padding: 16,
+    paddingBottom: 40,
   },
   reviewCard: {
-    backgroundColor: Colors.card,
-    marginHorizontal: Spacing.lg,
-    marginTop: Spacing.md,
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.lg,
+    backgroundColor: DarkGreenTheme.card,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: Colors.cardBorder,
-    ...Shadows.small,
+    borderColor: DarkGreenTheme.border,
   },
-  reviewHeader: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: Spacing.md,
+    marginBottom: 12,
   },
-  reviewUser: {
+  userInfo: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: 12,
     flex: 1,
-    gap: Spacing.md,
   },
-  reviewAvatar: {
+  avatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
   },
-  reviewAvatarPlaceholder: {
+  avatarPlaceholder: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.primary + '20',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  reviewAvatarText: {
-    color: Colors.primary,
-    fontWeight: 'bold',
+  avatarText: {
+    color: DarkGreenTheme.primaryLight,
     fontSize: 18,
+    fontWeight: '700',
   },
-  reviewUserInfo: {
-    flex: 1,
-  },
-  reviewUserName: {
-    ...Typography.body,
-    color: Colors.text,
+  userName: {
+    fontSize: 15,
     fontWeight: '600',
-    marginBottom: 2,
+    color: DarkGreenTheme.primaryLight,
+    marginBottom: 4,
   },
-  reviewMeta: {
+  ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: 8,
   },
   starsContainer: {
     flexDirection: 'row',
@@ -847,179 +714,235 @@ const styles = StyleSheet.create({
   },
   reviewTime: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: DarkGreenTheme.textMuted,
   },
   pendingBadge: {
-    backgroundColor: Colors.warning + '20',
-    paddingHorizontal: Spacing.sm,
+    backgroundColor: DarkGreenTheme.warning + '20',
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
+    borderRadius: 12,
   },
-  pendingBadgeText: {
-    color: Colors.warning,
+  pendingText: {
+    color: DarkGreenTheme.warning,
     fontSize: 11,
     fontWeight: '600',
   },
-  reviewComment: {
-    ...Typography.body,
-    color: Colors.text,
+  comment: {
     fontSize: 14,
+    color: DarkGreenTheme.text,
     lineHeight: 20,
-    marginBottom: Spacing.md,
+    marginBottom: 12,
   },
   replyContainer: {
-    marginTop: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    overflow: 'hidden',
-  },
-  replyGradient: {
-    padding: Spacing.md,
+    backgroundColor: DarkGreenTheme.background,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
   },
   replyHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
+    marginBottom: 8,
   },
-  replyUser: {
+  replyTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
   replyTitle: {
-    fontSize: 13,
-    color: Colors.primary,
-    fontWeight: '600',
+    fontSize: 12,
+    color: DarkGreenTheme.primaryLight,
+    fontWeight: '500',
+  },
+  replyTime: {
+    fontSize: 10,
+    color: DarkGreenTheme.textMuted,
   },
   replyActions: {
     flexDirection: 'row',
-    gap: Spacing.md,
+    gap: 12,
   },
-  replyActionButton: {
-    padding: 4,
+  replyAction: {
+    padding: 2,
   },
   replyText: {
     fontSize: 13,
-    color: Colors.text,
+    color: DarkGreenTheme.textSecondary,
     lineHeight: 18,
-    marginBottom: Spacing.xs,
-  },
-  replyDate: {
-    fontSize: 10,
-    color: Colors.textSecondary,
   },
   replyButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
-    marginTop: Spacing.sm,
-    paddingVertical: Spacing.sm,
+    gap: 6,
+    marginTop: 8,
+    paddingVertical: 8,
+    alignSelf: 'flex-start',
   },
   replyButtonText: {
     fontSize: 13,
-    color: Colors.primary,
+    color: DarkGreenTheme.primaryLight,
     fontWeight: '500',
   },
-  moderationContainer: {
+  moderationRow: {
     flexDirection: 'row',
-    gap: Spacing.md,
-    marginTop: Spacing.md,
-    paddingTop: Spacing.md,
+    gap: 12,
+    marginTop: 16,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: Colors.cardBorder,
+    borderTopColor: DarkGreenTheme.border,
   },
-  moderationButton: {
+  approveButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.md,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: DarkGreenTheme.success + '20',
   },
-  approveButton: {
-    backgroundColor: Colors.success + '10',
-  },
-  approveButtonText: {
-    color: Colors.success,
+  approveText: {
+    color: DarkGreenTheme.primaryLight,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   rejectButton: {
-    backgroundColor: Colors.error + '10',
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: DarkGreenTheme.error + '20',
   },
-  rejectButtonText: {
-    color: Colors.error,
+  rejectText: {
+    color: DarkGreenTheme.error,
     fontSize: 13,
+    fontWeight: '500',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: DarkGreenTheme.textSecondary,
+  },
+  footerLoader: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 32,
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: DarkGreenTheme.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
     fontWeight: '600',
+    color: DarkGreenTheme.primaryLight,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: DarkGreenTheme.textMuted,
+    textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    backgroundColor: Colors.background,
-    borderTopLeftRadius: BorderRadius.xl,
-    borderTopRightRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    minHeight: 300,
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: DarkGreenTheme.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '80%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.lg,
+    marginBottom: 20,
   },
   modalTitle: {
-    ...Typography.h3,
-    color: Colors.text,
+    fontSize: 18,
+    fontWeight: '600',
+    color: DarkGreenTheme.primaryLight,
+  },
+  previewContainer: {
+    backgroundColor: DarkGreenTheme.card,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  previewRating: {
+    marginBottom: 8,
+  },
+  previewComment: {
+    fontSize: 13,
+    color: DarkGreenTheme.textSecondary,
+    fontStyle: 'italic',
   },
   replyInput: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.cardBorder,
-    color: Colors.text,
+    backgroundColor: DarkGreenTheme.card,
+    borderRadius: 12,
+    padding: 16,
+    color: DarkGreenTheme.text,
     fontSize: 14,
-    minHeight: 120,
+    minHeight: 100,
     textAlignVertical: 'top',
-    marginBottom: Spacing.lg,
+    marginBottom: 20,
   },
-  modalFooter: {
+  modalActions: {
     flexDirection: 'row',
-    gap: Spacing.md,
+    gap: 12,
   },
-  modalCancelButton: {
+  cancelButton: {
     flex: 1,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.card,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: DarkGreenTheme.card,
     alignItems: 'center',
   },
-  modalCancelText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontWeight: '600',
+  cancelText: {
+    color: DarkGreenTheme.textSecondary,
+    fontSize: 15,
+    fontWeight: '500',
   },
-  modalSubmitButton: {
+  submitButton: {
     flex: 1,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: DarkGreenTheme.primaryLight,
     alignItems: 'center',
   },
-  modalSubmitDisabled: {
+  submitDisabled: {
     opacity: 0.5,
   },
-  modalSubmitText: {
-    fontSize: 14,
-    color: Colors.white,
+  submitText: {
+    color: DarkGreenTheme.background,
+    fontSize: 15,
     fontWeight: '600',
-  },
-  bottomPadding: {
-    height: 100,
   },
 });
 

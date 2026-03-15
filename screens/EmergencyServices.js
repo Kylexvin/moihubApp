@@ -201,9 +201,35 @@ const EmergencyServices = () => {
   };
 
   // Handle call button press
-  const handleCallPress = (phoneNumber, title) => {
-    checkPhoneAvailability(phoneNumber, title);
-  };
+const handleCallPress = (phoneNumber, title) => {
+  Alert.alert(
+    `📞 Emergency Call`,
+    `Call ${title} at ${phoneNumber}?`,
+    [
+      { text: "Cancel", style: "cancel" },
+      { 
+        text: "Call Now", 
+        onPress: () => {
+          const cleanNumber = phoneNumber.replace(/\s+/g, '');
+          const phoneUrl = `tel:${cleanNumber}`;
+          
+          // Just like HomeScreen - directly open the URL
+          Linking.openURL(phoneUrl).catch((err) => {
+            console.error('Phone call error:', err);
+            Alert.alert(
+              'Cannot Make Call',
+              'Unable to open phone dialer. Would you like to copy the number instead?',
+              [
+                { text: 'Copy Number', onPress: () => copyToClipboard(phoneNumber) },
+                { text: 'Cancel', style: 'cancel' }
+              ]
+            );
+          });
+        }
+      }
+    ]
+  );
+};
 
   // Handle long press to copy
   const handleLongPress = (phoneNumber, title) => {

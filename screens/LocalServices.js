@@ -128,19 +128,24 @@ const Localservices = ({ navigation }) => {
 
   // ============== IMPROVED AI CHAT FUNCTIONS ==============
   
-  const handleCallProvider = async (phoneNumber) => {
-    try {
-      const url = `tel:${phoneNumber}`;
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      } else {
-        Alert.alert('Error', 'Cannot make calls on this device');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to make call');
-    }
-  };
+const handleCallProvider = (phoneNumber) => {
+  if (!phoneNumber) {
+    Alert.alert('No Phone', 'This provider has no phone number');
+    return;
+  }
+  
+  // Format the phone number
+  const cleanNumber = phoneNumber.replace(/\s+/g, '');
+  const formattedNumber = cleanNumber.startsWith('+') 
+    ? cleanNumber 
+    : `+${cleanNumber}`;
+  
+  // Directly open URL without canOpenURL check
+  Linking.openURL(`tel:${formattedNumber}`).catch(err => {
+    console.log('Failed to open phone dialer:', err);
+    Alert.alert('Error', 'Could not make phone call');
+  });
+};
 
 
 
