@@ -7,6 +7,7 @@ import ShopProductsScreen from '../screens/eshop/ShopProductsScreen';
 import ProductDetailScreen from '../screens/eshop/ProductDetailScreen';
 import CartScreen from '../screens/eshop/CartScreen';
 import OrdersScreen from '../screens/eshop/OrdersScreen';
+import EshopAIScreen from '../screens/eshop/EshopAIScreen';
 import { useAuth } from '../context/AuthContext';
 
 const Stack = createStackNavigator();
@@ -75,16 +76,17 @@ const EshopNavigator = () => {
           headerBackTitleVisible: false,
         }}
       />
+      <Stack.Screen name="EshopAI" component={EshopAIScreen} options={{
+          
+          headerShown: false,
+          headerBackTitleVisible: false,
+        }} />
       <Stack.Screen
         name="Orders"
         component={OrdersScreen}
         options={{
-          headerTitle: currentUser?.username
-            ? `📋 ${currentUser.username}'s Orders`
-            : '📋 My Orders',
-          headerStyle: {
-            backgroundColor: '#10b981',
-          },
+         
+          headerShown: false,
           headerBackTitleVisible: false,
         }}
       />

@@ -374,6 +374,22 @@ export const AuthProvider = ({ children }) => {
     await performLogout();
   };
 
+  // Add a function to update user data
+  const updateUser = async (updatedUserData) => {
+    try {
+      // Update the current user state
+      setCurrentUser(updatedUserData);
+      
+      // Update AsyncStorage
+      await AsyncStorage.setItem('user', JSON.stringify(updatedUserData));
+      
+      return true;
+    } catch (error) {
+      console.error('Error updating user:', error);
+      return false;
+    }
+  };
+
   const value = {
     currentUser,
     token,
@@ -386,6 +402,8 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated,
     setIsAuthenticated,
     setError,
+    setCurrentUser,  // Add this line to expose setCurrentUser
+    updateUser,      // Optional: add a dedicated update function
     isTokenExpired: () => isTokenExpired(token),
     getTimeUntilExpiry: () => getTimeUntilExpiry(token),
   };

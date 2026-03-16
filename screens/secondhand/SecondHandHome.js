@@ -17,12 +17,33 @@ import {
   Platform
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import api from '../../utils/api';
-import Theme, { Colors, Components } from '../theme/Theme';
 
 const { width } = Dimensions.get('window');
 const cardWidth = (width - 45) / 2;
+
+// Dark Warm Amber Theme (matching MarketplaceDashboard)
+const MarketplaceColors = {
+  primary: '#03604d',      
+  primaryDark: '#0e582a',   // Dark Amber
+  primaryLight: '#0b7a0b',  // Light Amber
+  secondary: '#10B981',     // Teal (for success/balance)
+  accent: '#8B5CF6',        // Purple (for highlights)
+  background: '#0F0F0F',    // Near Black
+  surface: '#1A1A1A',       // Dark Surface
+  card: '#242424',          // Card Background
+  text: '#FFFFFF',          // White
+  textSecondary: '#9CA3AF', // Gray
+  textMuted: '#6B7280',     // Dark Gray
+  border: '#2D2D2D',        // Border
+  success: '#10B981',
+  warning: '#F59E0B',
+  error: '#EF4444',
+  whatsapp: '#25D366',
+};
 
 const SecondHandHome = () => {
   const navigation = useNavigation();
@@ -151,13 +172,9 @@ const SecondHandHome = () => {
       return;
     }
 
-    // Clean phone number
     const cleanNumber = phoneNumber.replace(/\D/g, '');
-    
-    // Format for WhatsApp
     const whatsappNumber = cleanNumber.startsWith('0') ? `254${cleanNumber.substring(1)}` : cleanNumber;
     
-    // Create message
     const defaultMessage = activeTab === 'sellers' 
       ? `Hello! I saw your product on Marketplace and I'm interested.`
       : `Hello! I saw your wanted post on Marketplace and I might have what you're looking for.`;
@@ -171,7 +188,6 @@ const SecondHandHome = () => {
       if (supported) {
         await Linking.openURL(whatsappUrl);
       } else {
-        // Fallback to web version
         const webUrl = `https://wa.me/${whatsappNumber}?text=${encodedMessage}`;
         await Linking.openURL(webUrl);
       }
@@ -200,11 +216,11 @@ const SecondHandHome = () => {
   // Get urgency color utility
   const getUrgencyColor = (urgency) => {
     switch (urgency?.toLowerCase()) {
-      case 'urgent': return Colors.danger;
-      case 'high': return Colors.warning;
-      case 'medium': return Colors.secondary;
-      case 'low': return Colors.success;
-      default: return Colors.textSecondary;
+      case 'urgent': return MarketplaceColors.error;
+      case 'high': return MarketplaceColors.warning;
+      case 'medium': return MarketplaceColors.accent;
+      case 'low': return MarketplaceColors.success;
+      default: return MarketplaceColors.textSecondary;
     }
   };
 
@@ -222,7 +238,6 @@ const SecondHandHome = () => {
 
     const onTextLayout = (event) => {
       const { lines } = event.nativeEvent;
-      // Show "Show More" button if text exceeds maxLines
       setShowButton(lines.length > maxLines);
     };
 
@@ -273,17 +288,20 @@ const SecondHandHome = () => {
             />
           ) : (
             <View style={styles.placeholderImage}>
-              <Text style={styles.placeholderText}>📷</Text>
+              <Ionicons name="image-outline" size={32} color={MarketplaceColors.textMuted} />
               <Text style={styles.placeholderSubtext}>No Image</Text>
             </View>
           )}
           
           {/* Price Badge Overlay */}
-          <View style={styles.priceBadge}>
+          <LinearGradient
+            colors={[MarketplaceColors.primary, MarketplaceColors.primaryDark]}
+            style={styles.priceBadge}
+          >
             <Text style={styles.priceText}>
               Ksh {price?.toLocaleString()}
             </Text>
-          </View>
+          </LinearGradient>
         </View>
 
         {/* Product Info */}
@@ -328,7 +346,8 @@ const SecondHandHome = () => {
               style={styles.whatsappButton}
               onPress={() => openWhatsApp(sellerWhatsApp || sellerId?.phone)}
             >
-              <Text style={styles.whatsappButtonText}>💬 WhatsApp</Text>
+              <Ionicons name="logo-whatsapp" size={12} color="#FFFFFF" />
+              <Text style={styles.whatsappButtonText}>WhatsApp</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -405,7 +424,8 @@ const SecondHandHome = () => {
             style={styles.whatsappButton}
             onPress={() => openWhatsApp(item.buyerId?.phone)}
           >
-            <Text style={styles.whatsappButtonText}>💬 WhatsApp</Text>
+            <Ionicons name="logo-whatsapp" size={12} color="#FFFFFF" />
+            <Text style={styles.whatsappButtonText}>WhatsApp</Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -415,15 +435,19 @@ const SecondHandHome = () => {
   // Render filters
   const renderFilters = () => (
     <View style={styles.filtersContainer}>
+      <LinearGradient
+        colors={[MarketplaceColors.primary + '10', 'transparent']}
+        style={styles.filtersGradient}
+      />
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Category Filter */}
         <Text style={styles.filterLabel}>Category</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
           <TouchableOpacity
             onPress={() => setFilters(prev => ({ ...prev, category: '' }))}
-            style={[Components.chip, !filters.category && Components.chipActive]}
+            style={[styles.filterChip, !filters.category && styles.filterChipActive]}
           >
-            <Text style={[Components.chipText, !filters.category && Components.chipTextActive]}>
+            <Text style={[styles.filterChipText, !filters.category && styles.filterChipTextActive]}>
               All
             </Text>
           </TouchableOpacity>
@@ -431,9 +455,9 @@ const SecondHandHome = () => {
             <TouchableOpacity
               key={cat}
               onPress={() => setFilters(prev => ({ ...prev, category: cat }))}
-              style={[Components.chip, filters.category === cat && Components.chipActive]}
+              style={[styles.filterChip, filters.category === cat && styles.filterChipActive]}
             >
-              <Text style={[Components.chipText, filters.category === cat && Components.chipTextActive]}>
+              <Text style={[styles.filterChipText, filters.category === cat && styles.filterChipTextActive]}>
                 {cat}
               </Text>
             </TouchableOpacity>
@@ -445,29 +469,33 @@ const SecondHandHome = () => {
           {activeTab === 'buyers' ? 'Budget Range' : 'Price Range'}
         </Text>
         <View style={styles.priceRow}>
-          <TextInput
-            placeholder="Min" 
-            placeholderTextColor={Colors.textSecondary}
-            value={activeTab === 'buyers' ? filters.minBudget : filters.minPrice}
-            onChangeText={(text) => setFilters(prev => ({ 
-              ...prev, 
-              [activeTab === 'buyers' ? 'minBudget' : 'minPrice']: text 
-            }))}
-            style={styles.priceInput}
-            keyboardType="numeric"
-          />
+          <View style={styles.priceInputContainer}>
+            <TextInput
+              placeholder="Min" 
+              placeholderTextColor={MarketplaceColors.textMuted}
+              value={activeTab === 'buyers' ? filters.minBudget : filters.minPrice}
+              onChangeText={(text) => setFilters(prev => ({ 
+                ...prev, 
+                [activeTab === 'buyers' ? 'minBudget' : 'minPrice']: text 
+              }))}
+              style={styles.priceInput}
+              keyboardType="numeric"
+            />
+          </View>
           <Text style={styles.priceSeparator}>to</Text>
-          <TextInput
-            placeholder="Max" 
-            placeholderTextColor={Colors.textSecondary}
-            value={activeTab === 'buyers' ? filters.maxBudget : filters.maxPrice}
-            onChangeText={(text) => setFilters(prev => ({ 
-              ...prev, 
-              [activeTab === 'buyers' ? 'maxBudget' : 'maxPrice']: text 
-            }))}
-            style={styles.priceInput}
-            keyboardType="numeric"
-          />
+          <View style={styles.priceInputContainer}>
+            <TextInput
+              placeholder="Max" 
+              placeholderTextColor={MarketplaceColors.textMuted}
+              value={activeTab === 'buyers' ? filters.maxBudget : filters.maxPrice}
+              onChangeText={(text) => setFilters(prev => ({ 
+                ...prev, 
+                [activeTab === 'buyers' ? 'maxBudget' : 'maxPrice']: text 
+              }))}
+              style={styles.priceInput}
+              keyboardType="numeric"
+            />
+          </View>
         </View>
 
         {/* Urgency Filter (for buyers) */}
@@ -477,9 +505,9 @@ const SecondHandHome = () => {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
               <TouchableOpacity
                 onPress={() => setFilters(prev => ({ ...prev, urgency: '' }))}
-                style={[Components.chip, !filters.urgency && Components.chipActive]}
+                style={[styles.filterChip, !filters.urgency && styles.filterChipActive]}
               >
-                <Text style={[Components.chipText, !filters.urgency && Components.chipTextActive]}>
+                <Text style={[styles.filterChipText, !filters.urgency && styles.filterChipTextActive]}>
                   All
                 </Text>
               </TouchableOpacity>
@@ -487,9 +515,9 @@ const SecondHandHome = () => {
                 <TouchableOpacity
                   key={level}
                   onPress={() => setFilters(prev => ({ ...prev, urgency: level }))}
-                  style={[Components.chip, filters.urgency === level && Components.chipActive]}
+                  style={[styles.filterChip, filters.urgency === level && styles.filterChipActive]}
                 >
-                  <Text style={[Components.chipText, filters.urgency === level && Components.chipTextActive]}>
+                  <Text style={[styles.filterChipText, filters.urgency === level && styles.filterChipTextActive]}>
                     {level.charAt(0).toUpperCase() + level.slice(1)}
                   </Text>
                 </TouchableOpacity>
@@ -505,9 +533,9 @@ const SecondHandHome = () => {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
               <TouchableOpacity
                 onPress={() => setFilters(prev => ({ ...prev, condition: '' }))}
-                style={[Components.chip, !filters.condition && Components.chipActive]}
+                style={[styles.filterChip, !filters.condition && styles.filterChipActive]}
               >
-                <Text style={[Components.chipText, !filters.condition && Components.chipTextActive]}>
+                <Text style={[styles.filterChipText, !filters.condition && styles.filterChipTextActive]}>
                   All
                 </Text>
               </TouchableOpacity>
@@ -515,9 +543,9 @@ const SecondHandHome = () => {
                 <TouchableOpacity
                   key={condition}
                   onPress={() => setFilters(prev => ({ ...prev, condition }))}
-                  style={[Components.chip, filters.condition === condition && Components.chipActive]}
+                  style={[styles.filterChip, filters.condition === condition && styles.filterChipActive]}
                 >
-                  <Text style={[Components.chipText, filters.condition === condition && Components.chipTextActive]}>
+                  <Text style={[styles.filterChipText, filters.condition === condition && styles.filterChipTextActive]}>
                     {condition}
                   </Text>
                 </TouchableOpacity>
@@ -528,16 +556,20 @@ const SecondHandHome = () => {
 
         {/* Location Filter */}
         <Text style={styles.filterLabel}>Location</Text>
-        <TextInput
-          placeholder="Enter location"
-          placeholderTextColor={Colors.textSecondary}
-          value={filters.location}
-          onChangeText={(text) => setFilters(prev => ({ ...prev, location: text }))}
-          style={styles.locationInput}
-        />
+        <View style={styles.locationInputContainer}>
+          <Ionicons name="location-outline" size={16} color={MarketplaceColors.primary} />
+          <TextInput
+            placeholder="Enter location"
+            placeholderTextColor={MarketplaceColors.textMuted}
+            value={filters.location}
+            onChangeText={(text) => setFilters(prev => ({ ...prev, location: text }))}
+            style={styles.locationInput}
+          />
+        </View>
 
         {/* Clear Filters */}
         <TouchableOpacity onPress={clearFilters} style={styles.clearButton}>
+          <Ionicons name="close-circle" size={16} color={MarketplaceColors.text} />
           <Text style={styles.clearButtonText}>Clear All Filters</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -597,6 +629,7 @@ const SecondHandHome = () => {
   // Render empty state
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
+      <Ionicons name="basket-outline" size={64} color={MarketplaceColors.textMuted} />
       <Text style={styles.emptyTitle}>
         {activeTab === 'sellers' ? 'No products found' : 'No requests found'}
       </Text>
@@ -609,33 +642,59 @@ const SecondHandHome = () => {
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Marketplace</Text>
-        <TouchableOpacity
-          onPress={() => navigation.navigate('SecondHandStack', { screen: 'MarketplaceDashboard' })}
-          style={Components.buttonPrimary}
-        >
-          <Text style={Components.buttonTextPrimary}>Post Item ➕</Text>
-        </TouchableOpacity>
-      </View>
+      <LinearGradient
+        colors={[MarketplaceColors.primary, MarketplaceColors.primaryDark]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.headerGreeting}>Welcome back!</Text>
+            <Text style={styles.headerTitle}>Marketplace</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('SecondHandStack', { screen: 'MarketplaceDashboard' })}
+            style={styles.createButton}
+          >
+            <LinearGradient
+              colors={['rgba(255, 255, 255, 0.2)', 'rgba(255, 255, 255, 0.1)']}
+              style={styles.createButtonGradient}
+            >
+              <Ionicons name="add" size={20} color="#FFFFFF" />
+              <Text style={styles.createButtonText}>Post</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Text style={styles.searchIcon}>🔍</Text>
+          <Ionicons name="search" size={18} color={MarketplaceColors.primary} />
           <TextInput
             placeholder="Search products..."
-            placeholderTextColor={Colors.textSecondary}
+            placeholderTextColor={MarketplaceColors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
             style={styles.searchInput}
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={16} color={MarketplaceColors.textMuted} />
+            </TouchableOpacity>
+          )}
         </View>
         <TouchableOpacity
           onPress={() => setShowFilters(!showFilters)}
-          style={[Components.buttonSecondary, showFilters && { backgroundColor: Colors.primary }]}
+          style={[styles.filterButton, showFilters && styles.filterButtonActive]}
         >
-          <Text style={[Components.buttonTextSecondary, showFilters && { color: Colors.black }]}>
+          <Ionicons 
+            name="options-outline" 
+            size={18} 
+            color={showFilters ? MarketplaceColors.background : MarketplaceColors.primary} 
+          />
+          <Text style={[styles.filterButtonText, showFilters && styles.filterButtonTextActive]}>
             Filter
           </Text>
         </TouchableOpacity>
@@ -664,27 +723,27 @@ const SecondHandHome = () => {
       {/* Filters Panel */}
       {showFilters && renderFilters()}
 
-      {/* Content - Using conditional rendering instead of dynamic numColumns */}
+      {/* Content */}
       <View style={styles.content}>
         {loading && !refreshing ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.primary} />
+            <ActivityIndicator size="large" color={MarketplaceColors.primary} />
             <Text style={styles.loadingText}>Loading...</Text>
           </View>
         ) : activeTab === 'sellers' ? (
           <FlatList
-            key="sellers-list" // Unique key for sellers list
+            key="sellers-list"
             data={products}
             keyExtractor={(item) => item._id}
             renderItem={renderProduct}
-            numColumns={2} // Fixed 2 columns for products
+            numColumns={2}
             columnWrapperStyle={styles.columnWrapper}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                colors={[Colors.primary]}
-                tintColor={Colors.primary}
+                colors={[MarketplaceColors.primary]}
+                tintColor={MarketplaceColors.primary}
               />
             }
             onEndReached={loadMore}
@@ -695,17 +754,17 @@ const SecondHandHome = () => {
           />
         ) : (
           <FlatList
-            key="buyers-list" // Unique key for buyers list
+            key="buyers-list"
             data={wantedPosts}
             keyExtractor={(item) => item._id}
             renderItem={renderWanted}
-            numColumns={1} // Fixed 1 column for wanted posts
+            numColumns={1}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                colors={[Colors.primary]}
-                tintColor={Colors.primary}
+                colors={[MarketplaceColors.primary]}
+                tintColor={MarketplaceColors.primary}
               />
             }
             onEndReached={loadMore}
@@ -723,402 +782,455 @@ const SecondHandHome = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: MarketplaceColors.background,
   },
 
   // Header Styles
   header: {
-    ...Components.headerContainer,
-    backgroundColor: Colors.primaryDark,
+    padding: 20,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
-  
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerGreeting: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    marginBottom: 4,
+  },
   headerTitle: {
-    ...Theme.Typography.h2,
-    color: Colors.white,
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  createButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  createButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  createButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 
   // Search Container Styles
   searchContainer: {
     flexDirection: 'row',
-    paddingHorizontal: Theme.Spacing.lg,
-    paddingVertical: Theme.Spacing.md,
-    backgroundColor: Colors.card,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     alignItems: 'center',
-    gap: Theme.Spacing.sm,
+    gap: 10,
   },
-  
   searchBar: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: Theme.BorderRadius.md,
-    paddingHorizontal: Theme.Spacing.md,
-    paddingVertical: Theme.Spacing.sm,
+    backgroundColor: MarketplaceColors.card,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: MarketplaceColors.border,
+    gap: 8,
   },
-  
-  searchIcon: {
-    fontSize: 18,
-    marginRight: Theme.Spacing.sm,
-    color: Colors.textSecondary,
-  },
-  
   searchInput: {
     flex: 1,
-    fontSize: 16,
-    color: Colors.text,
-    fontWeight: '400',
+    fontSize: 15,
+    color: MarketplaceColors.text,
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: MarketplaceColors.card,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: MarketplaceColors.border,
+    gap: 6,
+  },
+  filterButtonActive: {
+    backgroundColor: MarketplaceColors.primary,
+    borderColor: MarketplaceColors.primary,
+  },
+  filterButtonText: {
+    color: MarketplaceColors.primary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  filterButtonTextActive: {
+    color: MarketplaceColors.background,
   },
 
   // Tab Styles
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: Colors.card,
-    marginHorizontal: Theme.Spacing.lg,
-    marginTop: Theme.Spacing.sm,
-    marginBottom: Theme.Spacing.md,
-    borderRadius: Theme.BorderRadius.md,
-    padding: Theme.Spacing.xs,
+    backgroundColor: MarketplaceColors.card,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 12,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: MarketplaceColors.border,
   },
-  
   tab: {
     flex: 1,
-    paddingVertical: Theme.Spacing.sm,
+    paddingVertical: 10,
     alignItems: 'center',
-    borderRadius: Theme.BorderRadius.sm,
+    borderRadius: 8,
   },
-  
   tabActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: MarketplaceColors.primary,
   },
-  
   tabText: {
-    ...Theme.Typography.body,
-    color: Colors.textSecondary,
+    fontSize: 15,
+    color: MarketplaceColors.textSecondary,
     fontWeight: '600',
   },
-  
   tabTextActive: {
-    color: Colors.black,
+    color: MarketplaceColors.background,
     fontWeight: 'bold',
   },
 
   // Filters Panel Styles
   filtersContainer: {
-    ...Components.card,
-    marginHorizontal: Theme.Spacing.lg,
-    marginBottom: Theme.Spacing.md,
-    maxHeight: 300,
+    backgroundColor: MarketplaceColors.card,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: MarketplaceColors.border,
+    maxHeight: 400,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  
+  filtersGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 4,
+  },
   filterLabel: {
-    ...Theme.Typography.h3,
-    fontSize: 14,
-    marginBottom: Theme.Spacing.sm,
-    marginTop: Theme.Spacing.md,
+    fontSize: 15,
+    fontWeight: '600',
+    color: MarketplaceColors.primary,
+    marginBottom: 8,
+    marginTop: 12,
   },
-  
   filterRow: {
-    marginBottom: Theme.Spacing.xs,
+    marginBottom: 4,
   },
-  
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: MarketplaceColors.surface,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: MarketplaceColors.border,
+  },
+  filterChipActive: {
+    backgroundColor: MarketplaceColors.primary,
+    borderColor: MarketplaceColors.primary,
+  },
+  filterChipText: {
+    fontSize: 13,
+    color: MarketplaceColors.textSecondary,
+    fontWeight: '500',
+  },
+  filterChipTextActive: {
+    color: MarketplaceColors.background,
+    fontWeight: '600',
+  },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Theme.Spacing.sm,
+    marginBottom: 8,
   },
-  
-  priceInput: {
+  priceInputContainer: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: Theme.BorderRadius.sm,
-    paddingHorizontal: Theme.Spacing.sm,
-    paddingVertical: Theme.Spacing.xs,
-    fontSize: 14,
-    color: Colors.text,
+    backgroundColor: MarketplaceColors.surface,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.cardBorder,
+    borderColor: MarketplaceColors.border,
   },
-  
-  priceSeparator: {
-    marginHorizontal: Theme.Spacing.sm,
+  priceInput: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: MarketplaceColors.text,
+  },
+  priceSeparator: {
+    marginHorizontal: 12,
+    fontSize: 14,
+    color: MarketplaceColors.textMuted,
     fontWeight: '500',
   },
-  
+  locationInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: MarketplaceColors.surface,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: MarketplaceColors.border,
+    marginBottom: 8,
+    gap: 8,
+  },
   locationInput: {
-    ...Components.input,
+    flex: 1,
+    paddingVertical: 10,
     fontSize: 14,
-    marginBottom: Theme.Spacing.xs,
+    color: MarketplaceColors.text,
   },
-  
   clearButton: {
-    ...Components.buttonPrimary,
-    marginTop: Theme.Spacing.md,
-    backgroundColor: Colors.danger,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: MarketplaceColors.error,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 16,
+    gap: 8,
   },
-  
   clearButtonText: {
-    ...Components.buttonTextPrimary,
+    color: MarketplaceColors.text,
+    fontSize: 14,
+    fontWeight: '600',
   },
 
   // Content Styles
   content: {
     flex: 1,
   },
-  
   listContainer: {
-    paddingHorizontal: Theme.Spacing.md,
-    paddingBottom: Theme.Spacing.lg,
+    paddingHorizontal: 12,
+    paddingBottom: 20,
   },
-
   columnWrapper: {
     justifyContent: 'space-between',
-    marginBottom: Theme.Spacing.md,
+    marginBottom: 12,
   },
 
-  // Product Card Styles (2-Column Grid)
+  // Product Card Styles
   productCard: {
-    ...Components.card,
     width: cardWidth,
+    backgroundColor: MarketplaceColors.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: MarketplaceColors.border,
+    overflow: 'hidden',
   },
-
   imageContainer: {
     position: 'relative',
     height: 140,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderTopLeftRadius: Theme.BorderRadius.md,
-    borderTopRightRadius: Theme.BorderRadius.md,
-    overflow: 'hidden',
+    backgroundColor: MarketplaceColors.surface,
   },
-
   productImage: {
     width: '100%',
     height: '100%',
   },
-
   placeholderImage: {
     width: '100%',
     height: '100%',
-    backgroundColor: 'rgba(255,255,255,0.03)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-
-  placeholderText: {
-    fontSize: 32,
-    color: Colors.textSecondary,
-    marginBottom: 4,
-  },
-
   placeholderSubtext: {
     fontSize: 10,
-    color: Colors.textTertiary,
+    color: MarketplaceColors.textMuted,
     fontWeight: '500',
+    marginTop: 4,
   },
-
   priceBadge: {
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 8,
   },
-
   priceText: {
-    color: Colors.black,
-    fontSize: 10,
+    color: MarketplaceColors.background,
+    fontSize: 11,
     fontWeight: 'bold',
   },
-
   productInfo: {
-    padding: Theme.Spacing.sm,
+    padding: 10,
   },
-
   productName: {
-    ...Theme.Typography.bodySmall,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: 'bold',
-    marginBottom: 4,
+    color: MarketplaceColors.text,
+    marginBottom: 2,
     lineHeight: 16,
   },
-
   sellerUsername: {
     fontSize: 10,
-    color: Colors.secondary,
+    color: MarketplaceColors.secondary,
     fontWeight: '600',
     marginBottom: 4,
   },
-
   categoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 4,
   },
-
   category: {
     fontSize: 10,
-    color: Colors.textSecondary,
+    color: MarketplaceColors.textSecondary,
     fontWeight: '500',
     flex: 1,
   },
-
   conditionBadge: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: MarketplaceColors.surface,
     paddingHorizontal: 4,
     paddingVertical: 1,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: Colors.cardBorder,
+    borderColor: MarketplaceColors.border,
   },
-
   conditionText: {
     fontSize: 8,
-    color: Colors.textTertiary,
+    color: MarketplaceColors.textMuted,
     fontWeight: '600',
   },
-
   location: {
     fontSize: 9,
-    color: Colors.success,
+    color: MarketplaceColors.success,
     marginBottom: 6,
     fontWeight: '500',
   },
-
   productFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 2,
+    marginTop: 4,
   },
-
   timeAgo: {
     fontSize: 9,
-    color: Colors.textTertiary,
+    color: MarketplaceColors.textMuted,
     flex: 1,
   },
-
-  // WhatsApp Button Styles
   whatsappButton: {
-    backgroundColor: '#25D366',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: MarketplaceColors.whatsapp,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    alignItems: 'center',
+    gap: 4,
   },
-
   whatsappButtonText: {
-    color: Colors.white,
-    fontSize: 10,
+    color: '#FFFFFF',
+    fontSize: 9,
     fontWeight: 'bold',
   },
 
-  // Wanted Card Styles (Full Width)
+  // Wanted Card Styles
   wantedCard: {
-    ...Components.card,
-    marginBottom: Theme.Spacing.md,
+    backgroundColor: MarketplaceColors.card,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: MarketplaceColors.border,
     borderLeftWidth: 4,
-    borderLeftColor: Colors.primary,
+    borderLeftColor: MarketplaceColors.primary,
   },
-
   wantedHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: Theme.Spacing.sm,
+    marginBottom: 12,
   },
-
   wantedTitle: {
-    ...Theme.Typography.h3,
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: MarketplaceColors.text,
     flex: 1,
-    marginRight: Theme.Spacing.xs,
+    marginRight: 8,
     lineHeight: 18,
   },
-
   urgencyBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 8,
     alignSelf: 'flex-start',
   },
-
   urgencyText: {
     fontSize: 9,
     fontWeight: 'bold',
   },
-
   buyerInfo: {
-    marginBottom: Theme.Spacing.sm,
+    marginBottom: 8,
   },
-
   buyerUsername: {
-    fontSize: 11,
-    color: Colors.success,
+    fontSize: 12,
+    color: MarketplaceColors.success,
     fontWeight: '600',
     marginBottom: 2,
   },
-
   budget: {
-    fontSize: 12,
-    color: Colors.primary,
+    fontSize: 13,
+    color: MarketplaceColors.primary,
     fontWeight: 'bold',
     marginBottom: 6,
   },
-
   wantedCategory: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: MarketplaceColors.textSecondary,
     fontWeight: '500',
     marginBottom: 6,
   },
-
   wantedLocation: {
-    fontSize: 10,
-    color: Colors.success,
-    fontWeight: '500',
-    marginBottom: Theme.Spacing.sm,
-  },
-
-  // Description Styles
-  descriptionContainer: {
-    marginBottom: Theme.Spacing.sm,
-  },
-
-  description: {
     fontSize: 11,
-    color: Colors.text,
+    color: MarketplaceColors.success,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  descriptionContainer: {
+    marginBottom: 12,
+  },
+  description: {
+    fontSize: 12,
+    color: MarketplaceColors.text,
     lineHeight: 16,
   },
-
   showMoreButton: {
     marginTop: 2,
     alignSelf: 'flex-start',
   },
-
   showMoreText: {
-    fontSize: 10,
-    color: Colors.primary,
+    fontSize: 11,
+    color: MarketplaceColors.primary,
     fontWeight: '600',
   },
-
   wantedFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: Theme.Spacing.xs,
-    paddingTop: Theme.Spacing.xs,
+    marginTop: 8,
+    paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: Colors.cardBorder,
+    borderTopColor: MarketplaceColors.border,
   },
-
   wantedTimeAgo: {
-    fontSize: 9,
-    color: Colors.textTertiary,
+    fontSize: 10,
+    color: MarketplaceColors.textMuted,
     flex: 1,
   },
 
@@ -1127,30 +1239,28 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: Theme.Spacing.xl,
+    paddingVertical: 40,
   },
-  
   loadingText: {
-    ...Theme.Typography.body,
-    color: Colors.textSecondary,
-    marginTop: Theme.Spacing.sm,
+    fontSize: 14,
+    color: MarketplaceColors.textSecondary,
+    marginTop: 12,
   },
-  
   emptyContainer: {
     alignItems: 'center',
-    paddingVertical: Theme.Spacing.xl,
-    paddingHorizontal: Theme.Spacing.xl,
+    paddingVertical: 60,
+    paddingHorizontal: 32,
   },
-  
   emptyTitle: {
-    ...Theme.Typography.h3,
-    marginBottom: Theme.Spacing.sm,
-    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: MarketplaceColors.text,
+    marginTop: 16,
+    marginBottom: 8,
   },
-  
   emptySubtitle: {
-    ...Theme.Typography.body,
-    color: Colors.textSecondary,
+    fontSize: 14,
+    color: MarketplaceColors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },

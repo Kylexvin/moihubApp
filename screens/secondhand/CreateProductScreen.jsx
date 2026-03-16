@@ -12,12 +12,32 @@ import {
   Linking,
   Platform
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
 import RNPickerSelect from 'react-native-picker-select';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 
+// Dark Warm Amber Theme
+const MarketplaceColors = {
+  primary: '#03604d',      
+  primaryDark: '#0e582a',   // Dark Amber
+  primaryLight: '#0b7a0b',  // Light Amber
+  secondary: '#10B981',     // Teal (for success/balance)
+  accent: '#8B5CF6',        // Purple (for highlights)
+  background: '#0F0F0F',    // Near Black
+  surface: '#1A1A1A',       // Dark Surface
+  card: '#242424',          // Card Background
+  text: '#FFFFFF',          // White
+  textSecondary: '#9CA3AF', // Gray
+  textMuted: '#6B7280',     // Dark Gray
+  border: '#2D2D2D',        // Border
+  success: '#10B981',
+  warning: '#F59E0B',
+  error: '#EF4444',
+  info: '#3B82F6',
+};
 
 const CATEGORY_OPTIONS = [
   { label: 'Electronics', value: 'Electronics' },
@@ -76,7 +96,6 @@ const CreateProductScreen = ({ navigation }) => {
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: null }));
     }
@@ -111,7 +130,6 @@ const CreateProductScreen = ({ navigation }) => {
       newErrors.image = 'Product image is required';
     }
 
-    // WhatsApp validation (optional but if provided, should be valid)
     if (formData.sellerWhatsApp && !/^\+?[\d\s-()]+$/.test(formData.sellerWhatsApp)) {
       newErrors.sellerWhatsApp = 'Please enter a valid WhatsApp number';
     }
@@ -177,98 +195,97 @@ const CreateProductScreen = ({ navigation }) => {
     );
   };
 
-const contactAdmin = async () => {
-  Alert.alert(
-    'Contact Admin',
-    'If your product is pending approval for too long or has been rejected, you can contact our admin team.',
-    [
-      {
-        text: 'WhatsApp Admin',
-        onPress: async () => {
-          const adminWhatsApp = '+254768610613';
-          const message = 'Hello, I need help with my marketplace product approval.';
+  const contactAdmin = async () => {
+    Alert.alert(
+      'Contact Admin',
+      'If your product is pending approval for too long or has been rejected, you can contact our admin team.',
+      [
+        {
+          text: 'WhatsApp Admin',
+          onPress: async () => {
+            const adminWhatsApp = '+254768610613';
+            const message = 'Hello, I need help with my marketplace product approval.';
 
-          const cleanNumber = adminWhatsApp.replace(/\D/g, '');
-          const formattedNumber = cleanNumber.startsWith('254')
-            ? cleanNumber
-            : `254${cleanNumber.replace(/^0/, '')}`;
-          const encodedMessage = encodeURIComponent(message);
-
-          try {
-            const isInstalled = await Linking.canOpenURL('whatsapp://');
-
-            if (isInstalled) {
-              try {
-                await Linking.openURL(`whatsapp://send?phone=${formattedNumber}&text=${encodedMessage}`);
-                return;
-              } catch (err) {
-                console.warn('Native WhatsApp link failed:', err);
-              }
-            }
+            const cleanNumber = adminWhatsApp.replace(/\D/g, '');
+            const formattedNumber = cleanNumber.startsWith('254')
+              ? cleanNumber
+              : `254${cleanNumber.replace(/^0/, '')}`;
+            const encodedMessage = encodeURIComponent(message);
 
             try {
-              await Linking.openURL(`https://wa.me/${formattedNumber}?text=${encodedMessage}`);
-              return;
-            } catch (err) {
-              console.warn('Fallback web WhatsApp link failed:', err);
+              const isInstalled = await Linking.canOpenURL('whatsapp://');
+
+              if (isInstalled) {
+                try {
+                  await Linking.openURL(`whatsapp://send?phone=${formattedNumber}&text=${encodedMessage}`);
+                  return;
+                } catch (err) {
+                  console.warn('Native WhatsApp link failed:', err);
+                }
+              }
+
+              try {
+                await Linking.openURL(`https://wa.me/${formattedNumber}?text=${encodedMessage}`);
+                return;
+              } catch (err) {
+                console.warn('Fallback web WhatsApp link failed:', err);
+              }
+
+              Alert.alert(
+                'WhatsApp Not Available',
+                'WhatsApp is not available on this device. Choose an option:',
+                [
+                  {
+                    text: 'Copy Number',
+                    onPress: async () => {
+                      try {
+                        await Clipboard.setStringAsync(formattedNumber);
+                        Alert.alert('Copied!', `${formattedNumber} copied to clipboard`);
+                      } catch (copyErr) {
+                        console.error('Copy failed:', copyErr);
+                        Alert.alert('Error', 'Failed to copy number.');
+                      }
+                    }
+                  },
+                  {
+                    text: 'Open in Browser',
+                    onPress: async () => {
+                      try {
+                        await Linking.openURL(`https://wa.me/${formattedNumber}?text=${encodedMessage}`);
+                      } catch (browserErr) {
+                        console.error('Browser fallback failed:', browserErr);
+                        Alert.alert('Error', 'Failed to open in browser.');
+                      }
+                    }
+                  },
+                  { text: 'Cancel', style: 'cancel' }
+                ]
+              );
+
+            } catch (error) {
+              console.error('WhatsApp contact error:', error);
+              Alert.alert('Error', 'Could not initiate WhatsApp contact.');
             }
-
-            // Final fallback
-            Alert.alert(
-              'WhatsApp Not Available',
-              'WhatsApp is not available on this device. Choose an option:',
-              [
-                {
-                  text: 'Copy Number',
-                  onPress: async () => {
-                    try {
-                      await Clipboard.setStringAsync(formattedNumber);
-                      Alert.alert('Copied!', `${formattedNumber} copied to clipboard`);
-                    } catch (copyErr) {
-                      console.error('Copy failed:', copyErr);
-                      Alert.alert('Error', 'Failed to copy number.');
-                    }
-                  }
-                },
-                {
-                  text: 'Open in Browser',
-                  onPress: async () => {
-                    try {
-                      await Linking.openURL(`https://wa.me/${formattedNumber}?text=${encodedMessage}`);
-                    } catch (browserErr) {
-                      console.error('Browser fallback failed:', browserErr);
-                      Alert.alert('Error', 'Failed to open in browser.');
-                    }
-                  }
-                },
-                { text: 'Cancel', style: 'cancel' }
-              ]
-            );
-
-          } catch (error) {
-            console.error('WhatsApp contact error:', error);
-            Alert.alert('Error', 'Could not initiate WhatsApp contact.');
           }
-        }
-      },
-      {
-        text: 'Email Admin',
-        onPress: () => {
-          const email = 'info.moihub@gmail.com';
-          const subject = 'Product Approval Issue';
-          const body = 'Hello,\n\nI need assistance with my marketplace product approval.\n\nThank you.';
-          const url = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        },
+        {
+          text: 'Email Admin',
+          onPress: () => {
+            const email = 'info.moihub@gmail.com';
+            const subject = 'Product Approval Issue';
+            const body = 'Hello,\n\nI need assistance with my marketplace product approval.\n\nThank you.';
+            const url = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
-          Linking.openURL(url).catch(err => {
-            console.error('Failed to open email link:', err);
-            Alert.alert('Error', 'Could not open email client.');
-          });
-        }
-      },
-      { text: 'Cancel', style: 'cancel' }
-    ]
-  );
-};
+            Linking.openURL(url).catch(err => {
+              console.error('Failed to open email link:', err);
+              Alert.alert('Error', 'Could not open email client.');
+            });
+          }
+        },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
 
   const handleSubmit = async () => {
     if (!validateForm()) {
@@ -280,20 +297,17 @@ const contactAdmin = async () => {
       setUploading(true);
       const submitFormData = new FormData();
 
-      // Add all form fields
       Object.keys(formData).forEach(key => {
         if (formData[key] !== '') {
           submitFormData.append(key, formData[key]);
         }
       });
 
-      // Process tags
       if (formData.tags) {
         const tagsArray = formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
         submitFormData.append('tags', JSON.stringify(tagsArray));
       }
 
-      // Add image
       submitFormData.append('image', {
         uri: image.uri,
         name: `product_${Date.now()}.jpg`,
@@ -306,7 +320,7 @@ const contactAdmin = async () => {
 
       Alert.alert(
         'Success!', 
-        'Your product has been submitted for review. It will be visible in the marketplace once approved by our admin team.',
+        'Your product has been submitted for review.',
         [
           { text: 'OK', onPress: () => navigation.goBack() }
         ]
@@ -325,372 +339,467 @@ const contactAdmin = async () => {
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={() => navigation.goBack()}
+    <View style={styles.container}>
+      <LinearGradient
+        colors={[MarketplaceColors.background, MarketplaceColors.surface]}
+        style={StyleSheet.absoluteFill}
+      />
+      
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <LinearGradient
+          colors={[MarketplaceColors.primary, MarketplaceColors.primary]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.header}
         >
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Create New Product</Text>
-        <TouchableOpacity 
-          style={styles.helpButton}
-          onPress={() => setShowApprovalInfo(!showApprovalInfo)}
-        >
-          <Ionicons name="help-circle-outline" size={24} color="#2196F3" />
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity 
+            style={styles.backButton} 
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Create Product</Text>
+          <TouchableOpacity 
+            style={styles.helpButton}
+            onPress={() => setShowApprovalInfo(!showApprovalInfo)}
+          >
+            <Ionicons name="help-circle-outline" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </LinearGradient>
 
-      {showApprovalInfo && (
-        <View style={styles.infoCard}>
-          <Ionicons name="information-circle" size={20} color="#2196F3" />
-          <View style={styles.infoTextContainer}>
-            <Text style={styles.infoTitle}>Product Approval Process</Text>
-            <Text style={styles.infoText}>
-              All products are reviewed by our admin team before being published. This usually takes 24-48 hours.
+        {/* Approval Info Card */}
+        {showApprovalInfo && (
+          <LinearGradient
+            colors={[MarketplaceColors.card, MarketplaceColors.surface]}
+            style={styles.infoCard}
+          >
+            <View style={styles.infoIconContainer}>
+              <Ionicons name="information-circle" size={24} color={MarketplaceColors.primary} />
+            </View>
+            <View style={styles.infoTextContainer}>
+              <Text style={styles.infoTitle}>Product Approval Process</Text>
+              <Text style={styles.infoText}>
+                All products are reviewed by our admin team before being published. This usually takes 24-48 hours.
+              </Text>
+              <TouchableOpacity onPress={contactAdmin}>
+                <Text style={styles.contactAdminText}>Need Help? Contact Admin →</Text>
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+        )}
+
+        <View style={styles.form}>
+          {/* Product Name */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>
+              <Ionicons name="pricetag-outline" size={14} color={MarketplaceColors.primary} /> Product Name *
             </Text>
-            <TouchableOpacity style={styles.contactAdminButton} onPress={contactAdmin}>
-              <Text style={styles.contactAdminText}>Need Help? Contact Admin</Text>
+            <View style={[styles.inputWrapper, errors.name && styles.inputError]}>
+              <TextInput
+                placeholder="Enter product name"
+                placeholderTextColor={MarketplaceColors.textMuted}
+                style={styles.input}
+                value={formData.name}
+                onChangeText={(text) => handleInputChange('name', text)}
+                maxLength={100}
+              />
+            </View>
+            {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+          </View>
+
+          {/* Price & Negotiable Row */}
+          <View style={styles.rowContainer}>
+            <View style={[styles.inputContainer, styles.halfWidth]}>
+              <Text style={styles.label}>
+                <Ionicons name="cash-outline" size={14} color={MarketplaceColors.primary} /> Price (KES) *
+              </Text>
+              <View style={[styles.inputWrapper, errors.price && styles.inputError]}>
+                <TextInput
+                  placeholder="Enter price"
+                  placeholderTextColor={MarketplaceColors.textMuted}
+                  style={styles.input}
+                  value={formData.price}
+                  onChangeText={(text) => handleInputChange('price', text)}
+                  keyboardType="numeric"
+                />
+              </View>
+              {errors.price && <Text style={styles.errorText}>{errors.price}</Text>}
+            </View>
+
+            <TouchableOpacity style={styles.negotiableContainer} onPress={toggleNegotiable}>
+              <Ionicons 
+                name={formData.isNegotiable ? "checkbox" : "square-outline"} 
+                size={24} 
+                color={MarketplaceColors.primary} 
+              />
+              <Text style={styles.negotiableText}>Negotiable</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      )}
 
-      <View style={styles.form}>
-        {/* Product Name */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Product Name *</Text>
-          <TextInput
-            placeholder="Enter product name"
-            placeholderTextColor="#999"
-            style={[styles.input, errors.name && styles.inputError]}
-            value={formData.name}
-            onChangeText={(text) => handleInputChange('name', text)}
-            maxLength={100}
-          />
-          {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
-        </View>
-
-        {/* Price */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Price (KES) *</Text>
-          <TextInput
-            placeholder="Enter price"
-            placeholderTextColor="#999"
-            style={[styles.input, errors.price && styles.inputError]}
-            value={formData.price}
-            onChangeText={(text) => handleInputChange('price', text)}
-            keyboardType="numeric"
-          />
-          {errors.price && <Text style={styles.errorText}>{errors.price}</Text>}
-        </View>
-
-        {/* Negotiable Toggle */}
-        <TouchableOpacity style={styles.toggleContainer} onPress={toggleNegotiable}>
-          <Ionicons 
-            name={formData.isNegotiable ? "checkbox" : "square-outline"} 
-            size={24} 
-            color="#2196F3" 
-          />
-          <Text style={styles.toggleText}>Price is negotiable</Text>
-        </TouchableOpacity>
-
-        {/* Description */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Description *</Text>
-          <TextInput
-            placeholder="Describe your product in detail"
-            placeholderTextColor="#999"
-            style={[styles.textArea, errors.description && styles.inputError]}
-            value={formData.description}
-            onChangeText={(text) => handleInputChange('description', text)}
-            multiline
-            numberOfLines={4}
-            maxLength={500}
-          />
-          <Text style={styles.charCount}>{formData.description.length}/500</Text>
-          {errors.description && <Text style={styles.errorText}>{errors.description}</Text>}
-        </View>
-
-        {/* Category */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Category *</Text>
-          <View style={[styles.pickerContainer, errors.category && styles.inputError]}>
-            <RNPickerSelect
-              onValueChange={(value) => handleInputChange('category', value)}
-              value={formData.category}
-              items={CATEGORY_OPTIONS}
-              placeholder={{ label: 'Select a category', value: null }}
-              style={pickerSelectStyles}
-              Icon={() => <Ionicons name="chevron-down" size={20} color="#666" />}
-            />
+          {/* Description */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>
+              <Ionicons name="document-text-outline" size={14} color={MarketplaceColors.primary} /> Description *
+            </Text>
+            <View style={[styles.inputWrapper, styles.textAreaWrapper, errors.description && styles.inputError]}>
+              <TextInput
+                placeholder="Describe your product in detail"
+                placeholderTextColor={MarketplaceColors.textMuted}
+                style={[styles.input, styles.textArea]}
+                value={formData.description}
+                onChangeText={(text) => handleInputChange('description', text)}
+                multiline
+                numberOfLines={4}
+                maxLength={500}
+                textAlignVertical="top"
+              />
+            </View>
+            <View style={styles.inputFooter}>
+              <Text style={styles.charCount}>{formData.description.length}/500</Text>
+              {errors.description && <Text style={styles.errorText}>{errors.description}</Text>}
+            </View>
           </View>
-          {errors.category && <Text style={styles.errorText}>{errors.category}</Text>}
-        </View>
 
-        {/* Condition */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Condition</Text>
-          <View style={styles.pickerContainer}>
-            <RNPickerSelect
-              onValueChange={(value) => handleInputChange('condition', value)}
-              value={formData.condition}
-              items={CONDITION_OPTIONS}
-              style={pickerSelectStyles}
-              Icon={() => <Ionicons name="chevron-down" size={20} color="#666" />}
-            />
+          {/* Category & Condition Row */}
+          <View style={styles.rowContainer}>
+            <View style={[styles.inputContainer, styles.halfWidth]}>
+              <Text style={styles.label}>
+                <Ionicons name="apps-outline" size={14} color={MarketplaceColors.primary} /> Category *
+              </Text>
+              <View style={[styles.pickerWrapper, errors.category && styles.inputError]}>
+                <RNPickerSelect
+                  onValueChange={(value) => handleInputChange('category', value)}
+                  value={formData.category}
+                  items={CATEGORY_OPTIONS}
+                  placeholder={{ label: 'Select category', value: null }}
+                  style={pickerSelectStyles}
+                  Icon={() => <Ionicons name="chevron-down" size={20} color={MarketplaceColors.primary} />}
+                />
+              </View>
+              {errors.category && <Text style={styles.errorText}>{errors.category}</Text>}
+            </View>
+
+            <View style={[styles.inputContainer, styles.halfWidth]}>
+              <Text style={styles.label}>
+                <Ionicons name="ribbon-outline" size={14} color={MarketplaceColors.primary} /> Condition
+              </Text>
+              <View style={styles.pickerWrapper}>
+                <RNPickerSelect
+                  onValueChange={(value) => handleInputChange('condition', value)}
+                  value={formData.condition}
+                  items={CONDITION_OPTIONS}
+                  style={pickerSelectStyles}
+                  Icon={() => <Ionicons name="chevron-down" size={20} color={MarketplaceColors.primary} />}
+                />
+              </View>
+            </View>
           </View>
-        </View>
 
-        {/* Location */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Location</Text>
-          <TextInput
-            placeholder="Enter your location"
-            placeholderTextColor="#999"
-            style={styles.input}
-            value={formData.location}
-            onChangeText={(text) => handleInputChange('location', text)}
-          />
-        </View>
+          {/* Location & WhatsApp Row */}
+          <View style={styles.rowContainer}>
+            <View style={[styles.inputContainer, styles.halfWidth]}>
+              <Text style={styles.label}>
+                <Ionicons name="location-outline" size={14} color={MarketplaceColors.primary} /> Location
+              </Text>
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  placeholder="Enter your location"
+                  placeholderTextColor={MarketplaceColors.textMuted}
+                  style={styles.input}
+                  value={formData.location}
+                  onChangeText={(text) => handleInputChange('location', text)}
+                />
+              </View>
+            </View>
 
-        {/* WhatsApp */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>WhatsApp Number (Optional)</Text>
-          <TextInput
-            placeholder="Enter WhatsApp number for faster approval"
-            placeholderTextColor="#999"
-            style={[styles.input, errors.sellerWhatsApp && styles.inputError]}
-            value={formData.sellerWhatsApp}
-            onChangeText={(text) => handleInputChange('sellerWhatsApp', text)}
-            keyboardType="phone-pad"
-          />
-          {errors.sellerWhatsApp && <Text style={styles.errorText}>{errors.sellerWhatsApp}</Text>}
-        </View>
+            <View style={[styles.inputContainer, styles.halfWidth]}>
+              <Text style={styles.label}>
+                <Ionicons name="logo-whatsapp" size={14} color={MarketplaceColors.primary} /> WhatsApp
+              </Text>
+              <View style={[styles.inputWrapper, errors.sellerWhatsApp && styles.inputError]}>
+                <TextInput
+                  placeholder="+254..."
+                  placeholderTextColor={MarketplaceColors.textMuted}
+                  style={styles.input}
+                  value={formData.sellerWhatsApp}
+                  onChangeText={(text) => handleInputChange('sellerWhatsApp', text)}
+                  keyboardType="phone-pad"
+                />
+              </View>
+              {errors.sellerWhatsApp && <Text style={styles.errorText}>{errors.sellerWhatsApp}</Text>}
+            </View>
+          </View>
 
-        {/* Tags */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Tags</Text>
-          <TextInput
-            placeholder="Enter tags separated by commas (e.g., smartphone, android, used)"
-            placeholderTextColor="#999"
-            style={styles.input}
-            value={formData.tags}
-            onChangeText={(text) => handleInputChange('tags', text)}
-          />
-          <Text style={styles.helperText}>Tags help buyers find your product easier</Text>
-        </View>
+          {/* Tags */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>
+              <Ionicons name="pricetags-outline" size={14} color={MarketplaceColors.primary} /> Tags
+            </Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                placeholder="Enter tags separated by commas"
+                placeholderTextColor={MarketplaceColors.textMuted}
+                style={styles.input}
+                value={formData.tags}
+                onChangeText={(text) => handleInputChange('tags', text)}
+              />
+            </View>
+            <Text style={styles.helperText}>Tags help buyers find your product easier</Text>
+          </View>
 
-        {/* Image Upload */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Product Image *</Text>
+          {/* Image Upload */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>
+              <Ionicons name="image-outline" size={14} color={MarketplaceColors.primary} /> Product Image *
+            </Text>
+            <TouchableOpacity 
+              style={[styles.imagePicker, errors.image && styles.inputError]} 
+              onPress={showImageOptions}
+            >
+              {image ? (
+                <View style={styles.imageContainer}>
+                  <Image source={{ uri: image.uri }} style={styles.selectedImage} />
+                  <LinearGradient
+                    colors={['rgba(0,0,0,0.7)', 'rgba(0,0,0,0.9)']}
+                    style={styles.imageOverlay}
+                  >
+                    <TouchableOpacity style={styles.changeImageButton} onPress={showImageOptions}>
+                      <Ionicons name="camera" size={16} color="#FFFFFF" />
+                      <Text style={styles.changeImageText}>Change</Text>
+                    </TouchableOpacity>
+                  </LinearGradient>
+                </View>
+              ) : (
+                <View style={styles.imagePlaceholder}>
+                  <View style={styles.placeholderIconContainer}>
+                    <Ionicons name="camera" size={40} color={MarketplaceColors.primary} />
+                  </View>
+                  <Text style={styles.imagePickerText}>Tap to add product image</Text>
+                  <Text style={styles.imagePickerSubtext}>Take photo or choose from gallery</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            {errors.image && <Text style={styles.errorText}>{errors.image}</Text>}
+          </View>
+
+          {/* Submit Button */}
           <TouchableOpacity 
-            style={[styles.imagePicker, errors.image && styles.inputError]} 
-            onPress={showImageOptions}
+            style={[styles.submitButton, uploading && styles.submitButtonDisabled]} 
+            onPress={handleSubmit} 
+            disabled={uploading}
           >
-            {image ? (
-              <View style={styles.imageContainer}>
-                <Image source={{ uri: image.uri }} style={styles.selectedImage} />
-                <TouchableOpacity style={styles.changeImageButton} onPress={showImageOptions}>
-                  <Ionicons name="camera" size={16} color="#fff" />
-                  <Text style={styles.changeImageText}>Change</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.imagePlaceholder}>
-                <Ionicons name="camera" size={40} color="#999" />
-                <Text style={styles.imagePickerText}>Tap to add product image</Text>
-                <Text style={styles.imagePickerSubtext}>Take photo or choose from gallery</Text>
-              </View>
-            )}
+            <LinearGradient
+              colors={[MarketplaceColors.primary, MarketplaceColors.primaryDark]}
+              style={styles.submitButtonGradient}
+            >
+              {uploading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+                  <Text style={styles.submitButtonText}>
+                    Submit Product
+                  </Text>
+                </>
+              )}
+            </LinearGradient>
           </TouchableOpacity>
-          {errors.image && <Text style={styles.errorText}>{errors.image}</Text>}
+
+          {/* Cancel Button */}
+          <TouchableOpacity 
+            style={styles.cancelButton} 
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
         </View>
-
-        {/* Submit Button */}
-        <TouchableOpacity 
-          style={[styles.submitButton, uploading && styles.submitButtonDisabled]} 
-          onPress={handleSubmit} 
-          disabled={uploading}
-        >
-          {uploading ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Ionicons name="checkmark" size={20} color="#fff" />
-          )}
-          <Text style={styles.submitButtonText}>
-            {uploading ? 'Uploading...' : 'Submit Product'}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Cancel Button */}
-        <TouchableOpacity 
-          style={styles.cancelButton} 
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 10,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingBottom: 16,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
   backButton: {
     padding: 8,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20,
   },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
-    flex: 1,
-    textAlign: 'center',
+    color: '#FFFFFF',
   },
   helpButton: {
     padding: 8,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20,
   },
   infoCard: {
     flexDirection: 'row',
-    backgroundColor: '#e3f2fd',
     margin: 16,
     padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: MarketplaceColors.border,
+  },
+  infoIconContainer: {
+    width: 48,
+    height: 48,
     borderRadius: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#2196F3',
+    backgroundColor: MarketplaceColors.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   infoTextContainer: {
     flex: 1,
-    marginLeft: 12,
   },
   infoTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1976d2',
+    color: MarketplaceColors.primary,
     marginBottom: 4,
   },
   infoText: {
-    fontSize: 14,
-    color: '#1565c0',
-    lineHeight: 20,
+    fontSize: 13,
+    color: MarketplaceColors.textSecondary,
+    lineHeight: 18,
     marginBottom: 8,
   },
-  contactAdminButton: {
-    alignSelf: 'flex-start',
-  },
   contactAdminText: {
-    fontSize: 14,
-    color: '#1976d2',
+    fontSize: 13,
+    color: MarketplaceColors.primary,
     fontWeight: '600',
-    textDecorationLine: 'underline',
   },
   form: {
     padding: 20,
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: 16,
+  },
+  rowContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  halfWidth: {
+    flex: 1,
   },
   label: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: MarketplaceColors.text,
     marginBottom: 8,
   },
-  input: {
+  inputWrapper: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: MarketplaceColors.border,
     borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    backgroundColor: '#fff',
-    color: '#333',
+    backgroundColor: MarketplaceColors.surface,
+  },
+  textAreaWrapper: {
+    minHeight: 100,
+  },
+  input: {
+    padding: 14,
+    fontSize: 14,
+    color: MarketplaceColors.text,
   },
   textArea: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    backgroundColor: '#fff',
-    color: '#333',
     minHeight: 100,
     textAlignVertical: 'top',
   },
   inputError: {
-    borderColor: '#f44336',
-    backgroundColor: '#fff5f5',
+    borderColor: MarketplaceColors.error,
+    backgroundColor: MarketplaceColors.error + '10',
+  },
+  inputFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
   },
   errorText: {
-    color: '#f44336',
+    color: MarketplaceColors.error,
     fontSize: 12,
-    marginTop: 4,
+    flex: 1,
+    textAlign: 'right',
   },
   charCount: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'right',
-    marginTop: 4,
+    fontSize: 11,
+    color: MarketplaceColors.textMuted,
   },
   helperText: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: 11,
+    color: MarketplaceColors.textMuted,
     marginTop: 4,
   },
-  pickerContainer: {
+  pickerWrapper: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: MarketplaceColors.border,
     borderRadius: 12,
-    backgroundColor: '#fff',
+    backgroundColor: MarketplaceColors.surface,
   },
-  toggleContainer: {
+  negotiableContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginBottom: 16,
     paddingVertical: 8,
+    width: '40%',
   },
-  toggleText: {
-    fontSize: 16,
-    color: '#333',
-    marginLeft: 12,
+  negotiableText: {
+    fontSize: 14,
+    color: MarketplaceColors.text,
   },
   imagePicker: {
     borderWidth: 2,
-    borderColor: '#ddd',
+    borderColor: MarketplaceColors.border,
     borderStyle: 'dashed',
-    borderRadius: 12,
-    backgroundColor: '#fff',
+    borderRadius: 16,
+    backgroundColor: MarketplaceColors.surface,
     minHeight: 200,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
   imagePlaceholder: {
     alignItems: 'center',
     padding: 20,
   },
+  placeholderIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: MarketplaceColors.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   imagePickerText: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 12,
+    fontSize: 15,
+    color: MarketplaceColors.text,
+    marginTop: 8,
     fontWeight: '500',
   },
   imagePickerSubtext: {
     fontSize: 12,
-    color: '#999',
+    color: MarketplaceColors.textMuted,
     marginTop: 4,
   },
   imageContainer: {
@@ -701,78 +810,83 @@ const styles = StyleSheet.create({
   selectedImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 8,
+    borderRadius: 14,
+  },
+  imageOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 12,
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
   },
   changeImageButton: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    backgroundColor: 'rgba(0,0,0,0.7)',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    alignSelf: 'flex-end',
+    gap: 6,
   },
   changeImageText: {
-    color: '#fff',
-    fontSize: 12,
-    marginLeft: 4,
-    fontWeight: '500',
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
   submitButton: {
-    backgroundColor: '#2196F3',
+    borderRadius: 30,
+    overflow: 'hidden',
+    marginTop: 20,
+  },
+  submitButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
-    borderRadius: 12,
-    marginTop: 20,
+    gap: 8,
   },
   submitButtonDisabled: {
-    backgroundColor: '#ccc',
+    opacity: 0.6,
   },
   submitButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 8,
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   cancelButton: {
-    backgroundColor: '#f5f5f5',
     alignItems: 'center',
     paddingVertical: 16,
     borderRadius: 12,
     marginTop: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
   },
   cancelButtonText: {
-    color: '#666',
-    fontSize: 16,
+    color: MarketplaceColors.textSecondary,
+    fontSize: 15,
     fontWeight: '500',
   },
 });
 
 const pickerSelectStyles = StyleSheet.create({
   inputIOS: {
-    fontSize: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    color: '#333',
+    fontSize: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    color: MarketplaceColors.text,
     paddingRight: 40,
   },
   inputAndroid: {
-    fontSize: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    color: '#333',
+    fontSize: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    color: MarketplaceColors.text,
     paddingRight: 40,
   },
   iconContainer: {
-    top: 20,
+    top: 16,
     right: 15,
+  },
+  placeholder: {
+    color: MarketplaceColors.textMuted,
   },
 });
 
-export default CreateProductScreen;
+export default CreateProductScreen; 

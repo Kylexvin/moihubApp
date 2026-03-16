@@ -22,7 +22,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
-const BASE_URL = 'http://192.168.100.10:5000';
+const BASE_URL = 'https://moihub.onrender.com';
 
 const ProfileScreen = () => {
   const { currentUser, logout, setCurrentUser, token } = useAuth();

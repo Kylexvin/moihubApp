@@ -211,7 +211,7 @@ const checkUserReviewStatus = useCallback(async () => {
       if (hasUserReviewed && userReview) {
         // Update existing review
         response = await axios.put(
-          `/api/services/reviews/reviews/${userReview.id}`,
+          `/api/services/reviews/${userReview.id}`,
           {
             rating: newReview.rating,
             comment: newReview.comment
@@ -225,7 +225,7 @@ const checkUserReviewStatus = useCallback(async () => {
       } else {
         // Create new review
         response = await axios.post(
-          `/api/services/reviews/providers/${providerId}/reviews`,
+          `/api/services/providers/${providerId}/reviews`,
           {
             rating: newReview.rating,
             comment: newReview.comment
@@ -280,7 +280,7 @@ const checkUserReviewStatus = useCallback(async () => {
           onPress: async () => {
             try {
               await axios.delete(
-                `/api/services/reviews/reviews/${userReview.id}`,
+                `/api/services/reviews/${userReview.id}`,
                 {
                   headers: {
                     'Authorization': `Bearer ${token}`,
