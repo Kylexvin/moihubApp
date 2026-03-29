@@ -191,8 +191,18 @@ const fetchBookings = async () => {
       },
       service: {
         name: booking.serviceId?.name || 'Service',
+        // Include all pricing fields
         price: booking.serviceId?.price || 0,
-        duration: booking.serviceId?.duration || 60
+        pricingType: booking.serviceId?.pricingType || 'fixed',
+        minPrice: booking.serviceId?.minPrice || 0,
+        maxPrice: booking.serviceId?.maxPrice || 0,
+        hourlyRate: booking.serviceId?.hourlyRate || 0,
+        customPriceNote: booking.serviceId?.customPriceNote || '',
+        isPriceNegotiable: booking.serviceId?.isPriceNegotiable || false,
+        // Include all duration fields
+        duration: booking.serviceId?.duration || 60,
+        durationType: booking.serviceId?.durationType || 'fixed',
+        customDurationNote: booking.serviceId?.customDurationNote || ''
       },
       date: new Date(booking.date),
       time: booking.time,
@@ -428,6 +438,45 @@ const renderBookingItem = ({ item }) => {
   const dateTag = getServiceDateTag(item.date);
   const bookedTimeAgo = getBookedTimeAgo(item.createdAt);
   
+  // Helper function for price display
+  const getPriceDisplay = () => {
+    const service = item.service;
+    
+    if (service.pricingType === 'fixed') {
+      return formatCurrency(service.price);
+    }
+    if (service.pricingType === 'range') {
+      return `${formatCurrency(service.minPrice)} - ${formatCurrency(service.maxPrice)}`;
+    }
+    if (service.pricingType === 'hourly') {
+      return `${formatCurrency(service.hourlyRate)}/hour`;
+    }
+    if (service.pricingType === 'varies') {
+      return service.customPriceNote || 'Price varies';
+    }
+    // Fallback to totalAmount if no pricing type
+    return formatCurrency(item.totalAmount);
+  };
+  
+  // Helper function for duration display
+  const getDurationDisplay = () => {
+    const service = item.service;
+    
+    if (service.durationType === 'custom') {
+      return service.customDurationNote || 'Duration varies';
+    }
+    if (service.duration) {
+      const minutes = service.duration;
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      
+      if (hours === 0) return `${mins} min`;
+      if (mins === 0) return `${hours} hr${hours > 1 ? 's' : ''}`;
+      return `${hours}hr ${mins}min`;
+    }
+    return 'N/A';
+  };
+  
   return (
     <View style={styles.bookingCard}>
       {/* Header with service name and date tag */}
@@ -443,7 +492,7 @@ const renderBookingItem = ({ item }) => {
         </View>
       </View>
       
-      {/* Status badge moved below header */}
+      {/* Status badge */}
       <TouchableOpacity 
         style={[styles.statusBadge, { backgroundColor: statusInfo.bgColor }]}
         onPress={() => handleUpdateStatus(item)}
@@ -473,13 +522,21 @@ const renderBookingItem = ({ item }) => {
         <View style={styles.detailRow}>
           <View style={styles.detailColumn}>
             <Text style={styles.detailLabel}>Amount</Text>
-            <Text style={styles.detailValue}>{formatCurrency(item.totalAmount)}</Text>
+            <Text style={styles.detailValue}>{getPriceDisplay()}</Text>
           </View>
           <View style={styles.detailColumn}>
             <Text style={styles.detailLabel}>Duration</Text>
-            <Text style={styles.detailValue}>{item.service.duration} min</Text>
+            <Text style={styles.detailValue}>{getDurationDisplay()}</Text>
           </View>
         </View>
+        
+        {/* Negotiable badge */}
+        {item.service.isPriceNegotiable && (
+          <View style={styles.negotiableBadge}>
+            <Ionicons name="chatbubble-outline" size={12} color={Colors.warning} />
+            <Text style={styles.negotiableBadgeText}>Negotiable</Text>
+          </View>
+        )}
         
         {/* Phone number with contact options */}
         {hasPhone && (
@@ -1305,6 +1362,23 @@ serviceNameContainer: {
     gap: 12,
     flex: 1,
   },
+  negotiableBadge: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+  backgroundColor: Colors.warning + '20',
+  paddingHorizontal: 8,
+  paddingVertical: 4,
+  borderRadius: BorderRadius.round,
+  alignSelf: 'flex-start',
+  marginTop: 4,
+  marginBottom: 8,
+},
+negotiableBadgeText: {
+  fontSize: 10,
+  color: Colors.warning,
+  fontWeight: '600',
+},
   statusDot: {
     width: 8,
     height: 8,

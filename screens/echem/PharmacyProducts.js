@@ -92,28 +92,24 @@ const PharmacyProducts = ({ navigation, route }) => {
   }, [searchQuery, products]);
 
   // WhatsApp function
-  const openWhatsApp = () => {
-    const phoneNumber = shopInfo.contactNumber || '254700000000';
-    const message = `Hello from MoiHub, I'm interested in products from ${shopInfo.name || pharmacyName}.`;
-    
-    let url = '';
-    const cleanNumber = phoneNumber.replace(/\D/g, '');
-    const formattedNumber = cleanNumber.startsWith('254') ? cleanNumber : `254${cleanNumber}`;
-    
-    if (Platform.OS === 'ios') {
-      url = `whatsapp://send?phone=${formattedNumber}&text=${encodeURIComponent(message)}`;
+const openWhatsApp = () => {
+  const phoneNumber = shopInfo.contactNumber || '254700000000';
+  const message = `Hello from MoiHub, I'm interested in products from ${shopInfo.name || pharmacyName}.`;
+  
+  const cleanNumber = phoneNumber.replace(/\D/g, '');
+  const formattedNumber = cleanNumber.startsWith('254') ? cleanNumber : `254${cleanNumber}`;
+  
+  const url = `whatsapp://send?phone=${formattedNumber}&text=${encodeURIComponent(message)}`;
+  
+  Linking.canOpenURL(url).then(supported => {
+    if (supported) {
+      return Linking.openURL(url);
     } else {
-      url = `whatsapp://send?phone=${formattedNumber}&text=${encodeURIComponent(message)}`;
+      // Use api.whatsapp.com instead of web.whatsapp.com — mobile browsers redirect to the app
+      const webUrl = `https://api.whatsapp.com/send?phone=${formattedNumber}&text=${encodeURIComponent(message)}`;
+      return Linking.openURL(webUrl);
     }
-    
-    Linking.canOpenURL(url).then(supported => {
-      if (supported) {
-        return Linking.openURL(url);
-      } else {
-        const webUrl = `https://web.whatsapp.com/send?phone=${formattedNumber}&text=${encodeURIComponent(message)}`;
-        return Linking.openURL(webUrl);
-      }
-    }).catch(err => {
+  }).catch(err => {
       console.error('WhatsApp error:', err);
       Alert.alert(
         'WhatsApp Not Available',

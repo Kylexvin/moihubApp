@@ -1,5 +1,5 @@
 // screens/localservices/dashboard/ProductManagement.js
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -28,59 +28,142 @@ import * as ImagePicker from 'expo-image-picker';
 import Theme from '../../theme/Theme';
 
 const { Colors, Typography, Spacing, BorderRadius, Shadows } = Theme;
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+// ─── Design tokens ─────────────────────────────────────────────────
+const MODAL_BG       = '#161616';
+const MODAL_BORDER   = 'rgba(80,200,120,0.25)';
+const INPUT_BG       = 'rgba(255,255,255,0.07)';
+const INPUT_BORDER   = 'rgba(255,255,255,0.15)';
+const SECTION_BG     = 'rgba(255,255,255,0.05)';
+const SECTION_BORDER = 'rgba(255,255,255,0.1)';
+const OVERLAY        = 'rgba(0,0,0,0.78)';
+
+const BOTTOM_NAV_HEIGHT = 70;
+
+// ─── Shared modal shell (outside component to prevent remounts) ────
+const ModalShell = ({ visible, onClose, title, children, onSave, saveLabel = 'Save', saving }) => (
+  <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1, backgroundColor: OVERLAY, justifyContent: 'flex-end' }}
+    >
+      <View style={shellStyles.card}>
+        <View style={shellStyles.handle} />
+        <View style={shellStyles.header}>
+          <Text style={shellStyles.title}>{title}</Text>
+          <TouchableOpacity onPress={onClose} style={shellStyles.closeBtn}>
+            <Ionicons name="close" size={22} color="#888888" />
+          </TouchableOpacity>
+        </View>
+        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {children}
+          <View style={shellStyles.actions}>
+            <TouchableOpacity style={shellStyles.cancelBtn} onPress={onClose} disabled={saving}>
+              <Text style={shellStyles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={shellStyles.saveBtn} onPress={onSave} disabled={saving}>
+              {saving
+                ? <ActivityIndicator size="small" color="#000" />
+                : <Text style={shellStyles.saveText}>{saveLabel}</Text>
+              }
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    </KeyboardAvoidingView>
+  </Modal>
+);
+
+const shellStyles = StyleSheet.create({
+  card: {
+    backgroundColor: MODAL_BG,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    borderWidth: 1, borderBottomWidth: 0, borderColor: MODAL_BORDER,
+    paddingHorizontal: 24, paddingBottom: 40, maxHeight: '92%',
+  },
+  handle: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignSelf: 'center', marginTop: 16, marginBottom: 8,
+  },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 16,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.07)',
+    marginBottom: 24,
+  },
+  title:    { fontSize: 18, fontWeight: '700', color: '#ffffff' },
+  closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' },
+  actions:  { flexDirection: 'row', gap: 16, marginTop: 24, marginBottom: 8 },
+  cancelBtn: { flex: 1, padding: 16, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center' },
+  cancelText: { fontSize: 16, fontWeight: '600', color: '#888888' },
+  saveBtn:   { flex: 1, padding: 16, borderRadius: 12, backgroundColor: '#50c878', alignItems: 'center' },
+  saveText:  { fontSize: 16, fontWeight: '700', color: '#000000' },
+});
+
+// ─── Field component ───────────────────────────────────────────────
+const Field = ({ label, value, onChangeText, placeholder, multiline = false, keyboardType = 'default' }) => (
+  <View style={{ marginBottom: 20 }}>
+    <Text style={{ fontSize: 12, fontWeight: '600', color: '#888', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</Text>
+    <TextInput
+      style={{
+        backgroundColor: INPUT_BG, borderRadius: 12, padding: 14,
+        borderWidth: 1, borderColor: INPUT_BORDER, color: '#fff', fontSize: 15,
+        ...(multiline && { minHeight: 90, textAlignVertical: 'top' })
+      }}
+      value={value}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor="#555"
+      multiline={multiline}
+      numberOfLines={multiline ? 3 : 1}
+      textAlignVertical={multiline ? 'top' : 'center'}
+      keyboardType={keyboardType}
+    />
+  </View>
+);
+
+// ─── Main component ────────────────────────────────────────────────
 const ProductManagement = () => {
   const navigation = useNavigation();
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [products, setProducts]           = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [refreshing, setRefreshing]       = useState(false);
+  const [showAddModal, setShowAddModal]   = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  
-  // Form state
+  const [uploadingImage, setUploadingImage]   = useState(false);
+  const [submitting, setSubmitting]           = useState(false);
+  const [deleting, setDeleting]               = useState(false);
+
   const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    price: '',
-    stock: '',
-    currency: 'KES',
-    image: null, // This will hold the image URI
-    imageAsset: null, // This will hold the full image asset object
-    isActive: true
+    name: '', description: '', price: '', stock: '',
+    currency: 'KES', image: null, imageAsset: null, isActive: true,
   });
 
-  // Bottom navigation height
-  const BOTTOM_NAV_HEIGHT = 70;
-
-  useEffect(() => {
-    fetchProducts();
-  }, []);
+  useEffect(() => { fetchProducts(); }, []);
 
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/services/dashboard/products');
-      setProducts(response.data.products || []);
-    } catch (error) {
-      console.error('Fetch products error:', error);
-      Alert.alert('Error', 'Failed to load products. Please try again.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+      const res = await axios.get('/api/services/dashboard/products');
+      setProducts(res.data.products || []);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to load products.');
+    } finally { setLoading(false); setRefreshing(false); }
   };
 
   const onRefresh = () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     fetchProducts();
+  };
+
+  const resetForm = () => {
+    setFormData({ name: '', description: '', price: '', stock: '', currency: 'KES', image: null, imageAsset: null, isActive: true });
+    setSelectedProduct(null);
   };
 
   const handleAddProduct = () => {
@@ -93,14 +176,10 @@ const ProductManagement = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSelectedProduct(product);
     setFormData({
-      name: product.name || '',
-      description: product.description || '',
-      price: product.price?.toString() || '',
-      stock: product.stock?.toString() || '0',
-      currency: product.currency || 'KES',
-      image: product.image || null,
-      imageAsset: null,
-      isActive: product.isActive ?? true
+      name: product.name || '', description: product.description || '',
+      price: product.price?.toString() || '', stock: product.stock?.toString() || '0',
+      currency: product.currency || 'KES', image: product.image || null,
+      imageAsset: null, isActive: product.isActive ?? true,
     });
     setShowEditModal(true);
   };
@@ -111,627 +190,319 @@ const ProductManagement = () => {
     setShowDeleteModal(true);
   };
 
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      description: '',
-      price: '',
-      stock: '',
-      currency: 'KES',
-      image: null,
-      imageAsset: null,
-      isActive: true
-    });
-    setSelectedProduct(null);
-  };
-
   const pickImage = async () => {
     try {
-      // Request permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Sorry, we need camera roll permissions to upload images.');
-        return;
-      }
-
-      // Launch image picker
+      if (status !== 'granted') { Alert.alert('Permission Required', 'Camera roll permissions needed.'); return; }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
+        allowsEditing: true, aspect: [4, 3], quality: 0.8,
       });
-
       if (!result.canceled && result.assets[0]) {
-        setFormData(prev => ({ 
-          ...prev, 
-          image: result.assets[0].uri,
-          imageAsset: result.assets[0]
-        }));
+        setFormData(prev => ({ ...prev, image: result.assets[0].uri, imageAsset: result.assets[0] }));
         setShowImagePicker(false);
       }
-    } catch (error) {
-      console.error('Image picker error:', error);
-      Alert.alert('Error', 'Failed to pick image. Please try again.');
-    }
+    } catch (e) { Alert.alert('Error', 'Failed to pick image.'); }
   };
 
   const takePhoto = async () => {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Sorry, we need camera permissions to take photos.');
-        return;
-      }
-
+      if (status !== 'granted') { Alert.alert('Permission Required', 'Camera permissions needed.'); return; }
       const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
+        allowsEditing: true, aspect: [4, 3], quality: 0.8,
       });
-
       if (!result.canceled && result.assets[0]) {
-        setFormData(prev => ({ 
-          ...prev, 
-          image: result.assets[0].uri,
-          imageAsset: result.assets[0]
-        }));
+        setFormData(prev => ({ ...prev, image: result.assets[0].uri, imageAsset: result.assets[0] }));
         setShowImagePicker(false);
       }
-    } catch (error) {
-      console.error('Camera error:', error);
-      Alert.alert('Error', 'Failed to take photo. Please try again.');
-    }
+    } catch (e) { Alert.alert('Error', 'Failed to take photo.'); }
   };
 
-  const createFormData = (data, imageAsset) => {
-    const formData = new FormData();
-    
-    // Add text fields
+  const buildFormData = (data, imageAsset) => {
+    const fd = new FormData();
     Object.keys(data).forEach(key => {
-      if (key !== 'image' && key !== 'imageAsset') {
-        formData.append(key, data[key]);
-      }
+      if (key !== 'image' && key !== 'imageAsset') fd.append(key, data[key]);
     });
-    
-    // Add image if exists
     if (imageAsset) {
       const filename = imageAsset.uri.split('/').pop();
       const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
-      
-      formData.append('image', {
-        uri: imageAsset.uri,
-        name: filename,
-        type: type,
-      });
+      fd.append('image', { uri: imageAsset.uri, name: filename, type: match ? `image/${match[1]}` : 'image/jpeg' });
     }
-    
-    return formData;
+    return fd;
+  };
+
+  const validateForm = () => {
+    if (!formData.name.trim()) { Alert.alert('Required', 'Product name is required'); return false; }
+    if (!formData.price || parseFloat(formData.price) <= 0) { Alert.alert('Required', 'Valid price is required'); return false; }
+    if (formData.stock === '' || parseInt(formData.stock) < 0) { Alert.alert('Required', 'Valid stock quantity is required'); return false; }
+    return true;
   };
 
   const handleSubmit = async () => {
     if (!validateForm()) return;
-
     try {
       setSubmitting(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
       const productData = {
-        name: formData.name.trim(),
-        description: formData.description.trim(),
-        price: parseFloat(formData.price),
-        stock: parseInt(formData.stock),
-        currency: formData.currency,
-        isActive: formData.isActive
+        name: formData.name.trim(), description: formData.description.trim(),
+        price: parseFloat(formData.price), stock: parseInt(formData.stock),
+        currency: formData.currency, isActive: formData.isActive,
       };
 
-      let response;
-      
       if (showEditModal && selectedProduct) {
-        // Update existing product
-        // First update product details
-        response = await axios.put(
-          `/api/services/dashboard/products/${selectedProduct._id}`,
-          productData
-        );
-        
-        // Then update image if new image was selected
+        const res = await axios.put(`/api/services/dashboard/products/${selectedProduct._id}`, productData);
         if (formData.imageAsset) {
           setUploadingImage(true);
-          const imageFormData = createFormData({}, formData.imageAsset);
           await axios.put(
             `/api/services/dashboard/products/${selectedProduct._id}/image`,
-            imageFormData,
-            {
-              headers: {
-                'Content-Type': 'multipart/form-data',
-              },
-            }
+            buildFormData({}, formData.imageAsset),
+            { headers: { 'Content-Type': 'multipart/form-data' } }
           );
         }
-        
-        if (response.data.message) {
+        if (res.data.message) {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          Alert.alert('Success', 'Product updated successfully');
-          
-          // Update local state - refetch to get updated image URL
-          fetchProducts();
-          
-          setShowEditModal(false);
-          resetForm();
+          Alert.alert('Saved', 'Product updated', [{ text: 'OK', onPress: () => { setShowEditModal(false); resetForm(); fetchProducts(); } }]);
         }
       } else {
-        // Create new product with image
-        const formDataToSend = createFormData(productData, formData.imageAsset);
-        
-        response = await axios.post(
-          '/api/services/dashboard/products',
-          formDataToSend,
-          {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
-          }
-        );
-        
-        if (response.data.success) {
+        const res = await axios.post('/api/services/dashboard/products', buildFormData(productData, formData.imageAsset), {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        if (res.data.success) {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          Alert.alert('Success', 'Product created successfully');
-          
-          // Add to local state
-          const newProduct = response.data.data;
-          setProducts(prev => [newProduct, ...prev]);
-          
-          setShowAddModal(false);
-          resetForm();
+          Alert.alert('Added', 'Product created', [{ text: 'OK', onPress: () => { setShowAddModal(false); resetForm(); fetchProducts(); } }]);
         }
       }
-    } catch (error) {
-      console.error('Submit error:', error);
+    } catch (e) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', error.response?.data?.message || 'Failed to save product');
-    } finally {
-      setSubmitting(false);
-      setUploadingImage(false);
-    }
+      Alert.alert('Error', e.response?.data?.message || 'Failed to save product');
+    } finally { setSubmitting(false); setUploadingImage(false); }
   };
 
   const removeProductImage = async () => {
     if (!selectedProduct) return;
-
     try {
       setUploadingImage(true);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-      const response = await axios.delete(
-        `/api/services/dashboard/products/${selectedProduct._id}/image`
-      );
-      
-      if (response.data.message) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert('Success', 'Product image removed successfully');
-        
-        // Update local state
+      const res = await axios.delete(`/api/services/dashboard/products/${selectedProduct._id}/image`);
+      if (res.data.message) {
         setFormData(prev => ({ ...prev, image: null, imageAsset: null }));
-        setProducts(prev => prev.map(product => 
-          product._id === selectedProduct._id 
-            ? { ...product, image: null }
-            : product
-        ));
+        setProducts(prev => prev.map(p => p._id === selectedProduct._id ? { ...p, image: null } : p));
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-    } catch (error) {
-      console.error('Remove image error:', error);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', error.response?.data?.message || 'Failed to remove image');
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-
-  const validateForm = () => {
-    if (!formData.name.trim()) {
-      Alert.alert('Validation Error', 'Product name is required');
-      return false;
-    }
-    if (!formData.price || isNaN(parseFloat(formData.price)) || parseFloat(formData.price) <= 0) {
-      Alert.alert('Validation Error', 'Valid price is required');
-      return false;
-    }
-    if (!formData.stock || isNaN(parseInt(formData.stock)) || parseInt(formData.stock) < 0) {
-      Alert.alert('Validation Error', 'Valid stock quantity is required');
-      return false;
-    }
-    return true;
+    } catch (e) {
+      Alert.alert('Error', e.response?.data?.message || 'Failed to remove image');
+    } finally { setUploadingImage(false); }
   };
 
   const confirmDelete = async () => {
     if (!selectedProduct) return;
-
     try {
       setDeleting(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-
-      const response = await axios.delete(
-        `/api/services/dashboard/products/${selectedProduct._id}`
-      );
-      
-      if (response.data.message) {
+      const res = await axios.delete(`/api/services/dashboard/products/${selectedProduct._id}`);
+      if (res.data.message) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert('Success', 'Product deleted successfully');
-        
-        // Remove from local state
-        setProducts(prev => prev.filter(product => product._id !== selectedProduct._id));
-        
+        setProducts(prev => prev.filter(p => p._id !== selectedProduct._id));
         setShowDeleteModal(false);
         setSelectedProduct(null);
       }
-    } catch (error) {
-      console.error('Delete error:', error);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', error.response?.data?.message || 'Failed to delete product');
-    } finally {
-      setDeleting(false);
-    }
+    } catch (e) {
+      Alert.alert('Error', e.response?.data?.message || 'Failed to delete product');
+    } finally { setDeleting(false); }
   };
 
-  const formatCurrency = (amount) => {
-    return `KES ${amount?.toLocaleString() || '0'}`;
-  };
+  const formatCurrency = (amount) => `KES ${amount?.toLocaleString() || '0'}`;
 
   const getStockStatus = (stock) => {
     if (stock === 0) return { label: 'Out of Stock', color: Colors.danger };
-    if (stock <= 5) return { label: 'Low Stock', color: Colors.warning };
+    if (stock <= 5)  return { label: 'Low Stock',    color: Colors.warning };
     return { label: 'In Stock', color: Colors.success };
   };
 
+  // ─── Product card ──────────────────────────────────────────────
   const renderProductItem = ({ item }) => {
-    const stockStatus = getStockStatus(item.stock);
-    
+    const ss = getStockStatus(item.stock);
     return (
-      <TouchableOpacity 
-        style={styles.productCard}
-        onPress={() => handleEditProduct(item)}
-        activeOpacity={0.7}
-      >
-        {/* Product Image */}
-        <View style={styles.productImageContainer}>
-          {item.image ? (
-            <Image
-              source={{ uri: item.image }}
-              style={styles.productImage}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={[styles.productImage, styles.noImage]}>
-              <Ionicons name="cube-outline" size={32} color={Colors.textSecondary} />
-            </View>
-          )}
-          
-          {/* Stock Status Badge */}
-          <View style={[styles.stockBadge, { backgroundColor: stockStatus.color + '20' }]}>
-            <Text style={[styles.stockText, { color: stockStatus.color }]}>
-              {item.stock} in stock
-            </Text>
+      <View style={styles.productCard}>
+        <View style={styles.productImageBox}>
+          {item.image
+            ? <Image source={{ uri: item.image }} style={styles.productImage} resizeMode="cover" />
+            : <View style={styles.noImage}><Ionicons name="cube-outline" size={32} color={Colors.textSecondary} /></View>
+          }
+          <View style={[styles.stockBadge, { backgroundColor: ss.color + '22' }]}>
+            <View style={[styles.stockDot, { backgroundColor: ss.color }]} />
+            <Text style={[styles.stockText, { color: ss.color }]}>{item.stock} in stock</Text>
           </View>
         </View>
-        
-        <View style={styles.productContent}>
-          <View style={styles.productHeader}>
-            <View style={styles.productInfo}>
+
+        <View style={styles.productBody}>
+          <View style={styles.productRow}>
+            <View style={{ flex: 1 }}>
               <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
               <Text style={styles.productPrice}>{formatCurrency(item.price)}</Text>
             </View>
-            <View style={styles.activeStatus}>
-              <View style={[
-                styles.activeDot, 
-                { backgroundColor: item.isActive ? Colors.success : Colors.danger }
-              ]} />
-              <Text style={styles.activeText}>
-                {item.isActive ? 'Active' : 'Inactive'}
+            <View style={[styles.activePill, { backgroundColor: item.isActive ? Colors.success + '20' : Colors.danger + '20' }]}>
+              <Text style={[styles.activePillText, { color: item.isActive ? Colors.success : Colors.danger }]}>
+                {item.isActive ? 'Active' : 'Off'}
               </Text>
             </View>
           </View>
-          
-          <Text style={styles.productDescription} numberOfLines={2}>
-            {item.description || 'No description'}
-          </Text>
-          
-          <View style={styles.productActions}>
-            <TouchableOpacity 
-              style={styles.editButton}
-              onPress={() => handleEditProduct(item)}
-            >
-              <Ionicons name="create-outline" size={18} color={Colors.primary} />
-              <Text style={styles.editButtonText}>Edit</Text>
+
+          {item.description ? (
+            <Text style={styles.productDesc} numberOfLines={2}>{item.description}</Text>
+          ) : null}
+
+          <View style={styles.cardActions}>
+            <TouchableOpacity style={styles.editBtn} onPress={() => handleEditProduct(item)}>
+              <Ionicons name="create-outline" size={16} color={Colors.primary} />
+              <Text style={styles.editBtnText}>Edit</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.deleteButton}
-              onPress={() => handleDeleteProduct(item)}
-            >
-              <Ionicons name="trash-outline" size={18} color={Colors.danger} />
-              <Text style={styles.deleteButtonText}>Delete</Text>
+            <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteProduct(item)}>
+              <Ionicons name="trash-outline" size={16} color={Colors.danger} />
+              <Text style={styles.deleteBtnText}>Delete</Text>
             </TouchableOpacity>
           </View>
         </View>
-      </TouchableOpacity>
+      </View>
     );
   };
 
+  // ─── Add/Edit modal ────────────────────────────────────────────
+  const renderAddEditModal = () => {
+    const isEdit = showEditModal;
+    return (
+      <ModalShell
+        visible={showAddModal || showEditModal}
+        onClose={() => { setShowAddModal(false); setShowEditModal(false); resetForm(); }}
+        title={isEdit ? 'Edit Product' : 'Add Product'}
+        onSave={handleSubmit}
+        saveLabel={isEdit ? 'Update' : 'Add Product'}
+        saving={submitting}
+      >
+        {/* Image */}
+        <Text style={styles.fieldLabel}>Product Image</Text>
+        {formData.image ? (
+          <View style={{ marginBottom: 20 }}>
+            <Image source={{ uri: formData.image }} style={styles.imagePreview} resizeMode="cover" />
+            <View style={styles.imageActions}>
+              <TouchableOpacity style={styles.imgActionBtn} onPress={() => setShowImagePicker(true)} disabled={uploadingImage}>
+                <Ionicons name="camera" size={16} color={Colors.primary} />
+                <Text style={[styles.imgActionText, { color: Colors.primary }]}>Change</Text>
+              </TouchableOpacity>
+              {isEdit && (
+                <TouchableOpacity style={[styles.imgActionBtn, { borderColor: Colors.danger + '60' }]} onPress={removeProductImage} disabled={uploadingImage}>
+                  {uploadingImage
+                    ? <ActivityIndicator size="small" color={Colors.danger} />
+                    : <>
+                        <Ionicons name="trash" size={16} color={Colors.danger} />
+                        <Text style={[styles.imgActionText, { color: Colors.danger }]}>Remove</Text>
+                      </>
+                  }
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.imageUploadBtn} onPress={() => setShowImagePicker(true)} disabled={uploadingImage}>
+            <Ionicons name="camera-outline" size={28} color={Colors.primary} />
+            <Text style={styles.imageUploadText}>Upload Image</Text>
+            <Text style={styles.imageUploadHint}>Recommended: 4:3 ratio</Text>
+          </TouchableOpacity>
+        )}
+
+        <Field label="Product Name *" value={formData.name} onChangeText={(t) => setFormData(p => ({ ...p, name: t }))} placeholder="product name" />
+        <Field label="Description" value={formData.description} onChangeText={(t) => setFormData(p => ({ ...p, description: t }))} placeholder="Describe your product..." multiline />
+
+        {/* Price + Stock row */}
+        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.fieldLabel}>Price (KES) *</Text>
+            <TextInput
+              style={styles.fieldInput}
+              value={formData.price}
+              onChangeText={(t) => setFormData(p => ({ ...p, price: t.replace(/[^0-9.]/g, '') }))}
+              placeholder="1800"
+              placeholderTextColor="#555"
+              keyboardType="numeric"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.fieldLabel}>Stock *</Text>
+            <TextInput
+              style={styles.fieldInput}
+              value={formData.stock}
+              onChangeText={(t) => setFormData(p => ({ ...p, stock: t.replace(/[^0-9]/g, '') }))}
+              placeholder="15"
+              placeholderTextColor="#555"
+              keyboardType="numeric"
+            />
+          </View>
+        </View>
+
+        {/* Active toggle */}
+        <View style={styles.toggleRow}>
+          <Text style={styles.toggleLabel}>Active Product</Text>
+          <Switch
+            value={formData.isActive}
+            onValueChange={(v) => setFormData(p => ({ ...p, isActive: v }))}
+            trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
+            thumbColor={Colors.background}
+          />
+        </View>
+      </ModalShell>
+    );
+  };
+
+  // ─── Image picker modal ────────────────────────────────────────
   const renderImagePickerModal = () => (
-    <Modal
-      animationType="slide"
-      transparent={true}
-      visible={showImagePicker}
-      onRequestClose={() => setShowImagePicker(false)}
-    >
-      <View style={styles.imagePickerOverlay}>
-        <View style={styles.imagePickerContainer}>
-          <Text style={styles.imagePickerTitle}>Choose Image Source</Text>
-          
-          <View style={styles.imagePickerOptions}>
-            <TouchableOpacity 
-              style={styles.imagePickerOption}
-              onPress={takePhoto}
-            >
-              <View style={[styles.imagePickerIcon, { backgroundColor: Colors.primary + '20' }]}>
-                <Ionicons name="camera" size={32} color={Colors.primary} />
+    <Modal animationType="slide" transparent visible={showImagePicker} onRequestClose={() => setShowImagePicker(false)}>
+      <View style={{ flex: 1, backgroundColor: OVERLAY, justifyContent: 'flex-end' }}>
+        <View style={styles.pickerSheet}>
+          <View style={styles.pickerHandle} />
+          <Text style={styles.pickerTitle}>Choose Image</Text>
+          <View style={styles.pickerOptions}>
+            <TouchableOpacity style={styles.pickerOption} onPress={takePhoto}>
+              <View style={[styles.pickerIcon, { backgroundColor: Colors.primary + '20' }]}>
+                <Ionicons name="camera" size={28} color={Colors.primary} />
               </View>
-              <Text style={styles.imagePickerOptionText}>Take Photo</Text>
+              <Text style={styles.pickerOptionText}>Camera</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.imagePickerOption}
-              onPress={pickImage}
-            >
-              <View style={[styles.imagePickerIcon, { backgroundColor: Colors.success + '20' }]}>
-                <Ionicons name="image" size={32} color={Colors.success} />
+            <TouchableOpacity style={styles.pickerOption} onPress={pickImage}>
+              <View style={[styles.pickerIcon, { backgroundColor: Colors.info + '20' }]}>
+                <Ionicons name="image" size={28} color={Colors.info} />
               </View>
-              <Text style={styles.imagePickerOptionText}>Choose from Gallery</Text>
+              <Text style={styles.pickerOptionText}>Gallery</Text>
             </TouchableOpacity>
           </View>
-          
-          <TouchableOpacity 
-            style={styles.imagePickerCancel}
-            onPress={() => setShowImagePicker(false)}
-          >
-            <Text style={styles.imagePickerCancelText}>Cancel</Text>
+          <TouchableOpacity style={styles.pickerCancel} onPress={() => setShowImagePicker(false)}>
+            <Text style={styles.pickerCancelText}>Cancel</Text>
           </TouchableOpacity>
         </View>
       </View>
     </Modal>
   );
 
-  const renderAddEditModal = () => {
-    const isEdit = showEditModal;
-    const title = isEdit ? 'Edit Product' : 'Add New Product';
-    
-    return (
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={showAddModal || showEditModal}
-        onRequestClose={() => {
-          setShowAddModal(false);
-          setShowEditModal(false);
-          resetForm();
-        }}
-      >
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <ScrollView 
-            style={styles.modalContainer}
-            contentContainerStyle={styles.modalScrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            <Text style={styles.modalTitle}>{title}</Text>
-            
-            {/* Image Upload */}
-            <View style={styles.imageUploadContainer}>
-              <Text style={styles.inputLabel}>Product Image</Text>
-              
-              {formData.image ? (
-                <View style={styles.imagePreviewContainer}>
-                  <Image 
-                    source={{ uri: formData.image }} 
-                    style={styles.imagePreview}
-                    resizeMode="cover"
-                  />
-                  <View style={styles.imageActions}>
-                    <TouchableOpacity 
-                      style={styles.imageActionButton}
-                      onPress={() => setShowImagePicker(true)}
-                      disabled={uploadingImage}
-                    >
-                      {uploadingImage ? (
-                        <ActivityIndicator size="small" color={Colors.primary} />
-                      ) : (
-                        <>
-                          <Ionicons name="camera" size={20} color={Colors.primary} />
-                          <Text style={styles.imageActionText}>Change</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                    
-                    {isEdit && (
-                      <TouchableOpacity 
-                        style={[styles.imageActionButton, styles.removeImageButton]}
-                        onPress={removeProductImage}
-                        disabled={uploadingImage}
-                      >
-                        {uploadingImage ? (
-                          <ActivityIndicator size="small" color={Colors.danger} />
-                        ) : (
-                          <>
-                            <Ionicons name="trash" size={20} color={Colors.danger} />
-                            <Text style={[styles.imageActionText, { color: Colors.danger }]}>
-                              Remove
-                            </Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              ) : (
-                <TouchableOpacity 
-                  style={styles.imageUploadButton}
-                  onPress={() => setShowImagePicker(true)}
-                  disabled={uploadingImage}
-                >
-                  {uploadingImage ? (
-                    <ActivityIndicator size="small" color={Colors.primary} />
-                  ) : (
-                    <>
-                      <Ionicons name="camera" size={32} color={Colors.primary} />
-                      <Text style={styles.imageUploadText}>Upload Image</Text>
-                      <Text style={styles.imageUploadSubtext}>Recommended: 4:3 ratio</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
-            
-            {/* Product Name */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Product Name *</Text>
-              <TextInput
-                style={styles.textInput}
-                value={formData.name}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, name: text }))}
-                placeholder="e.g., Premium Massage Oil"
-                placeholderTextColor={Colors.textTertiary}
-              />
-            </View>
-            
-            {/* Description */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Description</Text>
-              <TextInput
-                style={[styles.textInput, styles.textArea]}
-                value={formData.description}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, description: text }))}
-                placeholder="Describe your product..."
-                placeholderTextColor={Colors.textTertiary}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
-            </View>
-            
-            {/* Price and Stock Row */}
-            <View style={styles.rowInputs}>
-              <View style={[styles.inputGroup, styles.halfInput]}>
-                <Text style={styles.inputLabel}>Price (KES) *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={formData.price}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, price: text.replace(/[^0-9.]/g, '') }))}
-                  placeholder="1800"
-                  placeholderTextColor={Colors.textTertiary}
-                  keyboardType="numeric"
-                />
-              </View>
-              
-              <View style={[styles.inputGroup, styles.halfInput]}>
-                <Text style={styles.inputLabel}>Stock Quantity *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={formData.stock}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, stock: text.replace(/[^0-9]/g, '') }))}
-                  placeholder="15"
-                  placeholderTextColor={Colors.textTertiary}
-                  keyboardType="numeric"
-                />
-              </View>
-            </View>
-            
-            {/* Active Status */}
-            <View style={styles.switchGroup}>
-              <Text style={styles.switchLabel}>Active Product</Text>
-              <Switch
-                value={formData.isActive}
-                onValueChange={(value) => setFormData(prev => ({ ...prev, isActive: value }))}
-                trackColor={{ false: Colors.cardBorder, true: Colors.primary }}
-                thumbColor={Colors.background}
-                ios_backgroundColor={Colors.cardBorder}
-              />
-            </View>
-            
-            {/* Action Buttons */}
-            <View style={styles.modalActions}>
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowAddModal(false);
-                  setShowEditModal(false);
-                  resetForm();
-                }}
-                disabled={submitting || uploadingImage}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.submitButton]}
-                onPress={handleSubmit}
-                disabled={submitting || uploadingImage}
-              >
-                {submitting ? (
-                  <ActivityIndicator size="small" color={Colors.text} />
-                ) : (
-                  <Text style={styles.submitButtonText}>
-                    {isEdit ? 'Update Product' : 'Add Product'}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </Modal>
-    );
-  };
-
+  // ─── Delete confirm modal ──────────────────────────────────────
   const renderDeleteModal = () => (
-    <Modal
-      animationType="fade"
-      transparent={true}
-      visible={showDeleteModal}
-      onRequestClose={() => setShowDeleteModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.confirmModal}>
-          <View style={styles.deleteIcon}>
-            <Ionicons name="warning" size={48} color={Colors.danger} />
+    <Modal animationType="fade" transparent visible={showDeleteModal} onRequestClose={() => setShowDeleteModal(false)}>
+      <View style={{ flex: 1, backgroundColor: OVERLAY, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+        <View style={styles.deleteCard}>
+          <View style={styles.deleteIconCircle}>
+            <Ionicons name="warning" size={40} color={Colors.danger} />
           </View>
-          
-          <Text style={styles.confirmTitle}>Delete Product</Text>
-          <Text style={styles.confirmMessage}>
-            Are you sure you want to delete "{selectedProduct?.name}"? This action cannot be undone.
+          <Text style={styles.deleteTitle}>Delete Product</Text>
+          <Text style={styles.deleteMessage}>
+            Are you sure you want to delete "{selectedProduct?.name}"? This cannot be undone.
           </Text>
-          
-          <View style={styles.confirmActions}>
-            <TouchableOpacity 
-              style={[styles.confirmButton, styles.cancelConfirmButton]}
-              onPress={() => setShowDeleteModal(false)}
-              disabled={deleting}
-            >
-              <Text style={styles.cancelConfirmText}>Cancel</Text>
+          <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
+            <TouchableOpacity style={styles.deleteCancelBtn} onPress={() => setShowDeleteModal(false)} disabled={deleting}>
+              <Text style={styles.deleteCancelText}>Cancel</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.confirmButton, styles.deleteConfirmButton]}
-              onPress={confirmDelete}
-              disabled={deleting}
-            >
-              {deleting ? (
-                <ActivityIndicator size="small" color={Colors.text} />
-              ) : (
-                <Text style={styles.deleteConfirmText}>Delete</Text>
-              )}
+            <TouchableOpacity style={styles.deleteConfirmBtn} onPress={confirmDelete} disabled={deleting}>
+              {deleting
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Text style={styles.deleteConfirmText}>Delete</Text>
+              }
             </TouchableOpacity>
           </View>
         </View>
@@ -739,623 +510,174 @@ const ProductManagement = () => {
     </Modal>
   );
 
+  // ─── Empty state ───────────────────────────────────────────────
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Ionicons name="cube-outline" size={48} color={Colors.textSecondary} />
-      <Text style={styles.emptyStateText}>No products found</Text>
-      <Text style={styles.emptyStateSubtext}>
-        Add your first product to showcase in your store
-      </Text>
-      <TouchableOpacity 
-        style={styles.addFirstProductButton}
-        onPress={handleAddProduct}
-      >
-        <Ionicons name="add" size={20} color={Colors.text} />
-        <Text style={styles.addFirstProductText}>Add Your First Product</Text>
+      <Ionicons name="cube-outline" size={52} color={Colors.textSecondary} />
+      <Text style={styles.emptyTitle}>No products yet</Text>
+      <Text style={styles.emptySubtitle}>Add your first product to showcase in your store</Text>
+      <TouchableOpacity style={styles.emptyBtn} onPress={handleAddProduct}>
+        <Ionicons name="add" size={20} color="#000" />
+        <Text style={styles.emptyBtnText}>Add First Product</Text>
       </TouchableOpacity>
     </View>
   );
 
-  const renderContent = () => {
-    if (loading && !refreshing) {
-      return (
-        <View style={styles.loadingContainer}>
+  // ─── List header ───────────────────────────────────────────────
+  const ListHeader = () => (
+    <View style={styles.listHeader}>
+      <Text style={styles.pageTitle}>Products</Text>
+      <Text style={styles.pageSubtitle}>Manage your store inventory</Text>
+      <View style={styles.statsRow}>
+        {[
+          { value: products.length,                                  label: 'Total'  },
+          { value: products.filter(p => p.isActive).length,         label: 'Active' },
+          { value: products.reduce((s, p) => s + (p.stock || 0), 0), label: 'Stock'  },
+        ].map(({ value, label }) => (
+          <View key={label} style={styles.statCard}>
+            <Text style={styles.statValue}>{value}</Text>
+            <Text style={styles.statLabel}>{label}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
+        <View style={styles.loadingBox}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={styles.loadingText}>Loading products...</Text>
         </View>
-      );
-    }
+      </SafeAreaView>
+    );
+  }
 
-    const isEmpty = products.length === 0;
+  const isEmpty = products.length === 0;
 
-    return (
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
+
       <FlatList
         data={products}
         renderItem={renderProductItem}
         keyExtractor={(item) => item._id}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={renderEmptyState}
+        ListHeaderComponent={!isEmpty ? <ListHeader /> : null}
+        ListFooterComponent={<View style={{ height: BOTTOM_NAV_HEIGHT + 40 }} />}
+        contentContainerStyle={[styles.listContent, isEmpty && styles.emptyContent]}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={Colors.primary}
-            colors={[Colors.primary]}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} colors={[Colors.primary]} />
         }
-        contentContainerStyle={[
-          styles.listContent,
-          isEmpty && styles.emptyListContent
-        ]}
-        ListHeaderComponent={() => !isEmpty && (
-          <View style={styles.statsContainer}>
-            <Text style={styles.pageTitle}>Product Management</Text>
-            <Text style={styles.pageSubtitle}>Manage your products and inventory</Text>
-            <View style={styles.statsRow}>
-              <View style={styles.statCard}>
-                <Text style={styles.statNumber}>{products.length}</Text>
-                <Text style={styles.statLabel}>Total Products</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statNumber}>
-                  {products.filter(p => p.isActive).length}
-                </Text>
-                <Text style={styles.statLabel}>Active</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statNumber}>
-                  {products.reduce((sum, p) => sum + p.stock, 0)}
-                </Text>
-                <Text style={styles.statLabel}>Total Stock</Text>
-              </View>
-            </View>
-          </View>
-        )}
-        ListFooterComponent={<View style={{ height: BOTTOM_NAV_HEIGHT + Spacing.lg }} />}
       />
-    );
-  };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
-      
-      {/* Content */}
-      <View style={styles.contentContainer}>
-        {renderContent()}
-      </View>
-
-      {/* FAB Button */}
-      <TouchableOpacity 
-        style={styles.fabButton}
-        onPress={handleAddProduct}
-        activeOpacity={0.9}
-      >
-        <Ionicons name="add" size={28} color={Colors.text} />
+      {/* FAB */}
+      <TouchableOpacity style={styles.fab} onPress={handleAddProduct} activeOpacity={0.85}>
+        <Ionicons name="add" size={28} color="#000" />
       </TouchableOpacity>
 
-      {/* Add/Edit Modal */}
       {renderAddEditModal()}
-
-      {/* Image Picker Modal */}
       {renderImagePickerModal()}
-
-      {/* Delete Confirmation Modal */}
       {renderDeleteModal()}
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  contentContainer: {
-    flex: 1,
-  },
-  listContent: {
-    paddingBottom: Spacing.lg,
-  },
-  emptyListContent: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: Spacing.md,
-    ...Typography.body,
-    color: Colors.textSecondary,
-  },
-  // Stats and Title
-  statsContainer: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.md,
-  },
-  pageTitle: {
-    ...Typography.h1,
-    color: Colors.text,
-    fontWeight: '700',
-    fontSize: 28,
-    marginBottom: Spacing.xs,
-  },
-  pageSubtitle: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.lg,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.cardBorder,
-  },
-  statNumber: {
-    ...Typography.h3,
-    color: Colors.primary,
-    fontWeight: '700',
-    fontSize: 24,
-  },
-  statLabel: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    marginTop: 4,
-  },
-  // FAB Button
-  fabButton: {
-    position: 'absolute',
-    bottom: Spacing.xl,
-    right: Spacing.xl,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  container:   { flex: 1, backgroundColor: Colors.background },
+  loadingBox:  { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { ...Typography.body, color: Colors.textSecondary, marginTop: Spacing.md },
+  listContent: { paddingBottom: Spacing.lg },
+  emptyContent: { flex: 1, justifyContent: 'center' },
+
+  // ── List header ──
+  listHeader:   { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: Spacing.md },
+  pageTitle:    { fontSize: 26, fontWeight: '700', color: Colors.text, marginBottom: 4 },
+  pageSubtitle: { fontSize: 14, color: Colors.textSecondary, marginBottom: Spacing.md },
+  statsRow:     { flexDirection: 'row', gap: Spacing.sm },
+  statCard:     { flex: 1, backgroundColor: SECTION_BG, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: 'center', borderWidth: 1, borderColor: SECTION_BORDER },
+  statValue:    { fontSize: 22, fontWeight: '700', color: Colors.primary },
+  statLabel:    { fontSize: 11, color: Colors.textSecondary, marginTop: 2 },
+
+  // ── FAB ──
+  fab: {
+    position: 'absolute', bottom: 28, right: 24,
+    width: 58, height: 58, borderRadius: 29,
     backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Shadows.medium,
-    elevation: 8,
-    zIndex: 1000,
-    shadowColor: Colors.primary,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4, shadowRadius: 8, elevation: 8,
   },
-  // Product Card
+
+  // ── Product card ──
   productCard: {
-    backgroundColor: Colors.card,
-    marginHorizontal: Spacing.lg,
-    marginVertical: Spacing.sm,
-    borderRadius: BorderRadius.lg,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.cardBorder,
-    ...Shadows.small,
-  },
-  productImageContainer: {
-    position: 'relative',
-    height: 180,
-  },
-  productImage: {
-    width: '100%',
-    height: '100%',
-  },
-  noImage: {
-    backgroundColor: Colors.card + '80',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stockBadge: {
-    position: 'absolute',
-    bottom: Spacing.sm,
-    right: Spacing.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
-  },
-  stockText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  productContent: {
-    padding: Spacing.md,
-  },
-  productHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: Spacing.sm,
-  },
-  productInfo: {
-    flex: 1,
-    marginRight: Spacing.sm,
-  },
-  productName: {
-    ...Typography.body,
-    color: Colors.text,
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  productPrice: {
-    ...Typography.body,
-    color: Colors.primary,
-    fontWeight: '700',
-    fontSize: 18,
-    marginTop: 2,
-  },
-  activeStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-  },
-  activeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  activeText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
-  productDescription: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: Spacing.md,
-  },
-  productActions: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    backgroundColor: Colors.card,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.primary,
-    flex: 1,
-    justifyContent: 'center',
-  },
-  editButtonText: {
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  deleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    backgroundColor: Colors.card,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.danger,
-    flex: 1,
-    justifyContent: 'center',
-  },
-  deleteButtonText: {
-    fontSize: 14,
-    color: Colors.danger,
-    fontWeight: '600',
-  },
-  // Empty State
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: Spacing.xl * 2,
-    paddingHorizontal: Spacing.lg,
-  },
-  emptyStateText: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.xs,
-  },
-  emptyStateSubtext: {
-    ...Typography.caption,
-    color: Colors.textTertiary,
-    textAlign: 'center',
-    marginBottom: Spacing.lg,
-  },
-  addFirstProductButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.lg,
-  },
-  addFirstProductText: {
-    ...Typography.body,
-    color: Colors.text,
-    fontWeight: '600',
-  },
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing.lg,
-  },
-  modalContainer: {
-    backgroundColor: Colors.background,
-    borderRadius: BorderRadius.lg,
-    width: '100%',
-    maxWidth: 500,
-    maxHeight: '90%',
-  },
-  modalScrollContent: {
-    padding: Spacing.lg,
-  },
-  modalTitle: {
-    ...Typography.h3,
-    color: Colors.text,
-    textAlign: 'center',
-    marginBottom: Spacing.lg,
-  },
-  // Image Upload
-  imageUploadContainer: {
-    marginBottom: Spacing.lg,
-  },
-  imagePreviewContainer: {
-    alignItems: 'center',
-  },
-  imagePreview: {
-    width: '100%',
-    height: 200,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.md,
-  },
-  imageActions: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-    width: '100%',
-  },
-  imageActionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.xs,
-    backgroundColor: Colors.card,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.primary,
-  },
-  removeImageButton: {
-    borderColor: Colors.danger,
-  },
-  imageActionText: {
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  imageUploadButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.card + '80',
-    borderWidth: 2,
-    borderColor: Colors.cardBorder,
-    borderStyle: 'dashed',
-    borderRadius: BorderRadius.md,
-    padding: Spacing.xl,
-  },
-  imageUploadText: {
-    ...Typography.body,
-    color: Colors.primary,
-    fontWeight: '600',
-    marginTop: Spacing.sm,
-  },
-  imageUploadSubtext: {
-    ...Typography.caption,
-    color: Colors.textTertiary,
-    marginTop: Spacing.xs,
-  },
-  // Image Picker Modal
-  imagePickerOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  imagePickerContainer: {
-    backgroundColor: Colors.background,
-    borderTopLeftRadius: BorderRadius.lg,
-    borderTopRightRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    paddingBottom: Spacing.xl,
-  },
-  imagePickerTitle: {
-    ...Typography.h3,
-    color: Colors.text,
-    textAlign: 'center',
-    marginBottom: Spacing.lg,
-  },
-  imagePickerOptions: {
-    flexDirection: 'row',
-    gap: Spacing.lg,
-    marginBottom: Spacing.lg,
-  },
-  imagePickerOption: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  imagePickerIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  imagePickerOptionText: {
-    ...Typography.body,
-    color: Colors.text,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  imagePickerCancel: {
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.card,
-    alignItems: 'center',
-  },
-  imagePickerCancelText: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
-  // Form Inputs
-  inputGroup: {
-    marginBottom: Spacing.lg,
-  },
-  inputLabel: {
-    ...Typography.body,
-    color: Colors.text,
-    fontWeight: '600',
-    marginBottom: Spacing.xs,
-  },
-  textInput: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.cardBorder,
-    color: Colors.text,
-    fontSize: 16,
-  },
-  textArea: {
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  rowInputs: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  halfInput: {
-    flex: 1,
-  },
-  switchGroup: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: Colors.cardBorder,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.cardBorder,
-    marginBottom: Spacing.lg,
-  },
-  switchLabel: {
-    ...Typography.body,
-    color: Colors.text,
-    fontWeight: '600',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-  },
-  modalButton: {
-    flex: 1,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: Colors.card,
-  },
-  cancelButtonText: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
-  submitButton: {
-    backgroundColor: Colors.primary,
-  },
-  submitButtonText: {
-    ...Typography.body,
-    color: Colors.text,
-    fontWeight: '600',
-  },
-  // Delete Modal
-  confirmModal: {
-    backgroundColor: Colors.background,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    width: '100%',
-    maxWidth: 400,
-    alignItems: 'center',
-  },
-  deleteIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.danger + '20',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.lg,
-  },
-  confirmTitle: {
-    ...Typography.h3,
-    color: Colors.text,
-    marginBottom: Spacing.sm,
-  },
-  confirmMessage: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: Spacing.lg,
-    lineHeight: 22,
-  },
-  confirmActions: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-    width: '100%',
-  },
-  confirmButton: {
-    flex: 1,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    alignItems: 'center',
-  },
-  cancelConfirmButton: {
-    backgroundColor: Colors.card,
-  },
-  cancelConfirmText: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
-  deleteConfirmButton: {
-    backgroundColor: Colors.danger,
-  },
-  deleteConfirmText: {
-    ...Typography.body,
-    color: Colors.text,
-    fontWeight: '600',
-  },
+    backgroundColor: SECTION_BG, marginHorizontal: Spacing.lg,
+    marginVertical: Spacing.sm, borderRadius: BorderRadius.lg,
+    borderWidth: 1, borderColor: SECTION_BORDER, overflow: 'hidden',
+  },
+  productImageBox: { height: 170, position: 'relative' },
+  productImage:    { width: '100%', height: '100%' },
+  noImage:         { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)' },
+  stockBadge:      { position: 'absolute', bottom: 10, right: 10, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: BorderRadius.round },
+  stockDot:        { width: 6, height: 6, borderRadius: 3 },
+  stockText:       { fontSize: 12, fontWeight: '700' },
+  productBody:     { padding: Spacing.md },
+  productRow:      { flexDirection: 'row', alignItems: 'flex-start', marginBottom: Spacing.xs },
+  productName:     { fontSize: 16, fontWeight: '700', color: Colors.text },
+  productPrice:    { fontSize: 17, fontWeight: '700', color: Colors.primary, marginTop: 2 },
+  activePill:      { paddingHorizontal: 10, paddingVertical: 3, borderRadius: BorderRadius.round, marginLeft: 8 },
+  activePillText:  { fontSize: 11, fontWeight: '700' },
+  productDesc:     { fontSize: 13, color: Colors.textSecondary, lineHeight: 19, marginBottom: Spacing.md },
+  cardActions:     { flexDirection: 'row', gap: Spacing.sm },
+  editBtn:         { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.primary + '60', backgroundColor: Colors.primary + '10' },
+  editBtnText:     { fontSize: 13, color: Colors.primary, fontWeight: '600' },
+  deleteBtn:       { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.danger + '60', backgroundColor: Colors.danger + '10' },
+  deleteBtnText:   { fontSize: 13, color: Colors.danger, fontWeight: '600' },
+
+  // ── Empty state ──
+  emptyState:    { alignItems: 'center', paddingVertical: 60, paddingHorizontal: Spacing.lg },
+  emptyTitle:    { fontSize: 18, fontWeight: '700', color: Colors.textSecondary, marginTop: Spacing.md },
+  emptySubtitle: { fontSize: 14, color: Colors.textTertiary, textAlign: 'center', marginTop: 6, marginBottom: Spacing.lg },
+  emptyBtn:      { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.primary, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, borderRadius: BorderRadius.lg },
+  emptyBtnText:  { fontSize: 15, color: '#000', fontWeight: '700' },
+
+  // ── Add/Edit modal form ──
+  fieldLabel:     { fontSize: 12, fontWeight: '600', color: '#888', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  fieldInput:     { backgroundColor: INPUT_BG, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: INPUT_BORDER, color: '#fff', fontSize: 15, marginBottom: 0 },
+  imagePreview:   { width: '100%', height: 180, borderRadius: 12, marginBottom: 12 },
+  imageActions:   { flexDirection: 'row', gap: 12 },
+  imgActionBtn:   { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.primary + '60', backgroundColor: Colors.primary + '10' },
+  imgActionText:  { fontSize: 13, fontWeight: '600' },
+  imageUploadBtn: { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: INPUT_BORDER, borderStyle: 'dashed', borderRadius: 12, padding: 32, marginBottom: 20 },
+  imageUploadText: { fontSize: 14, color: Colors.primary, fontWeight: '600', marginTop: 8 },
+  imageUploadHint: { fontSize: 12, color: '#555', marginTop: 4 },
+  toggleRow:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.07)', marginBottom: 4 },
+  toggleLabel:    { fontSize: 15, fontWeight: '600', color: Colors.text },
+
+  // ── Image picker sheet ──
+  pickerSheet:      { backgroundColor: MODAL_BG, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderBottomWidth: 0, borderColor: MODAL_BORDER, padding: 24, paddingBottom: 50, alignItems: 'center' },
+  pickerHandle:     { width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)', marginBottom: 16 },
+  pickerTitle:      { fontSize: 17, fontWeight: '700', color: '#fff', marginBottom: 24 },
+  pickerOptions:    { flexDirection: 'row', gap: 32, marginBottom: 24 },
+  pickerOption:     { alignItems: 'center' },
+  pickerIcon:       { width: 68, height: 68, borderRadius: 34, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  pickerOptionText: { fontSize: 13, fontWeight: '600', color: Colors.text },
+  pickerCancel:     { width: '100%', padding: 14, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center' },
+  pickerCancelText: { fontSize: 15, fontWeight: '600', color: '#888' },
+
+  // ── Delete modal ──
+  deleteCard:       { backgroundColor: MODAL_BG, borderRadius: 20, padding: 28, width: '100%', alignItems: 'center', borderWidth: 1, borderColor: Colors.danger + '30' },
+  deleteIconCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: Colors.danger + '20', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  deleteTitle:      { fontSize: 18, fontWeight: '700', color: Colors.text, marginBottom: 8 },
+  deleteMessage:    { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', lineHeight: 21, marginBottom: 24 },
+  deleteCancelBtn:  { flex: 1, padding: 14, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center' },
+  deleteCancelText: { fontSize: 15, fontWeight: '600', color: '#888' },
+  deleteConfirmBtn: { flex: 1, padding: 14, borderRadius: 12, backgroundColor: Colors.danger, alignItems: 'center' },
+  deleteConfirmText: { fontSize: 15, fontWeight: '700', color: '#fff' },
 });
 
 export default ProductManagement;

@@ -57,47 +57,45 @@ const ServicesTab = ({
   const [contactPhone, setContactPhone] = useState('');
   const [isSubmittingInquiry, setIsSubmittingInquiry] = useState(false);
 
-  const fetchServices = useCallback(async () => {
-    try {
-      setError(null);
-      
-      const response = await axios.get(
-        `/api/services/providers/${providerId}/dashboard/services`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-          timeout: 10000
-        }
-      );
-      
-      const transformedServices = response.data.services?.map(service => ({
-        id: service._id || service.id,
-        name: service.name,
-        duration: `${service.duration} mins`,
-        price: `KES ${service.price?.toLocaleString?.() || service.price}`,
-        rawPrice: service.price,
-        description: service.description,
-        category: service.category || 'Service',
-      })) || [];
-      
-      setServices(transformedServices);
-    } catch (error) {
-      console.error('Error fetching services:', error);
-      setError('Failed to load services. Please try again.');
-      
-      if (error.response?.status === 401) {
-        Alert.alert(
-          'Session Expired',
-          'Your session has expired. Please login again.',
-          [{ text: 'OK' }]
-        );
+const fetchServices = useCallback(async () => {
+  try {
+    setError(null);
+    
+    const response = await axios.get(
+      `/api/services/providers/${providerId}/dashboard/services`,
+      {
+        headers: { 'Authorization': `Bearer ${token}` },
+        timeout: 10000
       }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    );
+    
+    // Just use the data as-is from API - it already has formatted priceDisplay and duration
+    const transformedServices = response.data.services?.map(service => ({
+      id: service._id || service.id,
+      name: service.name,
+      duration: service.duration, // API already sends "60 mins" or formatted string
+      priceDisplay: service.priceDisplay, // API already sends "KES 200" or formatted
+      rawPrice: service.price,
+      description: service.description,
+      category: service.category || 'Service',
+      canBook: service.canBook,
+      pricingType: service.pricingType,
+      isPriceNegotiable: service.isPriceNegotiable
+    })) || [];
+    
+    setServices(transformedServices);
+  } catch (error) {
+    console.error('Error fetching services:', error);
+    setError('Failed to load services. Please try again.');
+    
+    if (error.response?.status === 401) {
+      Alert.alert('Session Expired', 'Please login again.', [{ text: 'OK' }]);
     }
-  }, [providerId, token]);
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+}, [providerId, token]);
 
   useEffect(() => {
     fetchServices();
@@ -318,13 +316,19 @@ const ServicesTab = ({
                 </TouchableOpacity>
               </View>
               
-              {selectedService && (
-                <View style={styles.serviceSummary}>
-                  <Text style={styles.serviceName}>{selectedService.name}</Text>
-                  <Text style={styles.servicePrice}>KES {selectedService.rawPrice?.toLocaleString()}</Text>
-                  <Text style={styles.serviceDuration}>{selectedService.duration}</Text>
-                </View>
-              )}
+{selectedService && (
+  <View style={styles.serviceSummary}>
+    <Text style={styles.serviceName}>{selectedService.name}</Text>
+    <Text style={styles.servicePrice}>{selectedService.priceDisplay}</Text>
+    <Text style={styles.serviceDuration}>{selectedService.duration}</Text>
+    {selectedService.isPriceNegotiable && (
+      <View style={styles.negotiableBadge}>
+        <Ionicons name="chatbubble-outline" size={12} color={Colors.warning} />
+        <Text style={styles.negotiableBadgeText}>Negotiable</Text>
+      </View>
+    )}
+  </View>
+)} 
               
               <ScrollView style={styles.bookingForm}>
                 {/* Contact Phone - REQUIRED FIELD */}
@@ -588,7 +592,7 @@ const ServicesTab = ({
     );
   }
 
-  return (
+return (
     <View style={styles.container}>
       <ScrollView
         style={styles.scrollView}
@@ -627,7 +631,7 @@ const ServicesTab = ({
                       <Text style={styles.serviceName} numberOfLines={1}>
                         {service.name}
                       </Text>
-                      <Text style={styles.servicePrice}>{service.price}</Text>
+                      <Text style={styles.servicePrice}>{service.priceDisplay}</Text>
                     </View>
                     
                     {service.description ? (
@@ -642,13 +646,21 @@ const ServicesTab = ({
                         <Text style={styles.serviceDurationText}>{service.duration}</Text>
                       </View>
                       
-                      {service.category && (
+                      {service.category && service.category !== 'Service' && (
                         <View style={styles.serviceCategory}>
                           <Ionicons name="pricetag" size={14} color={Colors.textSecondary} />
                           <Text style={styles.serviceCategoryText}>{service.category}</Text>
                         </View>
                       )}
                     </View>
+                    
+                    {/* Show negotiable badge if applicable */}
+                    {service.isPriceNegotiable && (
+                      <View style={styles.negotiableBadge}>
+                        <Ionicons name="chatbubble-outline" size={12} color={Colors.warning} />
+                        <Text style={styles.negotiableBadgeText}>Negotiable</Text>
+                      </View>
+                    )}
                     
                     <View style={styles.serviceActions}>
                       <TouchableOpacity 
@@ -701,6 +713,22 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  negotiableBadge: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+  backgroundColor: Colors.warning + '20',
+  paddingHorizontal: 8,
+  paddingVertical: 4,
+  borderRadius: BorderRadius.round,
+  alignSelf: 'flex-start',
+  marginBottom: Spacing.md,
+},
+negotiableBadgeText: {
+  fontSize: 10,
+  color: Colors.warning,
+  fontWeight: '600',
+},
   // Skeleton Styles
   skeletonContainer: {
     padding: Spacing.lg,

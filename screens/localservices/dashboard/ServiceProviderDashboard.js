@@ -189,23 +189,7 @@ const ServiceProviderDashboard = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Business Info */}
-        <View style={styles.businessInfoCard}>
-          <View style={styles.businessInfoRow}>
-            <Ionicons name="location" size={16} color={Colors.textSecondary} />
-            <Text style={styles.businessInfoText}>
-              {provider?.areas?.join(', ') || 'No locations set'}
-            </Text>
-          </View>
-          <View style={styles.businessInfoRow}>
-            <Ionicons name="call" size={16} color={Colors.textSecondary} />
-            <Text style={styles.businessInfoText}>{provider?.phone || 'No phone number'}</Text>
-          </View>
-          <View style={styles.businessInfoRow}>
-            <Ionicons name="grid" size={16} color={Colors.textSecondary} />
-            <Text style={styles.businessInfoText}>{provider?.category || 'No category'}</Text>
-          </View>
-        </View>
+
 
         {/* Stats Overview */}
         <DashboardSection title="Business Overview">

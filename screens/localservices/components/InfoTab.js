@@ -314,7 +314,7 @@ const InfoTab = ({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="information-circle" size={24} color={Colors.primary} />
-          <Text style={styles.sectionTitle}>About {infoData.business?.name || providerName}</Text>
+          <Text style={styles.sectionTitle}>About</Text>
         </View>
         <Text style={styles.sectionContent}>
           {infoData.about || 'No description available.'}
