@@ -1,0 +1,1 @@
+$env:ANDROID_HOME="C:\Users\Administrator\AppData\Local\Android\Sdk\Sdk"; $env:Path+=";$env:ANDROID_HOME\platform-tools"; npx expo start

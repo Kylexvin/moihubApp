@@ -93,19 +93,33 @@ const FoodScreen = () => {
     }
   }, [vendors]);
 
+  // FULLY RANDOM image assignment - different every time the screen loads
   const assignRandomImagesToVendors = () => {
     const images = {};
+    vendors.forEach((vendor) => {
+      // Get truly random index
+      const randomIndex = Math.floor(Math.random() * FoodImages.length);
+      images[vendor._id] = FoodImages[randomIndex];
+    });
+    setVendorImages(images);
+  };
+
+  // Alternative: Pseudo-random but consistent per vendor (same image always for same vendor)
+  const assignConsistentRandomImagesToVendors = () => {
+    const images = {};
     vendors.forEach((vendor, index) => {
-      // Use multiple factors to ensure unique images:
-      // - Vendor ID (if available)
-      // - Index position
-      // - Current timestamp seed
-      const seed = vendor._id 
-        ? vendor._id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-        : index * 100;
-      
-      // Add index to ensure different images even if IDs are similar
-      const imageIndex = (seed + index * 7) % FoodImages.length;
+      // Create a hash from vendor ID for consistent but "random-looking" assignment
+      let hash = 0;
+      if (vendor._id) {
+        for (let i = 0; i < vendor._id.length; i++) {
+          hash = ((hash << 5) - hash) + vendor._id.charCodeAt(i);
+          hash |= 0; // Convert to 32-bit integer
+        }
+      } else {
+        hash = index * 123456789;
+      }
+      // Use absolute value to ensure positive index
+      const imageIndex = Math.abs(hash) % FoodImages.length;
       images[vendor._id] = FoodImages[imageIndex];
     });
     setVendorImages(images);
@@ -120,6 +134,10 @@ const FoodScreen = () => {
   const onRefresh = async () => {
     setRefreshing(true);
     await loadVendors();
+    // Re-assign random images after refresh
+    if (vendors.length > 0) {
+      assignRandomImagesToVendors();
+    }
     setRefreshing(false);
   };
 
@@ -129,11 +147,8 @@ const FoodScreen = () => {
       return vendorImages[vendor._id];
     }
     
-    // Fallback: generate a random index based on vendor properties
-    const seed = vendor._id 
-      ? vendor._id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-      : Math.random() * 1000;
-    return FoodImages[seed % FoodImages.length];
+    // Fallback: truly random
+    return FoodImages[Math.floor(Math.random() * FoodImages.length)];
   };
 
   const renderVendorItem = ({ item, index }) => (
@@ -150,10 +165,11 @@ const FoodScreen = () => {
         })}
         activeOpacity={0.9}
       >
-        {/* Background Image - Now unique per vendor */}
+        {/* Background Image - Now truly random per vendor */}
         <Image
           source={{ uri: getVendorImage(item) }}
           style={styles.vendorImage}
+          onError={() => console.log(`Failed to load image for ${item.shopName}`)}
         />
         
         {/* Dark Overlay for Text Visibility */}
@@ -197,14 +213,6 @@ const FoodScreen = () => {
 
   const renderHeader = () => (
     <View style={styles.headerContainer}>
-      {/* Welcome Section - Simplified */}
-      {/* <View style={styles.welcomeSection}>
-        <View>
-          <Text style={styles.greeting}>Hungry?</Text>
-          <Text style={styles.subGreeting}>Find something delicious</Text>
-        </View>
-      </View> */}
-
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <LinearGradient
@@ -431,20 +439,6 @@ const styles = StyleSheet.create({
   },
   headerContainer: {
     paddingTop: 20,
-  },
-  welcomeSection: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  greeting: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: FoodColors.primary,
-    marginBottom: 4,
-  },
-  subGreeting: {
-    fontSize: 16,
-    color: FoodColors.textSecondary,
   },
   searchContainer: {
     paddingHorizontal: 20,
