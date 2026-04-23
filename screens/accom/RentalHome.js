@@ -74,14 +74,12 @@ const RentalHome = ({ navigation }) => {
     total: 0
   });
 
-  // Rental types and locations for filter dropdown
-  const rentalTypes = ['bedsitter', 'one-bedroom', 'two-bedroom'];
+  // Rental types and locations for filter dropdown - FIXED to match backend
+  const rentalTypes = ['bedsitter', '1bedroom', '2bedroom'];
   const vacancyStatuses = [
     { label: 'All', value: '', icon: 'help-circle', color: RentalColors.textMuted },
-    { label: 'Vacant (Voted)', value: 'verified_vacant', icon: 'checkmark-circle', color: RentalColors.success },
-    { label: 'Occupied (Voted)', value: 'verified_occupied', icon: 'close-circle', color: RentalColors.error },
-    { label: 'Vacant (Admin)', value: 'admin_verified_vacant', icon: 'shield-checkmark', color: RentalColors.success },
-    { label: 'Occupied (Admin)', value: 'admin_verified_occupied', icon: 'shield-checkmark', color: RentalColors.error },
+    { label: 'Verified Vacant', value: 'verified_vacant', icon: 'checkmark-circle', color: RentalColors.success },
+    { label: 'Verified Occupied', value: 'verified_occupied', icon: 'close-circle', color: RentalColors.error },
     { label: 'Unverified', value: 'unverified', icon: 'help-circle-outline', color: RentalColors.textMuted }
   ];
 
@@ -275,25 +273,36 @@ const RentalHome = ({ navigation }) => {
   };
 
   const handleCreateRental = () => {
-  if (!isAuthenticated) {
-    Alert.alert(
-      'Authentication Required',
-      'Please log in to create a rental listing',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Login', onPress: () => navigation.navigate('Login') }
-      ]
-    );
-    return;
-  }
-  navigation.navigate('CreateRental');
-};
+    if (!isAuthenticated) {
+      Alert.alert(
+        'Authentication Required',
+        'Please log in to create a rental listing',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Login', onPress: () => navigation.navigate('Login') }
+        ]
+      );
+      return;
+    }
+    navigation.navigate('CreateRental');
+  };
 
+  // FIXED: Get vacancy status based on backend data
   const getVacancyStatusColor = (rental) => {
+    // Check admin override first
     if (rental.adminOverride?.isActive) {
       return rental.hasVacant ? RentalColors.success : RentalColors.error;
     }
     
+    // Check verified status from backend
+    if (rental.vacancyStatus === 'verified_vacant') {
+      return RentalColors.success;
+    }
+    if (rental.vacancyStatus === 'verified_occupied') {
+      return RentalColors.error;
+    }
+    
+    // Check community votes
     if (rental.voteStats?.totalVotes > 0) {
       const vacantRatio = rental.voteStats.vacantVotes / rental.voteStats.totalVotes;
       if (vacantRatio > 0.6) return RentalColors.success;
@@ -301,27 +310,47 @@ const RentalHome = ({ navigation }) => {
       return RentalColors.warning;
     }
     
+    // Unverified
     return RentalColors.textMuted;
   };
 
+  // FIXED: Get status text based on backend data
   const getVacancyStatusText = (rental) => {
+    // Check admin override first
     if (rental.adminOverride?.isActive) {
-      return rental.hasVacant ? 'Available' : 'Occupied';
+      return rental.hasVacant ? 'Available (Admin)' : 'Occupied (Admin)';
     }
     
+    // Check verified status from backend
+    if (rental.vacancyStatus === 'verified_vacant') {
+      return 'Verified Vacant';
+    }
+    if (rental.vacancyStatus === 'verified_occupied') {
+      return 'Verified Occupied';
+    }
+    
+    // Check community votes
     if (rental.voteStats?.totalVotes > 0) {
       const vacantRatio = rental.voteStats.vacantVotes / rental.voteStats.totalVotes;
-      if (vacantRatio > 0.6) return 'Likely Available';
+      if (vacantRatio > 0.6) return 'Likely Vacant';
       if (vacantRatio < 0.4) return 'Likely Occupied';
       return 'Disputed';
     }
     
+    // Unverified
     return 'Unverified';
   };
 
   const getStatusIcon = (rental) => {
     if (rental.adminOverride?.isActive) {
-      return rental.hasVacant ? 'checkmark-circle' : 'close-circle';
+      return rental.hasVacant ? 'shield-checkmark' : 'shield-checkmark';
+    }
+    
+    if (rental.vacancyStatus === 'verified_vacant') {
+      return 'checkmark-circle';
+    }
+    if (rental.vacancyStatus === 'verified_occupied') {
+      return 'close-circle';
     }
     
     if (rental.voteStats?.totalVotes > 0) {
@@ -334,7 +363,9 @@ const RentalHome = ({ navigation }) => {
     return 'help-circle-outline';
   };
 
+  // FIXED: Show appropriate status info based on backend data
   const renderStatusInfo = (rental) => {
+    // Admin override case
     if (rental.adminOverride?.isActive) {
       return (
         <View style={styles.statusInfo}>
@@ -354,6 +385,22 @@ const RentalHome = ({ navigation }) => {
       );
     }
     
+    // Backend verified status
+    if (rental.vacancyStatus === 'verified_vacant' || rental.vacancyStatus === 'verified_occupied') {
+      return (
+        <View style={styles.statusInfo}>
+          <View style={styles.statusHeader}>
+            <Ionicons name="checkmark-done-circle" size={14} color={RentalColors.gold} />
+            <Text style={[styles.statusInfoText, { color: RentalColors.gold }]}>System Verified</Text>
+          </View>
+          <Text style={styles.statusInfoDetail}>
+            Status has been verified by the system
+          </Text>
+        </View>
+      );
+    }
+    
+    // Community votes case
     if (rental.voteStats?.totalVotes > 0) {
       const vacantRatio = rental.voteStats.vacantVotes / rental.voteStats.totalVotes;
       return (
@@ -368,10 +415,17 @@ const RentalHome = ({ navigation }) => {
           <Text style={styles.statusInfoDetail}>
             {Math.round(Math.max(vacantRatio, 1 - vacantRatio) * 100)}% confidence
           </Text>
+          <TouchableOpacity 
+            style={styles.voteButton}
+            onPress={() => navigation.navigate('RentalDetail', { rentalId: rental._id })}
+          >
+            <Text style={styles.voteButtonText}>Cast Your Vote →</Text>
+          </TouchableOpacity>
         </View>
       );
     }
     
+    // Unverified - show vote prompt
     return (
       <View style={styles.statusInfo}>
         <View style={styles.statusHeader}>
@@ -379,8 +433,14 @@ const RentalHome = ({ navigation }) => {
           <Text style={[styles.statusInfoText, { color: RentalColors.textMuted }]}>Unverified</Text>
         </View>
         <Text style={styles.statusInfoDetail}>
-          Be the first to vote
+          No votes yet. Be the first to report vacancy status!
         </Text>
+        <TouchableOpacity 
+          style={styles.voteButton}
+          onPress={() => navigation.navigate('RentalDetail', { rentalId: rental._id })}
+        >
+          <Text style={styles.voteButtonText}>Vote Now →</Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -441,7 +501,8 @@ const RentalHome = ({ navigation }) => {
               <Ionicons name="home-outline" size={16} color={RentalColors.gold} />
               <Text style={styles.infoText}>
                 {item.type === 'bedsitter' ? 'Bedsitter' : 
-                 item.type === 'one-bedroom' ? '1 Bedroom' : '2 Bedroom'}
+                 item.type === '1bedroom' ? '1 Bedroom' : 
+                 item.type === '2bedroom' ? '2 Bedroom' : item.type}
               </Text>
             </View>
 
@@ -544,199 +605,201 @@ const RentalHome = ({ navigation }) => {
     );
   };
 
-const renderFilterModal = () => (
-  <Modal
-    visible={showFilterModal}
-    animationType="slide"
-    transparent={true}
-    onRequestClose={() => setShowFilterModal(false)}
-  >
-    <View style={styles.modalOverlay}>
-      <Animatable.View animation="slideInUp" duration={300} style={styles.modalContent}>
-        <LinearGradient
-          colors={[RentalColors.surface, RentalColors.card]}
-          style={styles.modalGradient}
-        >
-          {/* Header - Fixed at top */}
-          <View style={styles.modalHeader}>
-            <View style={styles.modalTitleContainer}>
-              <Ionicons name="options-outline" size={24} color={RentalColors.gold} />
-              <Text style={styles.modalTitle}>Filter Rentals</Text>
-            </View>
-            <TouchableOpacity 
-              style={styles.modalCloseButton}
-              onPress={() => setShowFilterModal(false)}
-            >
-              <Ionicons name="close" size={24} color={RentalColors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Scrollable Content - Takes remaining space */}
-          <ScrollView 
-            style={styles.modalScrollView}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.modalScrollContent}
+  const renderFilterModal = () => (
+    <Modal
+      visible={showFilterModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowFilterModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <Animatable.View animation="slideInUp" duration={300} style={styles.modalContent}>
+          <LinearGradient
+            colors={[RentalColors.surface, RentalColors.card]}
+            style={styles.modalGradient}
           >
-            {/* Location Filter */}
-            <View style={styles.filterSection}>
-              <Text style={styles.filterLabel}>Location</Text>
-              <View style={styles.filterInputContainer}>
-                <Ionicons name="location-outline" size={18} color={RentalColors.gold} />
-                <TextInput
-                  style={styles.filterInput}
-                  placeholder="e.g., Stage, Chebarus"
-                  placeholderTextColor={RentalColors.textMuted}
-                  value={tempFilters.location}
-                  onChangeText={(text) => setTempFilters({ ...tempFilters, location: text })}
-                />
+            {/* Header - Fixed at top */}
+            <View style={styles.modalHeader}>
+              <View style={styles.modalTitleContainer}>
+                <Ionicons name="options-outline" size={24} color={RentalColors.gold} />
+                <Text style={styles.modalTitle}>Filter Rentals</Text>
               </View>
-            </View>
-
-            {/* Type Filter */}
-            <View style={styles.filterSection}>
-              <Text style={styles.filterLabel}>Property Type</Text>
-              <View style={styles.typeOptions}>
-                {rentalTypes.map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.typeOption,
-                      tempFilters.type === type && styles.selectedTypeOption
-                    ]}
-                    onPress={() => setTempFilters({ ...tempFilters, type: tempFilters.type === type ? '' : type })}
-                  >
-                    <Text style={[
-                      styles.typeOptionText,
-                      tempFilters.type === type && styles.selectedTypeOptionText
-                    ]}>
-                      {type === 'bedsitter' ? 'Bedsitter' : 
-                       type === 'one-bedroom' ? '1 Bedroom' : '2 Bedroom'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Price Range Filter */}
-            <View style={styles.filterSection}>
-              <Text style={styles.filterLabel}>Price Range (KSh)</Text>
-              <View style={styles.priceRange}>
-                <View style={styles.priceInputContainer}>
-                  <TextInput
-                    style={styles.priceInput}
-                    placeholder="Min"
-                    placeholderTextColor={RentalColors.textMuted}
-                    value={tempFilters.minPrice}
-                    onChangeText={(text) => setTempFilters({ ...tempFilters, minPrice: text })}
-                    keyboardType="numeric"
-                  />
-                </View>
-                <Text style={styles.priceSeparator}>-</Text>
-                <View style={styles.priceInputContainer}>
-                  <TextInput
-                    style={styles.priceInput}
-                    placeholder="Max"
-                    placeholderTextColor={RentalColors.textMuted}
-                    value={tempFilters.maxPrice}
-                    onChangeText={(text) => setTempFilters({ ...tempFilters, maxPrice: text })}
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
-            </View>
-
-            {/* Vacancy Status Filter */}
-            <View style={styles.filterSection}>
-              <Text style={styles.filterLabel}>Vacancy Status</Text>
-              <View style={styles.statusOptions}>
-                {vacancyStatuses.map((status) => (
-                  <TouchableOpacity
-                    key={status.value}
-                    style={[
-                      styles.statusOption,
-                      tempFilters.vacancyStatus === status.value && styles.selectedStatusOption
-                    ]}
-                    onPress={() => setTempFilters({ 
-                      ...tempFilters, 
-                      vacancyStatus: tempFilters.vacancyStatus === status.value ? '' : status.value 
-                    })}
-                  >
-                    <Ionicons 
-                      name={status.icon} 
-                      size={16} 
-                      color={status.color} 
-                    />
-                    <Text style={[
-                      styles.statusOptionText,
-                      tempFilters.vacancyStatus === status.value && styles.selectedStatusOptionText
-                    ]}>
-                      {status.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Selected Filters Display */}
-            {Object.keys(tempFilters).filter(key => tempFilters[key] && tempFilters[key].toString().trim() !== '').length > 0 && (
-              <View style={styles.filterSection}>
-                <Text style={styles.filterLabel}>Selected Filters</Text>
-                <View style={styles.activeFilters}>
-                  {Object.entries(tempFilters).map(([key, value]) => {
-                    if (!value || value.toString().trim() === '') return null;
-                    return (
-                      <View key={key} style={styles.activeFilter}>
-                        <Text style={styles.activeFilterText}>
-                          {key === 'vacancyStatus' 
-                            ? vacancyStatuses.find(s => s.value === value)?.label || value
-                            : key === 'type'
-                            ? value === 'bedsitter' ? 'Bedsitter' : 
-                              value === 'one-bedroom' ? '1 Bedroom' : '2 Bedroom'
-                            : key === 'minPrice' || key === 'maxPrice'
-                            ? `${key === 'minPrice' ? 'Min' : 'Max'}: KSh ${value}`
-                            : `${key}: ${value}`
-                          }
-                        </Text>
-                        <TouchableOpacity
-                          onPress={() => setTempFilters({ ...tempFilters, [key]: '' })}
-                          style={styles.removeFilter}
-                        >
-                          <Ionicons name="close-circle" size={16} color={RentalColors.textMuted} />
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            )}
-          </ScrollView>
-
-          {/* Footer with buttons - Fixed at bottom */}
-          <View style={styles.modalFooter}>
-            <TouchableOpacity
-              style={styles.resetButton}
-              onPress={resetFilters}
-            >
-              <Text style={styles.resetButtonText}>Reset</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.applyButton}
-              onPress={applyFilters}
-            >
-              <LinearGradient
-                colors={[RentalColors.primary, RentalColors.secondary]}
-                style={styles.applyButtonGradient}
+              <TouchableOpacity 
+                style={styles.modalCloseButton}
+                onPress={() => setShowFilterModal(false)}
               >
-                <Ionicons name="checkmark" size={18} color={RentalColors.gold} />
-                <Text style={styles.applyButtonText}>Apply Filters</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
-      </Animatable.View>
-    </View>
-  </Modal>
-);
+                <Ionicons name="close" size={24} color={RentalColors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Scrollable Content - Takes remaining space */}
+            <ScrollView 
+              style={styles.modalScrollView}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScrollContent}
+            >
+              {/* Location Filter */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterLabel}>Location</Text>
+                <View style={styles.filterInputContainer}>
+                  <Ionicons name="location-outline" size={18} color={RentalColors.gold} />
+                  <TextInput
+                    style={styles.filterInput}
+                    placeholder="e.g., Stage, Chebarus"
+                    placeholderTextColor={RentalColors.textMuted}
+                    value={tempFilters.location}
+                    onChangeText={(text) => setTempFilters({ ...tempFilters, location: text })}
+                  />
+                </View>
+              </View>
+
+              {/* Type Filter - FIXED to match backend */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterLabel}>Property Type</Text>
+                <View style={styles.typeOptions}>
+                  {rentalTypes.map((type) => (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.typeOption,
+                        tempFilters.type === type && styles.selectedTypeOption
+                      ]}
+                      onPress={() => setTempFilters({ ...tempFilters, type: tempFilters.type === type ? '' : type })}
+                    >
+                      <Text style={[
+                        styles.typeOptionText,
+                        tempFilters.type === type && styles.selectedTypeOptionText
+                      ]}>
+                        {type === 'bedsitter' ? 'Bedsitter' : 
+                         type === '1bedroom' ? '1 Bedroom' : 
+                         type === '2bedroom' ? '2 Bedroom' : type}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Price Range Filter */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterLabel}>Price Range (KSh)</Text>
+                <View style={styles.priceRange}>
+                  <View style={styles.priceInputContainer}>
+                    <TextInput
+                      style={styles.priceInput}
+                      placeholder="Min"
+                      placeholderTextColor={RentalColors.textMuted}
+                      value={tempFilters.minPrice}
+                      onChangeText={(text) => setTempFilters({ ...tempFilters, minPrice: text })}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <Text style={styles.priceSeparator}>-</Text>
+                  <View style={styles.priceInputContainer}>
+                    <TextInput
+                      style={styles.priceInput}
+                      placeholder="Max"
+                      placeholderTextColor={RentalColors.textMuted}
+                      value={tempFilters.maxPrice}
+                      onChangeText={(text) => setTempFilters({ ...tempFilters, maxPrice: text })}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+              </View>
+
+              {/* Vacancy Status Filter */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterLabel}>Vacancy Status</Text>
+                <View style={styles.statusOptions}>
+                  {vacancyStatuses.map((status) => (
+                    <TouchableOpacity
+                      key={status.value}
+                      style={[
+                        styles.statusOption,
+                        tempFilters.vacancyStatus === status.value && styles.selectedStatusOption
+                      ]}
+                      onPress={() => setTempFilters({ 
+                        ...tempFilters, 
+                        vacancyStatus: tempFilters.vacancyStatus === status.value ? '' : status.value 
+                      })}
+                    >
+                      <Ionicons 
+                        name={status.icon} 
+                        size={16} 
+                        color={status.color} 
+                      />
+                      <Text style={[
+                        styles.statusOptionText,
+                        tempFilters.vacancyStatus === status.value && styles.selectedStatusOptionText
+                      ]}>
+                        {status.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Selected Filters Display - FIXED type mapping */}
+              {Object.keys(tempFilters).filter(key => tempFilters[key] && tempFilters[key].toString().trim() !== '').length > 0 && (
+                <View style={styles.filterSection}>
+                  <Text style={styles.filterLabel}>Selected Filters</Text>
+                  <View style={styles.activeFilters}>
+                    {Object.entries(tempFilters).map(([key, value]) => {
+                      if (!value || value.toString().trim() === '') return null;
+                      return (
+                        <View key={key} style={styles.activeFilter}>
+                          <Text style={styles.activeFilterText}>
+                            {key === 'type' 
+                              ? (value === 'bedsitter' ? 'Bedsitter' : 
+                                 value === '1bedroom' ? '1 Bedroom' : 
+                                 value === '2bedroom' ? '2 Bedroom' : value)
+                              : key === 'vacancyStatus' 
+                                ? vacancyStatuses.find(s => s.value === value)?.label || value
+                                : key === 'minPrice' || key === 'maxPrice'
+                                  ? `${key === 'minPrice' ? 'Min' : 'Max'}: KSh ${value}`
+                                  : `${key}: ${value}`
+                            }
+                          </Text>
+                          <TouchableOpacity
+                            onPress={() => setTempFilters({ ...tempFilters, [key]: '' })}
+                            style={styles.removeFilter}
+                          >
+                            <Ionicons name="close-circle" size={16} color={RentalColors.textMuted} />
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Footer with buttons - Fixed at bottom */}
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.resetButton}
+                onPress={resetFilters}
+              >
+                <Text style={styles.resetButtonText}>Reset</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.applyButton}
+                onPress={applyFilters}
+              >
+                <LinearGradient
+                  colors={[RentalColors.primary, RentalColors.secondary]}
+                  style={styles.applyButtonGradient}
+                >
+                  <Ionicons name="checkmark" size={18} color={RentalColors.gold} />
+                  <Text style={styles.applyButtonText}>Apply Filters</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+        </Animatable.View>
+      </View>
+    </Modal>
+  );
 
   if (loading && !refreshing) {
     return (
@@ -889,8 +952,8 @@ const renderFilterModal = () => (
       </TouchableOpacity>
     </View>
   );
-}; 
- 
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1177,6 +1240,21 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: RentalColors.textMuted,
     marginTop: 1,
+  },
+  voteButton: {
+    marginTop: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: RentalColors.gold + '20',
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: RentalColors.gold,
+  },
+  voteButtonText: {
+    fontSize: 10,
+    color: RentalColors.gold,
+    fontWeight: '600',
   },
   emptyContainer: {
     alignItems: 'center',
@@ -1487,4 +1565,5 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
+
 export default RentalHome;

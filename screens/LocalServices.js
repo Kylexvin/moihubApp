@@ -50,32 +50,83 @@ const Localservices = ({ navigation }) => {
   const slideAnim = useRef(new Animated.Value(50)).current;
 
   // ============== HELPER FUNCTIONS (YOUR EXISTING CODE) ==============
-  const getCategoryIcon = (categoryName) => {
-    const name = categoryName.toLowerCase();
-    const iconMap = {
-      'matatu services': 'bus',
-      'boda boda': 'bicycle',
-      'motorbike services': 'bicycle',
-      'tuktuk services': 'car',
-      'transport': 'car',
-      'electronic repairs': 'build',
-      'laundry services': 'shirt',
-      'photoshoot services': 'camera',
-      'cyber café': 'desktop',
-      'cyber cafe': 'desktop',
-      'gas deliveries': 'flame',
-      'gas deliveries services': 'flame',
-      'saloonist': 'cut',
-      'kinyozi': 'cut',
-      'best kinyozi': 'cut',
-      'food ': 'ice-cream',
-      'poshomill': 'nutrition',
-      'capentry services': 'construct',
-      'mama fua': 'woman',
-      'test': 'star',
-    };
-    return iconMap[name] || 'business';
+const getCategoryIcon = (categoryName) => {
+  const name = categoryName.toLowerCase().trim();
+  
+  const iconMap = {
+    // Transport
+    'matatu services': 'bus',
+    'matatu': 'bus',
+    'boda boda': 'bicycle',
+    'boda': 'bicycle',
+    'motorbike services': 'bicycle',
+    'motorbike': 'bicycle',
+    'tuktuk services': 'car',
+    'tuktuk': 'car',
+    'tuktuk & cart': 'car',
+    'transport': 'car',
+    'parcel delivery': 'cube',
+    
+    // Beauty & Grooming
+    'barbershops': 'cut',
+    'barbershop': 'cut',
+    'kinyozi': 'cut',
+    'salons': 'cut',
+    'saloonist': 'cut',
+    'salon': 'cut',
+    
+    // Food
+    'restaurants': 'restaurant',
+    'restaurant': 'restaurant',
+    'baking and pastry': 'restaurant',
+    'baking': 'restaurant',
+    
+    // Laundry
+    'laundry': 'shirt',
+    'laundry services': 'shirt',
+    'mama fua': 'woman',
+    'dry cleaners': 'shirt',
+    
+    // Tech & Services
+    'electronic repairs': 'build',
+    'electronics': 'build',
+    'cyber café': 'desktop',
+    'cyber cafe': 'desktop',
+    'cyber and printings': 'print',
+    'branding': 'color-palette',
+    'photography & videography': 'camera',
+    'photography/videography': 'camera',
+    'photoshoot services': 'camera',
+    
+    // Home Services
+    'carpentry': 'construct',
+    'capentry services': 'construct',
+    'storage services': 'archive',
+    'errand runners': 'walk',
+    
+    // Defaults
+    'gas deliveries': 'flame',
+    'gas deliveries services': 'flame',
+    'poshomill': 'nutrition',
+    'food': 'ice-cream',
+    'test': 'star',
   };
+  
+  // Try exact match first
+  if (iconMap[name]) {
+    return iconMap[name];
+  }
+  
+  // Try partial match
+  for (const [key, icon] of Object.entries(iconMap)) {
+    if (name.includes(key) || key.includes(name)) {
+      return icon;
+    }
+  }
+  
+  // Default fallback
+  return 'business';
+};
 
   const getCategoryColor = (categoryName) => {
     const name = categoryName.toLowerCase();
@@ -140,7 +191,7 @@ const handleCallProvider = (phoneNumber) => {
     ? cleanNumber 
     : `+${cleanNumber}`;
   
-  // Directly open URL without canOpenURL check
+
   Linking.openURL(`tel:${formattedNumber}`).catch(err => {
     console.log('Failed to open phone dialer:', err);
     Alert.alert('Error', 'Could not make phone call');
@@ -149,7 +200,7 @@ const handleCallProvider = (phoneNumber) => {
 
 
 
-  // IMPROVED: Single source of truth for AI search
+
   const callAISearch = async (queryText) => {
     if (!queryText.trim()) return;
     
@@ -162,7 +213,7 @@ const handleCallProvider = (phoneNumber) => {
     }]);
     
     try {
-      // CALL YOUR ACTUAL BACKEND ENDPOINT
+
       const response = await axios.post('/api/services/ai-chat', { 
         query: queryText 
       });
