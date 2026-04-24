@@ -636,6 +636,7 @@ const handleSubmit = async () => {
 
   // ─── Duration section ──────────────────────────────────────────
   const renderDurationFields = () => {
+    if (formData.pricingType === 'hourly') return null;
     return (
       <View style={{ marginBottom: 20 }}>
         <Text style={styles.fieldLabel}>Duration *</Text>

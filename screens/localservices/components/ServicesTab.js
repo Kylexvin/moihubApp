@@ -11,7 +11,6 @@ import {
   Dimensions,
   Modal,
   TextInput,
-  SafeAreaView,
   Platform,
   KeyboardAvoidingView,
   TouchableWithoutFeedback,
@@ -26,80 +25,441 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 const { width } = Dimensions.get('window');
 const { Colors, Typography, Spacing, BorderRadius, Shadows } = Theme;
 
-const ServicesTab = ({ 
-  providerId, 
-  providerName, 
-  token, 
-  navigation,
-  onInitiateChat 
-}) => {
+// ─── Design tokens ───────────────────────────────────────────────
+const MODAL_BG     = '#161616';
+const MODAL_BORDER = 'rgba(80,200,120,0.25)';
+const INPUT_BG     = 'rgba(255,255,255,0.07)';
+const INPUT_BORDER = 'rgba(255,255,255,0.15)';
+const OVERLAY      = 'rgba(0,0,0,0.82)';
+
+// ─── Helpers ─────────────────────────────────────────────────────
+const getActionConfig = (pricingType) => {
+  switch (pricingType) {
+    case 'fixed':
+      return {
+        primaryLabel: 'Book Now',
+        primaryIcon: 'calendar',
+        modalTitle: 'Book Service',
+        showDateTime: true,
+        showHours: false,
+        showMessage: false,
+        ctaLabel: 'Confirm Booking',
+        ctaIcon: 'checkmark-circle',
+        color: Colors.primary,
+      };
+    case 'range':
+      return {
+        primaryLabel: 'Book Now',
+        primaryIcon: 'calendar',
+        modalTitle: 'Book Service',
+        showDateTime: true,
+        showHours: false,
+        showMessage: false,
+        ctaLabel: 'Confirm Booking',
+        ctaIcon: 'checkmark-circle',
+        color: Colors.primary,
+      };
+    case 'hourly':
+      return {
+        primaryLabel: 'Request Quote',
+        primaryIcon: 'time',
+        modalTitle: 'Request a Quote',
+        showDateTime: true,
+        showHours: true,
+        showMessage: true,
+        ctaLabel: 'Send Request',
+        ctaIcon: 'send',
+        color: '#3B82F6',
+      };
+    case 'varies':
+    default:
+      return {
+        primaryLabel: 'Inquire',
+        primaryIcon: 'chatbubble-ellipses',
+        modalTitle: 'Send Inquiry',
+        showDateTime: false,
+        showHours: false,
+        showMessage: true,
+        ctaLabel: 'Send Message',
+        ctaIcon: 'send',
+        color: '#F59E0B',
+      };
+  }
+};
+
+const formatDate = (date) =>
+  date.toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+  });
+
+// ─── Input Field ─────────────────────────────────────────────────
+const InputRow = ({ icon, children }) => (
+  <View style={inputStyles.row}>
+    <Ionicons name={icon} size={18} color="#888" style={inputStyles.icon} />
+    {children}
+  </View>
+);
+
+const inputStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: INPUT_BG,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 14,
+    gap: 10,
+  },
+  icon: { width: 20 },
+});
+
+// ─── Service Action Modal ─────────────────────────────────────────
+const ServiceActionModal = ({ visible, service, onClose, onSubmit, submitting }) => {
+  const [phone, setPhone] = useState('');
+  const [date, setDate] = useState(new Date());
+  const [time, setTime] = useState('14:00');
+  const [hours, setHours] = useState('1');
+  const [people, setPeople] = useState('1');
+  const [message, setMessage] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setPhone(''); setDate(new Date()); setTime('14:00');
+      setHours('1'); setPeople('1'); setMessage('');
+    }
+  }, [visible]);
+
+  if (!service) return null;
+
+  const config = getActionConfig(service.pricingType);
+
+  const handleSubmit = () => {
+    if (!phone.trim()) {
+      Alert.alert('Required', 'Please enter your phone number');
+      return;
+    }
+    if (phone.replace(/\D/g, '').length < 10) {
+      Alert.alert('Invalid', 'Enter a valid phone number');
+      return;
+    }
+    if (config.showMessage && !message.trim()) {
+      Alert.alert('Required', 'Please enter a message');
+      return;
+    }
+
+    onSubmit({
+      phone,
+      date: config.showDateTime ? date.toISOString().split('T')[0] : null,
+      time: config.showDateTime ? time : null,
+      hours: config.showHours ? parseInt(hours) || 1 : null,
+      people: config.showDateTime ? parseInt(people) || 1 : null,
+      message: message || null,
+    });
+  };
+
+  return (
+    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1, backgroundColor: OVERLAY, justifyContent: 'flex-end' }}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={modalStyles.card}>
+            {/* Handle */}
+            <View style={modalStyles.handle} />
+
+            {/* Header */}
+            <View style={modalStyles.header}>
+              <View style={[modalStyles.iconCircle, { backgroundColor: config.color + '20' }]}>
+                <Ionicons name={config.primaryIcon} size={20} color={config.color} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={modalStyles.title}>{config.modalTitle}</Text>
+                <Text style={modalStyles.subtitle} numberOfLines={1}>{service.name}</Text>
+              </View>
+              <TouchableOpacity onPress={onClose} style={modalStyles.closeBtn}>
+                <Ionicons name="close" size={20} color="#888" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Price pill */}
+            <View style={modalStyles.pricePill}>
+              <Text style={[modalStyles.priceText, { color: config.color }]}>
+                {service.priceDisplay}
+              </Text>
+              {service.isPriceNegotiable && (
+                <View style={modalStyles.negotiableTag}>
+                  <Text style={modalStyles.negotiableText}>Negotiable</Text>
+                </View>
+              )}
+              <View style={modalStyles.durationTag}>
+                <Ionicons name="time-outline" size={12} color="#888" />
+                <Text style={modalStyles.durationText}>{service.duration}</Text>
+              </View>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              style={{ paddingHorizontal: 24 }}
+            >
+              {/* Phone — always required */}
+              <InputRow icon="call-outline">
+                <TextInput
+                  style={modalStyles.input}
+                  value={phone}
+                  onChangeText={setPhone}
+                  placeholder="Your phone number *"
+                  placeholderTextColor="#555"
+                  keyboardType="phone-pad"
+                  returnKeyType="next"
+                />
+              </InputRow>
+
+              {/* Date & Time */}
+              {config.showDateTime && (
+                <>
+                  <TouchableOpacity onPress={() => setShowDatePicker(true)}>
+                    <InputRow icon="calendar-outline">
+                      <Text style={modalStyles.inputText}>{formatDate(date)}</Text>
+                      <Ionicons name="chevron-forward" size={16} color="#555" />
+                    </InputRow>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity onPress={() => setShowTimePicker(true)}>
+                    <InputRow icon="time-outline">
+                      <Text style={modalStyles.inputText}>{time}</Text>
+                      <Ionicons name="chevron-forward" size={16} color="#555" />
+                    </InputRow>
+                  </TouchableOpacity>
+
+                  <InputRow icon="people-outline">
+                    <TextInput
+                      style={modalStyles.input}
+                      value={people}
+                      onChangeText={setPeople}
+                      placeholder="Number of people"
+                      placeholderTextColor="#555"
+                      keyboardType="number-pad"
+                    />
+                  </InputRow>
+                </>
+              )}
+
+              {/* Hours needed (hourly only) */}
+              {config.showHours && (
+                <InputRow icon="hourglass-outline">
+                  <TextInput
+                    style={modalStyles.input}
+                    value={hours}
+                    onChangeText={setHours}
+                    placeholder="Hours needed (e.g., 2)"
+                    placeholderTextColor="#555"
+                    keyboardType="number-pad"
+                  />
+                </InputRow>
+              )}
+
+              {/* Message */}
+              {config.showMessage && (
+                <View style={[inputStyles.row, { alignItems: 'flex-start', minHeight: 100 }]}>
+                  <Ionicons name="chatbubble-outline" size={18} color="#888" style={[inputStyles.icon, { marginTop: 2 }]} />
+                  <TextInput
+                    style={[modalStyles.input, { flex: 1, textAlignVertical: 'top' }]}
+                    value={message}
+                    onChangeText={setMessage}
+                    placeholder={
+                      service.pricingType === 'hourly'
+                        ? 'Describe what you need...'
+                        : 'Your message or question...'
+                    }
+                    placeholderTextColor="#555"
+                    multiline
+                    numberOfLines={4}
+                  />
+                </View>
+              )}
+
+              {/* Optional notes for bookable */}
+              {(service.pricingType === 'fixed' || service.pricingType === 'range') && (
+                <View style={[inputStyles.row, { alignItems: 'flex-start', minHeight: 80 }]}>
+                  <Ionicons name="document-text-outline" size={18} color="#888" style={[inputStyles.icon, { marginTop: 2 }]} />
+                  <TextInput
+                    style={[modalStyles.input, { flex: 1, textAlignVertical: 'top' }]}
+                    value={message}
+                    onChangeText={setMessage}
+                    placeholder="Special requests or notes (optional)"
+                    placeholderTextColor="#555"
+                    multiline
+                    numberOfLines={3}
+                  />
+                </View>
+              )}
+
+              {/* Info note */}
+              <View style={modalStyles.infoNote}>
+                <Ionicons name="information-circle-outline" size={14} color="#555" />
+                <Text style={modalStyles.infoText}>
+                  {service.pricingType === 'fixed' || service.pricingType === 'range'
+                    ? 'Provider will confirm your booking via phone'
+                    : 'Provider will contact you to discuss details'}
+                </Text>
+              </View>
+
+              {/* CTA */}
+              <TouchableOpacity
+                style={[modalStyles.cta, { backgroundColor: config.color }, submitting && { opacity: 0.6 }]}
+                onPress={handleSubmit}
+                disabled={submitting}
+                activeOpacity={0.85}
+              >
+                {submitting ? (
+                  <ActivityIndicator size="small" color="#000" />
+                ) : (
+                  <>
+                    <Ionicons name={config.ctaIcon} size={18} color="#000" />
+                    <Text style={modalStyles.ctaText}>{config.ctaLabel}</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity style={modalStyles.cancelBtn} onPress={onClose} disabled={submitting}>
+                <Text style={modalStyles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <View style={{ height: 24 }} />
+            </ScrollView>
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={date}
+                mode="date"
+                display="default"
+                minimumDate={new Date()}
+                onChange={(e, d) => { setShowDatePicker(false); if (d) setDate(d); }}
+              />
+            )}
+            {showTimePicker && (
+              <DateTimePicker
+                value={new Date(`2000-01-01T${time}`)}
+                mode="time"
+                display="default"
+                onChange={(e, t) => {
+                  setShowTimePicker(false);
+                  if (t) {
+                    const h = t.getHours().toString().padStart(2, '0');
+                    const m = t.getMinutes().toString().padStart(2, '0');
+                    setTime(`${h}:${m}`);
+                  }
+                }}
+              />
+            )}
+          </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+};
+
+const modalStyles = StyleSheet.create({
+  card: {
+    backgroundColor: MODAL_BG,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    borderWidth: 1, borderBottomWidth: 0, borderColor: MODAL_BORDER,
+    paddingBottom: 16, maxHeight: '92%',
+  },
+  handle: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignSelf: 'center', marginTop: 14, marginBottom: 4,
+  },
+  header: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 24, paddingVertical: 16,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.07)',
+    gap: 12,
+  },
+  iconCircle: {
+    width: 40, height: 40, borderRadius: 20,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  title: { fontSize: 17, fontWeight: '700', color: '#fff' },
+  subtitle: { fontSize: 13, color: '#888', marginTop: 2 },
+  closeBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  pricePill: {
+    flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap',
+    gap: 8, paddingHorizontal: 24, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.07)',
+    marginBottom: 16,
+  },
+  priceText: { fontSize: 16, fontWeight: '700' },
+  negotiableTag: {
+    backgroundColor: '#F59E0B20', paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 20, borderWidth: 1, borderColor: '#F59E0B40',
+  },
+  negotiableText: { fontSize: 11, color: '#F59E0B', fontWeight: '600' },
+  durationTag: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.06)', paddingHorizontal: 8,
+    paddingVertical: 3, borderRadius: 20,
+  },
+  durationText: { fontSize: 11, color: '#888' },
+  input: { flex: 1, color: '#fff', fontSize: 15 },
+  inputText: { flex: 1, color: '#fff', fontSize: 15 },
+  infoNote: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    padding: 12, borderRadius: 10, marginBottom: 20,
+  },
+  infoText: { flex: 1, fontSize: 12, color: '#666', lineHeight: 17 },
+  cta: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, padding: 16, borderRadius: 14, marginBottom: 10,
+  },
+  ctaText: { fontSize: 16, fontWeight: '700', color: '#000' },
+  cancelBtn: { alignItems: 'center', padding: 14 },
+  cancelText: { fontSize: 15, color: '#555', fontWeight: '500' },
+});
+
+// ─── Main ServicesTab ─────────────────────────────────────────────
+const ServicesTab = ({ providerId, providerName, token, navigation }) => {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  
-  // Booking Modal State - ADDED phoneNumber
-  const [showBookingModal, setShowBookingModal] = useState(false);
-  const [selectedService, setSelectedService] = useState(null);
-  const [bookingDate, setBookingDate] = useState(new Date());
-  const [bookingTime, setBookingTime] = useState('14:30');
-  const [bookingNotes, setBookingNotes] = useState('');
-  const [numberOfPeople, setNumberOfPeople] = useState('1');
-  const [phoneNumber, setPhoneNumber] = useState(''); // NEW FIELD
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [isBooking, setIsBooking] = useState(false);
-  
-  // Inquiry Modal State
-  const [showInquiryModal, setShowInquiryModal] = useState(false);
-  const [inquiryType, setInquiryType] = useState(''); // 'service' or 'product'
-  const [inquiryMessage, setInquiryMessage] = useState('');
-  const [contactPhone, setContactPhone] = useState('');
-  const [isSubmittingInquiry, setIsSubmittingInquiry] = useState(false);
+  const [activeModal, setActiveModal] = useState(null); // service object
+  const [submitting, setSubmitting] = useState(false);
 
-const fetchServices = useCallback(async () => {
-  try {
-    setError(null);
-    
-    const response = await axios.get(
-      `/api/services/providers/${providerId}/dashboard/services`,
-      {
-        headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 10000
+  const fetchServices = useCallback(async () => {
+    try {
+      setError(null);
+      const response = await axios.get(
+        `/api/services/providers/${providerId}/dashboard/services`,
+        { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 }
+      );
+      setServices(response.data.services || []);
+    } catch (err) {
+      console.error('Fetch services error:', err);
+      setError('Failed to load services.');
+      if (err.response?.status === 401) {
+        Alert.alert('Session Expired', 'Please login again.');
       }
-    );
-    
-    // Just use the data as-is from API - it already has formatted priceDisplay and duration
-    const transformedServices = response.data.services?.map(service => ({
-      id: service._id || service.id,
-      name: service.name,
-      duration: service.duration, // API already sends "60 mins" or formatted string
-      priceDisplay: service.priceDisplay, // API already sends "KES 200" or formatted
-      rawPrice: service.price,
-      description: service.description,
-      category: service.category || 'Service',
-      canBook: service.canBook,
-      pricingType: service.pricingType,
-      isPriceNegotiable: service.isPriceNegotiable
-    })) || [];
-    
-    setServices(transformedServices);
-  } catch (error) {
-    console.error('Error fetching services:', error);
-    setError('Failed to load services. Please try again.');
-    
-    if (error.response?.status === 401) {
-      Alert.alert('Session Expired', 'Please login again.', [{ text: 'OK' }]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-  } finally {
-    setLoading(false);
-    setRefreshing(false);
-  }
-}, [providerId, token]);
+  }, [providerId, token]);
 
-  useEffect(() => {
-    fetchServices();
-  }, [fetchServices]);
+  useEffect(() => { fetchServices(); }, [fetchServices]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -107,973 +467,242 @@ const fetchServices = useCallback(async () => {
     fetchServices();
   };
 
-  const handleBookService = (service) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setSelectedService(service);
-    setBookingNotes('');
-    setNumberOfPeople('1');
-    setPhoneNumber(''); // RESET PHONE NUMBER
-    setShowBookingModal(true);
-  };
-
-  const handleConfirmBooking = async () => {
-    if (!selectedService) return;
-    
-    // Validate phone number
-    if (!phoneNumber.trim()) {
-      Alert.alert('Phone Required', 'Please enter your phone number for booking confirmation');
-      return;
-    }
-
-    // Basic phone validation
-    const cleanPhone = phoneNumber.replace(/\D/g, '');
-    if (cleanPhone.length < 10) {
-      Alert.alert('Invalid Phone', 'Please enter a valid phone number (at least 10 digits)');
-      return;
-    }
+  const handleSubmit = async ({ phone, date, time, hours, people, message }) => {
+    if (!activeModal) return;
+    const config = getActionConfig(activeModal.pricingType);
 
     try {
-      setIsBooking(true);
+      setSubmitting(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      
-      const formattedDate = bookingDate.toISOString().split('T')[0];
-      
-      const response = await axios.post('/api/services/bookings', {
-        providerId,
-        serviceId: selectedService.id,
-        date: formattedDate,
-        time: bookingTime,
-        notes: bookingNotes,
-        numberOfPeople: parseInt(numberOfPeople) || 1,
-        phoneNumber: phoneNumber // ADD PHONE NUMBER TO REQUEST
-      }, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 10000
-      });
 
-      if (response.data.success) {
+      if (activeModal.pricingType === 'fixed' || activeModal.pricingType === 'range') {
+        await axios.post('/api/services/bookings', {
+          providerId,
+          serviceId: activeModal.id,
+          date, time,
+          notes: message || '',
+          numberOfPeople: people,
+          phoneNumber: phone,
+        }, { headers: { Authorization: `Bearer ${token}` } });
+
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert(
-          'Booking Successful!',
-          `Your booking for ${selectedService.name} has been created. Booking ID: ${response.data.data.bookingReference}`,
-          [{ 
-            text: 'OK', 
-            onPress: () => {
-              setShowBookingModal(false);
-              // Navigate to bookings screen or refresh
-            }
-          }]
-        );
-      }
-    } catch (error) {
-      console.error('Booking error:', error);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      
-      let errorMessage = 'Failed to create booking. Please try again.';
-      
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      }
-      
-      Alert.alert(
-        'Booking Failed',
-        errorMessage,
-        [{ text: 'OK' }]
-      );
-    } finally {
-      setIsBooking(false);
-    }
-  };
-
-  const handleInquiry = (service, type = 'service') => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSelectedService(service);
-    setInquiryType(type);
-    setInquiryMessage('');
-    setContactPhone('');
-    setShowInquiryModal(true);
-  };
-
-  const handleSubmitInquiry = async () => {
-    if (!inquiryMessage.trim()) {
-      Alert.alert('Error', 'Please enter your message');
-      return;
-    }
-    
-    if (!contactPhone.trim()) {
-      Alert.alert('Error', 'Please enter your contact phone number');
-      return;
-    }
-
-    try {
-      setIsSubmittingInquiry(true);
-      
-      const endpoint = inquiryType === 'service' 
-        ? '/api/services/questions/service'
-        : '/api/services/questions/product';
-      
-      const payload = {
-        providerId,
-        message: inquiryMessage,
-        customerPhone: contactPhone,
-        contactMethod: 'whatsapp'
-      };
-      
-      if (inquiryType === 'service') {
-        payload.serviceId = selectedService.id;
+        Alert.alert('Booking Confirmed!', `Your booking for ${activeModal.name} has been submitted.`, [
+          { text: 'OK', onPress: () => setActiveModal(null) }
+        ]);
       } else {
-        // For product inquiries, you'd need productId
-        Alert.alert('Info', 'Product inquiry requires product ID');
-        return;
-      }
-      
-      const response = await axios.post(endpoint, payload, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+        await axios.post('/api/services/questions/service', {
+          providerId,
+          serviceId: activeModal.id,
+          message: activeModal.pricingType === 'hourly'
+            ? `Hours needed: ${hours}\n\n${message}`
+            : message,
+          customerPhone: phone,
+          contactMethod: 'whatsapp',
+        }, { headers: { Authorization: `Bearer ${token}` } });
 
-      if (response.data.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert(
-          'Message Sent!',
-          'Your inquiry has been sent to the provider.',
-          [{ 
-            text: 'OK', 
-            onPress: () => setShowInquiryModal(false)
-          }]
-        );
+        Alert.alert('Message Sent!', 'The provider will contact you shortly.', [
+          { text: 'OK', onPress: () => setActiveModal(null) }
+        ]);
       }
-    } catch (error) {
-      console.error('Inquiry error:', error);
+    } catch (err) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      
-      Alert.alert(
-        'Failed to Send',
-        error.response?.data?.message || 'Please try again later.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Failed', err.response?.data?.message || 'Please try again.');
     } finally {
-      setIsSubmittingInquiry(false);
+      setSubmitting(false);
     }
   };
 
-  const formatDate = (date) => {
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
-
-  // Skeleton Loading Component
-  const renderSkeleton = () => (
-    <View style={styles.skeletonContainer}>
-      {[1, 2, 3].map((i) => (
-        <View key={i} style={styles.skeletonCard}>
-          <View style={styles.skeletonContent}>
+  // ─── Skeleton ──────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <View style={styles.skeletonContainer}>
+        {[1, 2, 3].map(i => (
+          <View key={i} style={styles.skeletonCard}>
             <View style={styles.skeletonTitle} />
-            <View style={styles.skeletonDescription} />
+            <View style={styles.skeletonLine} />
             <View style={styles.skeletonFooter}>
               <View style={styles.skeletonPrice} />
-              <View style={styles.skeletonButton} />
+              <View style={styles.skeletonBtn} />
             </View>
           </View>
-        </View>
-      ))}
-    </View>
-  );
-
-  // Booking Modal - UPDATED WITH PHONE FIELD
-  const renderBookingModal = () => (
-    <Modal
-      animationType="slide"
-      transparent={true}
-      visible={showBookingModal}
-      onRequestClose={() => setShowBookingModal(false)}
-    >
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalContainer}
-      >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Book Service</Text>
-                <TouchableOpacity 
-                  onPress={() => setShowBookingModal(false)}
-                  style={styles.closeButton}
-                >
-                  <Ionicons name="close" size={24} color={Colors.text} />
-                </TouchableOpacity>
-              </View>
-              
-{selectedService && (
-  <View style={styles.serviceSummary}>
-    <Text style={styles.serviceName}>{selectedService.name}</Text>
-    <Text style={styles.servicePrice}>{selectedService.priceDisplay}</Text>
-    <Text style={styles.serviceDuration}>{selectedService.duration}</Text>
-    {selectedService.isPriceNegotiable && (
-      <View style={styles.negotiableBadge}>
-        <Ionicons name="chatbubble-outline" size={12} color={Colors.warning} />
-        <Text style={styles.negotiableBadgeText}>Negotiable</Text>
-      </View>
-    )}
-  </View>
-)} 
-              
-              <ScrollView style={styles.bookingForm}>
-                {/* Contact Phone - REQUIRED FIELD */}
-                <View style={styles.inputField}>
-                  <Ionicons name="call" size={20} color={Colors.textSecondary} />
-                  <TextInput
-                    style={styles.textInput}
-                    value={phoneNumber}
-                    onChangeText={setPhoneNumber}
-                    placeholder="Your phone number (required)*"
-                    placeholderTextColor={Colors.textTertiary}
-                    keyboardType="phone-pad"
-                    autoFocus={true}
-                    returnKeyType="next"
-                  />
-                </View>
-                
-                {/* Date Picker */}
-                <TouchableOpacity 
-                  style={styles.inputField}
-                  onPress={() => setShowDatePicker(true)}
-                >
-                  <Ionicons name="calendar" size={20} color={Colors.textSecondary} />
-                  <Text style={styles.inputText}>
-                    {formatDate(bookingDate)}
-                  </Text>
-                </TouchableOpacity>
-                
-                {/* Time Picker */}
-                <TouchableOpacity 
-                  style={styles.inputField}
-                  onPress={() => setShowTimePicker(true)}
-                >
-                  <Ionicons name="time" size={20} color={Colors.textSecondary} />
-                  <Text style={styles.inputText}>{bookingTime}</Text>
-                </TouchableOpacity>
-                
-                {/* Number of People */}
-                <View style={styles.inputField}>
-                  <Ionicons name="people" size={20} color={Colors.textSecondary} />
-                  <TextInput
-                    style={styles.textInput}
-                    value={numberOfPeople}
-                    onChangeText={setNumberOfPeople}
-                    placeholder="Number of people"
-                    keyboardType="number-pad"
-                    placeholderTextColor={Colors.textTertiary}
-                  />
-                </View>
-                
-                {/* Notes */}
-                <View style={[styles.inputField, { minHeight: 80 }]}>
-                  <Ionicons name="document-text" size={20} color={Colors.textSecondary} />
-                  <TextInput
-                    style={[styles.textInput, { flex: 1, textAlignVertical: 'top' }]}
-                    value={bookingNotes}
-                    onChangeText={setBookingNotes}
-                    placeholder="Any special requests or notes..."
-                    multiline
-                    numberOfLines={3}
-                    placeholderTextColor={Colors.textTertiary}
-                  />
-                </View>
-
-                {/* Phone Note */}
-                <View style={styles.phoneNote}>
-                  <Ionicons name="information-circle" size={14} color={Colors.textSecondary} />
-                  <Text style={styles.phoneNoteText}>
-                    Your phone number is required for booking confirmation and updates
-                  </Text>
-                </View>
-              </ScrollView>
-              
-              <View style={styles.modalFooter}>
-                <TouchableOpacity 
-                  style={[styles.cancelButton, { marginRight: Spacing.sm }]}
-                  onPress={() => setShowBookingModal(false)}
-                  disabled={isBooking}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[styles.confirmButton, (isBooking || !phoneNumber.trim()) && styles.disabledButton]}
-                  onPress={handleConfirmBooking}
-                  disabled={isBooking || !phoneNumber.trim()}
-                >
-                  {isBooking ? (
-                    <ActivityIndicator size="small" color={Colors.text} />
-                  ) : (
-                    <>
-                      <Ionicons name="checkmark" size={18} color={Colors.text} />
-                      <Text style={styles.confirmButtonText}>Confirm Booking</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </TouchableWithoutFeedback>
-        
-        {showDatePicker && (
-          <DateTimePicker
-            value={bookingDate}
-            mode="date"
-            display="default"
-            minimumDate={new Date()}
-            onChange={(event, selectedDate) => {
-              setShowDatePicker(false);
-              if (selectedDate) {
-                setBookingDate(selectedDate);
-              }
-            }}
-          />
-        )}
-        
-        {showTimePicker && (
-          <DateTimePicker
-            value={new Date(`2000-01-01T${bookingTime}`)}
-            mode="time"
-            display="default"
-            onChange={(event, selectedTime) => {
-              setShowTimePicker(false);
-              if (selectedTime) {
-                const hours = selectedTime.getHours().toString().padStart(2, '0');
-                const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
-                setBookingTime(`${hours}:${minutes}`);
-              }
-            }}
-          />
-        )}
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-
-  // Inquiry Modal (unchanged)
-  const renderInquiryModal = () => (
-    <Modal
-      animationType="slide"
-      transparent={true}
-      visible={showInquiryModal}
-      onRequestClose={() => setShowInquiryModal(false)}
-    >
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalContainer}
-      >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>
-                  {inquiryType === 'service' ? 'Ask About Service' : 'Ask About Product'}
-                </Text>
-                <TouchableOpacity 
-                  onPress={() => setShowInquiryModal(false)}
-                  style={styles.closeButton}
-                >
-                  <Ionicons name="close" size={24} color={Colors.text} />
-                </TouchableOpacity>
-              </View>
-              
-              {selectedService && (
-                <View style={styles.serviceSummary}>
-                  <Text style={styles.serviceName}>{selectedService.name}</Text>
-                </View>
-              )}
-              
-              <ScrollView style={styles.bookingForm}>
-                {/* Contact Phone */}
-                <View style={styles.inputField}>
-                  <Ionicons name="call" size={20} color={Colors.textSecondary} />
-                  <TextInput
-                    style={styles.textInput}
-                    value={contactPhone}
-                    onChangeText={setContactPhone}
-                    placeholder="Your WhatsApp number (e.g., +254712345678)"
-                    keyboardType="phone-pad"
-                    placeholderTextColor={Colors.textTertiary}
-                  />
-                </View>
-                
-                {/* Message */}
-                <View style={[styles.inputField, { minHeight: 120 }]}>
-                  <Ionicons name="chatbubble" size={20} color={Colors.textSecondary} />
-                  <TextInput
-                    style={[styles.textInput, { flex: 1, textAlignVertical: 'top' }]}
-                    value={inquiryMessage}
-                    onChangeText={setInquiryMessage}
-                    placeholder={`What would you like to ask about ${selectedService?.name}?`}
-                    multiline
-                    numberOfLines={4}
-                    placeholderTextColor={Colors.textTertiary}
-                  />
-                </View>
-                
-                <View style={styles.infoNote}>
-                  <Ionicons name="information-circle" size={16} color={Colors.textSecondary} />
-                  <Text style={styles.infoNoteText}>
-                    Provider will contact you on WhatsApp with answers
-                  </Text>
-                </View>
-              </ScrollView>
-              
-              <View style={styles.modalFooter}>
-                <TouchableOpacity 
-                  style={[styles.cancelButton, { marginRight: Spacing.sm }]}
-                  onPress={() => setShowInquiryModal(false)}
-                  disabled={isSubmittingInquiry}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[styles.confirmButton, isSubmittingInquiry && styles.disabledButton]}
-                  onPress={handleSubmitInquiry}
-                  disabled={isSubmittingInquiry}
-                >
-                  {isSubmittingInquiry ? (
-                    <ActivityIndicator size="small" color={Colors.text} />
-                  ) : (
-                    <>
-                      <Ionicons name="send" size={18} color={Colors.text} />
-                      <Text style={styles.confirmButtonText}>Send Message</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-
-  if (loading) {
-    return renderSkeleton();
-  }
-
-  if (error && !loading) {
-    return (
-      <View style={styles.errorContainer}>
-        <ScrollView
-          contentContainerStyle={styles.errorScrollContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={Colors.primary}
-              colors={[Colors.primary]}
-            />
-          }
-        >
-          <Ionicons name="alert-circle" size={48} color={Colors.danger} />
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={fetchServices}>
-            <Text style={styles.retryButtonText}>Try Again</Text>
-          </TouchableOpacity>
-        </ScrollView>
+        ))}
       </View>
     );
   }
 
-return (
+  if (error) {
+    return (
+      <ScrollView
+        contentContainerStyle={styles.errorBox}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} colors={[Colors.primary]} />}
+      >
+        <Ionicons name="alert-circle" size={48} color={Colors.danger} />
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryBtn} onPress={fetchServices}>
+          <Text style={styles.retryText}>Try Again</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  }
+
+  return (
     <View style={styles.container}>
       <ScrollView
-        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={Colors.primary}
-            colors={[Colors.primary]}
-          />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} colors={[Colors.primary]} />}
       >
-        <View style={styles.tabContent}>
-          <View style={styles.servicesHeader}>
-            <View>
-              <Text style={styles.tabTitle}>Services</Text>
-              <Text style={styles.tabSubtitle}>
-                {services.length} service{services.length !== 1 ? 's' : ''} available
-              </Text>
-            </View>
-          </View>
-          
+        <View style={styles.content}>
+          <Text style={styles.sectionTitle}>Services</Text>
+          <Text style={styles.sectionSubtitle}>
+            {services.length} service{services.length !== 1 ? 's' : ''} available
+          </Text>
+
           {services.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="construct-outline" size={48} color={Colors.textSecondary} />
-              <Text style={styles.emptyStateText}>No services available</Text>
-              <Text style={styles.emptyStateSubtext}>Check back later for updates</Text>
+              <Text style={styles.emptyTitle}>No services yet</Text>
+              <Text style={styles.emptySub}>Check back later</Text>
             </View>
           ) : (
-            <View style={styles.servicesList}>
-              {services.map((service) => (
-                <View key={service.id} style={styles.serviceCard}>
-                  <View style={styles.serviceInfo}>
-                    <View style={styles.serviceHeader}>
-                      <Text style={styles.serviceName} numberOfLines={1}>
-                        {service.name}
-                      </Text>
-                      <Text style={styles.servicePrice}>{service.priceDisplay}</Text>
+            services.map(service => {
+              const config = getActionConfig(service.pricingType);
+              return (
+                <View key={service.id} style={styles.card}>
+                  {/* Top row */}
+                  <View style={styles.cardTop}>
+                    <Text style={styles.cardName} numberOfLines={1}>{service.name}</Text>
+                    <Text style={[styles.cardPrice, { color: config.color }]}>
+                      {service.priceDisplay}
+                    </Text>
+                  </View>
+
+                  {/* Description */}
+                  {service.description ? (
+                    <Text style={styles.cardDesc} numberOfLines={2}>{service.description}</Text>
+                  ) : null}
+
+                  {/* Meta row */}
+                  <View style={styles.metaRow}>
+                    <View style={styles.metaItem}>
+                      <Ionicons name="time-outline" size={13} color="#888" />
+                      <Text style={styles.metaText}>{service.duration}</Text>
                     </View>
-                    
-                    {service.description ? (
-                      <Text style={styles.serviceDescription} numberOfLines={2}>
-                        {service.description}
-                      </Text>
-                    ) : null}
-                    
-                    <View style={styles.serviceMeta}>
-                      <View style={styles.serviceDuration}>
-                        <Ionicons name="time" size={14} color={Colors.textSecondary} />
-                        <Text style={styles.serviceDurationText}>{service.duration}</Text>
-                      </View>
-                      
-                      {service.category && service.category !== 'Service' && (
-                        <View style={styles.serviceCategory}>
-                          <Ionicons name="pricetag" size={14} color={Colors.textSecondary} />
-                          <Text style={styles.serviceCategoryText}>{service.category}</Text>
-                        </View>
-                      )}
-                    </View>
-                    
-                    {/* Show negotiable badge if applicable */}
-                    {service.isPriceNegotiable && (
-                      <View style={styles.negotiableBadge}>
-                        <Ionicons name="chatbubble-outline" size={12} color={Colors.warning} />
-                        <Text style={styles.negotiableBadgeText}>Negotiable</Text>
+                    {service.category && service.category !== 'General' && (
+                      <View style={styles.metaItem}>
+                        <Ionicons name="pricetag-outline" size={13} color="#888" />
+                        <Text style={styles.metaText}>{service.category}</Text>
                       </View>
                     )}
-                    
-                    <View style={styles.serviceActions}>
-                      <TouchableOpacity 
-                        style={styles.inquiryButton}
-                        onPress={() => handleInquiry(service, 'service')}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="chatbubble" size={16} color={Colors.text} />
-                        <Text style={styles.inquiryButtonText}>Ask</Text>
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity 
-                        style={styles.bookButton}
-                        onPress={() => handleBookService(service)}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="calendar" size={16} color={Colors.text} />
-                        <Text style={styles.bookButtonText}>Book Now</Text>
-                      </TouchableOpacity>
-                    </View>
+                    {service.isPriceNegotiable && (
+                      <View style={styles.negotiableChip}>
+                        <Text style={styles.negotiableChipText}>Negotiable</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Actions */}
+                  <View style={styles.cardActions}>
+                    <TouchableOpacity
+                      style={[styles.primaryBtn, { backgroundColor: config.color }]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        setActiveModal(service);
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name={config.primaryIcon} size={15} color="#000" />
+                      <Text style={styles.primaryBtnText}>{config.primaryLabel}</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
-              ))}
-            </View>
-          )}
-          
-          {services.length > 0 && (
-            <View style={styles.bookingNote}>
-              <Ionicons name="information-circle" size={16} color={Colors.textSecondary} />
-              <Text style={styles.bookingNoteText}>
-                Tap "Ask" to inquire about a service or "Book Now" to make an appointment
-              </Text>
-            </View>
+              );
+            })
           )}
         </View>
       </ScrollView>
-      
-      {renderBookingModal()}
-      {renderInquiryModal()}
+
+      <ServiceActionModal
+        visible={!!activeModal}
+        service={activeModal}
+        onClose={() => setActiveModal(null)}
+        onSubmit={handleSubmit}
+        submitting={submitting}
+      />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    minHeight: 400,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  negotiableBadge: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  gap: 4,
-  backgroundColor: Colors.warning + '20',
-  paddingHorizontal: 8,
-  paddingVertical: 4,
-  borderRadius: BorderRadius.round,
-  alignSelf: 'flex-start',
-  marginBottom: Spacing.md,
-},
-negotiableBadgeText: {
-  fontSize: 10,
-  color: Colors.warning,
-  fontWeight: '600',
-},
-  // Skeleton Styles
-  skeletonContainer: {
-    padding: Spacing.lg,
-    gap: Spacing.md,
-  },
-  skeletonCard: {
+  container: { flex: 1, backgroundColor: Colors.background },
+  content: { padding: Spacing.lg, paddingBottom: 40 },
+  sectionTitle: { ...Typography.h3, color: Colors.text, marginBottom: 4 },
+  sectionSubtitle: { ...Typography.bodySmall, color: Colors.textSecondary, marginBottom: Spacing.lg },
+
+  // Card
+  card: {
     backgroundColor: Colors.card,
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.cardBorder,
-  },
-  skeletonContent: {
-    gap: Spacing.sm,
-  },
-  skeletonTitle: {
-    width: '70%',
-    height: 20,
-    backgroundColor: Colors.card + '80',
-    borderRadius: BorderRadius.sm,
-  },
-  skeletonDescription: {
-    width: '90%',
-    height: 16,
-    backgroundColor: Colors.card + '80',
-    borderRadius: BorderRadius.sm,
-  },
-  skeletonFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: Spacing.md,
-  },
-  skeletonPrice: {
-    width: 80,
-    height: 20,
-    backgroundColor: Colors.card + '80',
-    borderRadius: BorderRadius.sm,
-  },
-  skeletonButton: {
-    width: 100,
-    height: 36,
-    backgroundColor: Colors.card + '80',
-    borderRadius: BorderRadius.md,
-  },
-  // Error Styles
-  errorContainer: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  errorScrollContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing.lg,
-    minHeight: 300,
-  },
-  errorText: {
-    marginTop: Spacing.md,
-    ...Typography.body,
-    color: Colors.danger,
-    textAlign: 'center',
-  },
-  retryButton: {
-    marginTop: Spacing.md,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.md,
-  },
-  retryButtonText: {
-    ...Typography.button,
-    color: Colors.text,
-  },
-  // Service List Styles
-  tabContent: {
-    padding: Spacing.lg,
-  },
-  servicesHeader: {
-    marginBottom: Spacing.lg,
-  },
-  tabTitle: {
-    ...Typography.h3,
-    color: Colors.text,
-    marginBottom: Spacing.xs,
-  },
-  tabSubtitle: {
-    ...Typography.bodySmall,
-    color: Colors.textSecondary,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: Spacing.xl * 2,
-  },
-  emptyStateText: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.xs,
-  },
-  emptyStateSubtext: {
-    ...Typography.caption,
-    color: Colors.textTertiary,
-  },
-  servicesList: {
-    gap: Spacing.md,
-  },
-  serviceCard: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
+    marginBottom: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.cardBorder,
     ...Shadows.small,
   },
-  serviceInfo: {
-    flex: 1,
+  cardTop: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'flex-start', marginBottom: 6,
   },
-  serviceHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: Spacing.sm,
+  cardName: {
+    ...Typography.body, color: Colors.text,
+    fontWeight: '700', fontSize: 16, flex: 1, marginRight: 8,
   },
-  serviceName: {
-    ...Typography.body,
-    color: Colors.text,
-    fontWeight: '600',
-    fontSize: 16,
-    flex: 1,
-    marginRight: Spacing.sm,
+  cardPrice: { fontSize: 15, fontWeight: '700' },
+  cardDesc: {
+    fontSize: 13, color: Colors.textSecondary,
+    lineHeight: 18, marginBottom: Spacing.sm,
   },
-  servicePrice: {
-    ...Typography.body,
-    color: Colors.primary,
-    fontWeight: '700',
-    fontSize: 16,
+  metaRow: {
+    flexDirection: 'row', flexWrap: 'wrap',
+    gap: 10, marginBottom: Spacing.md,
   },
-  serviceDescription: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.md,
-    lineHeight: 18,
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  metaText: { fontSize: 12, color: Colors.textSecondary },
+  negotiableChip: {
+    backgroundColor: '#F59E0B20', paddingHorizontal: 8,
+    paddingVertical: 2, borderRadius: 20,
   },
-  serviceMeta: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-    marginBottom: Spacing.md,
+  negotiableChipText: { fontSize: 11, color: '#F59E0B', fontWeight: '600' },
+  cardActions: { flexDirection: 'row', gap: Spacing.sm },
+  primaryBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'center', gap: 6,
+    paddingVertical: 10, borderRadius: BorderRadius.md,
   },
-  serviceDuration: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
+  primaryBtnText: { fontSize: 14, fontWeight: '700', color: '#000' },
+
+  // Skeleton
+  skeletonContainer: { padding: Spacing.lg, gap: Spacing.md },
+  skeletonCard: {
+    backgroundColor: Colors.card, borderRadius: BorderRadius.lg,
+    padding: Spacing.md, borderWidth: 1, borderColor: Colors.cardBorder, gap: Spacing.sm,
   },
-  serviceDurationText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  serviceCategory: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-  },
-  serviceCategoryText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  serviceActions: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  inquiryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    backgroundColor: Colors.secondary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    flex: 1,
-    justifyContent: 'center',
-  },
-  inquiryButtonText: {
-    fontSize: 14,
-    color: Colors.text,
-    fontWeight: '600',
-  },
-  bookButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    flex: 1,
-    justifyContent: 'center',
-  },
-  bookButtonText: {
-    fontSize: 14,
-    color: Colors.text,
-    fontWeight: '600',
-  },
-  bookingNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.card,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    marginTop: Spacing.lg,
-    gap: Spacing.sm,
-  },
-  bookingNoteText: {
-    flex: 1,
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontStyle: 'italic',
-  },
-  // Modal Styles - ADDED phoneNote
-  modalContainer: {
-    flex: 1,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: Colors.background,
-    borderTopLeftRadius: BorderRadius.xl,
-    borderTopRightRadius: BorderRadius.xl,
-    maxHeight: '90%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: Spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.cardBorder,
-  },
-  modalTitle: {
-    ...Typography.h3,
-    color: Colors.text,
-    flex: 1,
-  },
-  closeButton: {
-    padding: Spacing.xs,
-  },
-  serviceSummary: {
-    padding: Spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.cardBorder,
-    backgroundColor: Colors.card,
-  },
-  bookingForm: {
-    maxHeight: 400,
-    padding: Spacing.lg,
-  },
-  inputField: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.cardBorder,
-    gap: Spacing.md,
-  },
-  inputText: {
-    flex: 1,
-    ...Typography.body,
-    color: Colors.text,
-  },
-  textInput: {
-    flex: 1,
-    ...Typography.body,
-    color: Colors.text,
-    padding: 0,
-    margin: 0,
-  },
-  phoneNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.info + '20',
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    marginTop: Spacing.sm,
-    gap: Spacing.sm,
-  },
-  phoneNoteText: {
-    flex: 1,
-    fontSize: 12,
-    color: Colors.info,
-  },
-  infoNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.card + '40',
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    marginTop: Spacing.sm,
-    gap: Spacing.sm,
-  },
-  infoNoteText: {
-    flex: 1,
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontStyle: 'italic',
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    padding: Spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: Colors.cardBorder,
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: Colors.card,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    ...Typography.button,
-    color: Colors.textSecondary,
-  },
-  confirmButton: {
-    flex: 1,
-    backgroundColor: Colors.primary,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.sm,
-  },
-  confirmButtonText: {
-    ...Typography.button,
-    color: Colors.text,
-  },
-  disabledButton: {
-    opacity: 0.7,
-  },
+  skeletonTitle: { width: '65%', height: 18, backgroundColor: Colors.cardBorder, borderRadius: 6 },
+  skeletonLine: { width: '85%', height: 14, backgroundColor: Colors.cardBorder, borderRadius: 6 },
+  skeletonFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  skeletonPrice: { width: 80, height: 18, backgroundColor: Colors.cardBorder, borderRadius: 6 },
+  skeletonBtn: { width: 100, height: 34, backgroundColor: Colors.cardBorder, borderRadius: 10 },
+
+  // Error
+  errorBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: Spacing.lg, minHeight: 300 },
+  errorText: { ...Typography.body, color: Colors.danger, textAlign: 'center', marginTop: Spacing.md },
+  retryBtn: { marginTop: Spacing.md, backgroundColor: Colors.primary, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, borderRadius: BorderRadius.md },
+  retryText: { ...Typography.button, color: Colors.text },
+
+  // Empty
+  emptyState: { alignItems: 'center', paddingVertical: 60 },
+  emptyTitle: { ...Typography.body, color: Colors.textSecondary, marginTop: Spacing.md, fontWeight: '600' },
+  emptySub: { ...Typography.caption, color: Colors.textTertiary, marginTop: 4 },
 });
 
-export default ServicesTab;  
+export default ServicesTab;

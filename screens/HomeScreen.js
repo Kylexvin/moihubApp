@@ -1134,8 +1134,8 @@ const HomeScreen = () => {
               <Text style={styles.footerLink}>Policy</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.footerText}>Version 1.0.1</Text>
-          <Text style={styles.footerCopyright}>Made by Kylex</Text>
+          <Text style={styles.footerText}>Version 1.1.0</Text>
+          <Text style={styles.footerCopyright}>✟𝗞𝗬𝗟𝗘𝗫✟</Text>
         </View>
       </ScrollView>
     </View>

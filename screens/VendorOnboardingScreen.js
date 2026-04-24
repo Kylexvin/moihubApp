@@ -194,7 +194,7 @@ const VendorOnboardingScreen = () => {
 
       const message = dashboardChoice 
         ? 'Application submitted! Awaiting admin approval for dashboard access.'
-        : 'Service created successfully! Your listing is now live.';
+        : 'Service created successfully! Awaiting admin approval.';
 
       Alert.alert(
         'Success!',
