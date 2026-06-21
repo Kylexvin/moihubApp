@@ -24,8 +24,8 @@ const { width } = Dimensions.get('window');
 
 // Blog-themed color palette matching BlogsScreen
 const BlogColors = {
-  primary: '#7C4DFF',      // Vibrant Purple
-  secondary: '#FF6B6B',    // Coral
+  primary: '#187013',      // Vibrant Purple
+  secondary: '#187013',    // Coral
   accent: '#4ECDC4',       // Turquoise
   background: '#0A0A0A',   // Dark Background
   surface: '#1A1A1A',      // Surface Dark
