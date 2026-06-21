@@ -21,7 +21,7 @@ import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 
 const { width } = Dimensions.get('window');
-const API_URL = 'https://moihub.onrender.com/api';
+const API_URL = 'http://192.168.100.10:5000/api';
 
 // Luxury Emerald Green color palette
 const RentalColors = {

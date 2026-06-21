@@ -20,7 +20,7 @@ import * as Animatable from 'react-native-animatable';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 
-const API_URL = 'https://moihub.onrender.com/api';
+const API_URL = 'http://192.168.100.10:5000/api';
 const { width: screenWidth } = Dimensions.get('window');
 
 // Luxury Emerald Green color palette matching RentalHome

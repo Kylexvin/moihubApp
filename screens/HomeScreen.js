@@ -1,10 +1,10 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  TouchableOpacity, 
-  ScrollView, 
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
+  ScrollView,
   Image,
   StatusBar,
   Dimensions,
@@ -23,15 +23,14 @@ import axios from 'axios';
 import WhatsAppFAB from './WhatsAppFAB';
 import DataService from '../services/DataService';
 
-// NEW: Import showcase components
 import ServicesShowcase from './components/ServicesShowcase';
 import MarketplaceShowcase from './components/MarketplaceShowcase';
 
 const { width } = Dimensions.get('window');
-  
-// Skeleton Components (keep existing)
+
+// Skeleton Components
 const SkeletonBox = ({ width, height, style }) => (
-  <View 
+  <View
     style={[
       {
         width,
@@ -59,99 +58,36 @@ const SkeletonBox = ({ width, height, style }) => (
   </View>
 );
 
-const MissionSkeleton = () => (
-  <View style={styles.sectionContainer}>
-    <View style={styles.missionContainer}>
-      <View style={[styles.missionGradient, { backgroundColor: '#E1E9EE' }]}>
-        <View style={styles.missionHeader}>
-          <SkeletonBox width={24} height={24} style={{ borderRadius: 12 }} />
-          <SkeletonBox width={150} height={20} style={{ marginLeft: 10 }} />
-        </View>
-        <SkeletonBox width="100%" height={60} style={{ marginVertical: 10 }} />
-        <View style={styles.missionFooter}>
-          <SkeletonBox width={16} height={16} style={{ borderRadius: 8 }} />
-          <SkeletonBox width={120} height={16} style={{ marginLeft: 8 }} />
-        </View>
-      </View>
-    </View>
-  </View>
-);
-
-const HighlightSkeleton = () => (
-  <View style={styles.sectionContainer}>
-    <View style={styles.highlightContainer}>
-      <View style={styles.highlightImageContainer}>
-        <SkeletonBox width="100%" height={150} />
-      </View>
-      <View style={styles.highlightContent}>
-        <View style={styles.highlightTitleContainer}>
-          <SkeletonBox width={20} height={20} style={{ borderRadius: 10 }} />
-          <SkeletonBox width={100} height={20} style={{ marginLeft: 8 }} />
-        </View>
-        <SkeletonBox width="100%" height={40} style={{ marginVertical: 10 }} />
-        <SkeletonBox width={80} height={35} style={{ borderRadius: 20 }} />
-      </View>
-    </View>
-  </View>
-);
-
-const AdsSkeleton = () => (
-  <View style={styles.sectionContainer}>
-    <SkeletonBox width={100} height={24} style={{ marginBottom: 15 }} />
-    <View style={styles.adsContainer}>
-      <SkeletonBox width={width - 40} height={200} style={{ borderRadius: 15 }} />
-      <View style={styles.adIndicatorContainer}>
-        {[0, 1, 2].map((_, index) => (
-          <SkeletonBox 
-            key={index} 
-            width={8} 
-            height={8} 
-            style={{ borderRadius: 4, marginHorizontal: 3 }} 
-          />
-        ))}
-      </View>
-    </View>
-  </View>
-);
-
-const VendorCallSkeleton = () => (
-  <View style={styles.sectionContainer}>
-    <View style={[styles.vendorCallContainer, { backgroundColor: '#E1E9EE' }]}>
-      <View style={styles.vendorCallContent}>
-        <SkeletonBox width={32} height={32} style={{ borderRadius: 16, marginBottom: 10 }} />
-        <SkeletonBox width={150} height={24} style={{ marginBottom: 10 }} />
-        <SkeletonBox width="100%" height={50} style={{ marginBottom: 15 }} />
-        <SkeletonBox width={120} height={35} style={{ borderRadius: 20 }} />
-      </View>
-    </View>
-  </View>
-);
-
 const HomeScreen = () => {
   const { currentUser } = useAuth();
   const navigation = useNavigation();
   const [currentSlide, setCurrentSlide] = useState(0);
   const slideRef = useRef(null);
   const adsRef = useRef(null);
-  
+  const isMountedRef = useRef(true);
+
   // Backend data states
   const [homescreenData, setHomescreenData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [currentAdSlide, setCurrentAdSlide] = useState(0);
 
-  // NEW: Showcase states
+  // Showcase states
   const [marketplaceShowcase, setMarketplaceShowcase] = useState([]);
   const [servicesShowcase, setServicesShowcase] = useState([]);
   const [showcaseLoading, setShowcaseLoading] = useState(false);
 
-  // Personalization states
-  const [personalizedFeed, setPersonalizedFeed] = useState([]);
+  // Explore sections (personalized feed + recently viewed folded in / removed)
   const [exploreSections, setExploreSections] = useState([]);
-  const [recentlyViewed, setRecentlyViewed] = useState([]);
   const [iconsLoaded, setIconsLoaded] = useState(false);
 
-  // Check if icons are loaded
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     const checkIcons = async () => {
       try {
@@ -162,15 +98,13 @@ const HomeScreen = () => {
         setIconsLoaded(true);
       }
     };
-    
+
     checkIcons();
   }, []);
 
-  // Cache configuration - UPDATED to 30 minutes
   const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
 
-  // Track user behavior
-  const trackUserBehavior = async (action, screen, metadata = {}) => {
+  const trackUserBehavior = useCallback(async (action, screen, metadata = {}) => {
     try {
       await DataService.trackUserAction(
         currentUser?.id || 'anonymous',
@@ -181,153 +115,100 @@ const HomeScreen = () => {
     } catch (error) {
       console.error('Error tracking user behavior:', error);
     }
-  };
+  }, [currentUser]);
 
-  // Generate personalized content
-  const generatePersonalizedContent = async () => {
-    try {
-      const recent = await DataService.getRecentlyViewed();
-      setRecentlyViewed(recent.length > 0 ? recent : getDefaultRecentlyViewed());
-      setPersonalizedFeed(getDefaultPersonalizedFeed());
-      setExploreSections(getDefaultExploreSections());
-    } catch (error) {
-      console.error('Error generating personalized content:', error);
-      setPersonalizedFeed(getDefaultPersonalizedFeed());
-      setExploreSections(getDefaultExploreSections());
-      setRecentlyViewed(getDefaultRecentlyViewed());
-    }
-  };
-
-  // Fetch showcase data
-  const fetchShowcases = async () => {
-    try {
-      setShowcaseLoading(true);
-      const [marketplaceRes, servicesRes] = await Promise.all([
-        axios.get('/api/marketplace/showcase'),
-        axios.get('/api/services/showcase')
-      ]);
-      
-      setMarketplaceShowcase(marketplaceRes.data.showcaseItems || []);
-      setServicesShowcase(servicesRes.data.showcaseItems || []);
-    } catch (error) {
-      console.error('Failed to fetch showcases:', error);
-    } finally {
-      setShowcaseLoading(false);
-    }
-  };
-
-  const getDefaultPersonalizedFeed = () => [
+  const getDefaultExploreSections = useCallback(() => [
     {
       id: 1,
-      type: 'BLOG',
-      title: 'Campus Events',
-      description: '📝 Latest campus updates',
-      icon: '📝',
-      action: () => {
-        if (trackUserBehavior) {
-          trackUserBehavior('feed_click', 'Blogs', { type: 'blog' });
-        }
-        navigation.navigate('BlogsNavigator', { screen: 'Blogs' });
-      }
-    },
-    {
-      id: 2,
-      type: 'MARKET',
-      title: 'Second Hand Items',
-      description: '🛒 Great deals in marketplace',
-      icon: '🛒',
-      action: () => {
-        if (trackUserBehavior) {
-          trackUserBehavior('feed_click', 'SecondHandHome', { type: 'market' });
-        }
-        navigation.navigate('SecondHandStack');
-      }
-    }
-  ];
-
-  const getDefaultExploreSections = () => [
-    {
-      id: 1,
-      title: '🍕 Food Delivery',
+      title: 'Food Delivery',
       subtitle: 'Order from campus restaurants',
       icon: 'restaurant',
       action: () => {
-        if (trackUserBehavior) {
-          trackUserBehavior('explore_click', 'FoodHome', { section: 'food' });
-        }
+        trackUserBehavior('explore_click', 'FoodHome', { section: 'food' });
         navigation.navigate('FoodStack', { screen: 'FoodHome' });
       },
       buttonText: 'Order now →'
     },
     {
       id: 2,
-      title: '🛍️ E-Shop',
+      title: 'E-Shop',
       subtitle: 'Campus online shopping',
       icon: 'cart',
       action: () => {
-        if (trackUserBehavior) {
-          trackUserBehavior('explore_click', 'EshopHome', { section: 'eshop' });
-        }
+        trackUserBehavior('explore_click', 'EshopHome', { section: 'eshop' });
         navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
       },
       buttonText: 'Shop now →'
     },
     {
       id: 3,
-      title: '💕 LinkMe Dating',
+      title: 'LinkMe Dating',
       subtitle: 'Meet students on campus',
       icon: 'heart',
       action: () => {
-        if (trackUserBehavior) {
-          trackUserBehavior('explore_click', 'LinkMeEntry', { section: 'dating' });
-        }
+        trackUserBehavior('explore_click', 'LinkMeEntry', { section: 'dating' });
         navigation.navigate('LinkMe', { screen: 'LinkMeEntry' });
       },
       buttonText: 'Explore →'
     },
     {
       id: 4,
-      title: '🏠 Find Roommates',
+      title: 'Find Roommates',
       subtitle: 'Connect with potential roommates',
       icon: 'people',
       action: () => {
-        if (trackUserBehavior) {
-          trackUserBehavior('explore_click', 'RoommateBrowse', { section: 'roommate' });
-        }
+        trackUserBehavior('explore_click', 'RoommateBrowse', { section: 'roommate' });
         navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' });
       },
       buttonText: 'Browse →'
+    },
+    {
+      id: 5,
+      title: 'Campus Events',
+      subtitle: 'Latest campus updates',
+      icon: 'newspaper',
+      action: () => {
+        trackUserBehavior('explore_click', 'Blogs', { section: 'blog' });
+        navigation.navigate('BlogsNavigator', { screen: 'Blogs' });
+      },
+      buttonText: 'Read more →'
+    },
+    {
+      id: 6,
+      title: 'Second Hand Items',
+      subtitle: 'Great deals in marketplace',
+      icon: 'pricetag',
+      action: () => {
+        trackUserBehavior('explore_click', 'SecondHandHome', { section: 'market' });
+        navigation.navigate('SecondHandStack');
+      },
+      buttonText: 'Browse →'
     }
-  ];
+  ], [trackUserBehavior, navigation]);
 
-  const getDefaultRecentlyViewed = () => [
-    {
-      id: 1,
-      title: 'Food Vendors',
-      description: 'Order your favorite meals',
-      action: () => navigation.navigate('FoodStack', { screen: 'FoodHome' })
-    },
-    {
-      id: 2,
-      title: 'My School Portal',
-      description: 'Access student portal',
-      action: () => navigation.navigate('MySchoolNavigator', { screen: 'MySchoolHome' })
-    },
-    {
-      id: 3,
-      title: 'Marketplace',
-      description: 'Buy and sell second-hand items',
-      action: () => navigation.navigate('SecondHandStack')
-    },
-    {
-      id: 4,
-      title: 'Local Services',
-      description: 'Find campus service providers',
-      action: () => navigation.navigate('ServicesStack', { screen: 'LocalServices' })
+  const generatePersonalizedContent = useCallback(() => {
+    setExploreSections(getDefaultExploreSections());
+  }, [getDefaultExploreSections]);
+
+  const fetchShowcases = useCallback(async () => {
+    try {
+      setShowcaseLoading(true);
+      const [marketplaceRes, servicesRes] = await Promise.all([
+        axios.get('/api/marketplace/showcase'),
+        axios.get('/api/services/showcase')
+      ]);
+
+      if (!isMountedRef.current) return;
+      setMarketplaceShowcase(marketplaceRes.data.showcaseItems || []);
+      setServicesShowcase(servicesRes.data.showcaseItems || []);
+    } catch (error) {
+      console.error('Failed to fetch showcases:', error);
+    } finally {
+      if (isMountedRef.current) setShowcaseLoading(false);
     }
-  ];
+  }, []);
 
-  const slideData = [
+  const slideData = useMemo(() => [
     {
       id: 1,
       title: "Welcome to MoiHub",
@@ -372,56 +253,56 @@ const HomeScreen = () => {
         navigation.navigate('LinkMe', { screen: 'LinkMeEntry' });
       }
     }
-  ];
+  ], [navigation]);
 
-  const serviceCategories = [
-    { 
-      title: "Emergency", 
-      icon: "alert-circle-outline", 
+  const serviceCategories = useMemo(() => [
+    {
+      title: "Emergency",
+      icon: "alert-circle-outline",
       color: "#EF5350",
       onPress: () => {
         navigation.navigate('ServicesStack', { screen: 'EmergencyServices' });
       }
     },
-    { 
-      title: "Portal", 
-      icon: "school-outline", 
+    {
+      title: "Portal",
+      icon: "school-outline",
       color: "#66BB6A",
       onPress: () => {
         navigation.navigate('MySchoolNavigator', { screen: 'MySchoolHome' });
       }
     },
-    { 
-      title: "Food Delivery", 
-      icon: "fast-food-outline", 
+    {
+      title: "Food Delivery",
+      icon: "fast-food-outline",
       color: "#42A5F5",
       onPress: () => {
         navigation.navigate('FoodStack', { screen: 'FoodHome' });
       }
     },
-    { 
-      title: "Local Services", 
-      icon: "bicycle-outline", 
+    {
+      title: "Local Services",
+      icon: "bicycle-outline",
       color: "#FFB300",
       onPress: () => {
         navigation.navigate('ServicesStack', { screen: 'LocalServices' });
       }
     }
-  ];
+  ], [navigation]);
 
   const loadCachedData = async () => {
     try {
       const cached = await DataService.getAppSetting('homescreen_cache');
-      
+
       if (cached && cached.data && cached.timestamp) {
         setHomescreenData(cached.data);
         setLoading(false);
-        
+
         const isCacheFresh = (Date.now() - cached.timestamp) < CACHE_DURATION;
-        
+
         return { hasCache: true, isFresh: isCacheFresh };
       }
-      
+
       return { hasCache: false, isFresh: false };
     } catch (error) {
       console.error('Error loading cached data:', error);
@@ -429,32 +310,33 @@ const HomeScreen = () => {
     }
   };
 
-  // Fetch homescreen data from backend
   const fetchHomescreenData = async (showRefreshIndicator = false, forceRefresh = false) => {
     try {
       if (showRefreshIndicator) setRefreshing(true);
       if (forceRefresh) setLoading(true);
 
-      const response = await axios.get('https://moihub.onrender.com/api/homescreen', {
+      const response = await axios.get('/api/homescreen', {
         timeout: 10000,
       });
-      
+
+      if (!isMountedRef.current) return;
+
       const data = response.data;
       setHomescreenData(data);
-      
+
       await DataService.setAppSetting('homescreen_cache', {
         data,
         timestamp: Date.now()
       });
-      
+
     } catch (error) {
       console.error('Fetch homescreen failed:', error.message);
-      
+
       if (!homescreenData) {
         const fallback = await loadCachedData();
         if (!fallback.hasCache) {
           Alert.alert(
-            'Connection Error', 
+            'Connection Error',
             'Unable to load data. Please check your internet connection and try again.',
             [
               {
@@ -470,15 +352,17 @@ const HomeScreen = () => {
         }
       }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
   useEffect(() => {
     const initializeData = async () => {
       const cacheResult = await loadCachedData();
-      
+
       if (cacheResult.hasCache) {
         if (!cacheResult.isFresh) {
           fetchHomescreenData(false, false);
@@ -487,27 +371,25 @@ const HomeScreen = () => {
         await fetchHomescreenData(false, true);
       }
 
-      await generatePersonalizedContent();
-      await fetchShowcases();
+      generatePersonalizedContent();
+      fetchShowcases();
     };
 
     initializeData();
   }, []);
 
-  // Pull to refresh
   const onRefresh = useCallback(() => {
     fetchHomescreenData(true, false);
     fetchShowcases();
   }, []);
 
-  // Auto-slide functionality
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentSlide((prev) => {
         const nextSlide = (prev + 1) % slideData.length;
-        slideRef.current?.scrollToIndex({ 
-          index: nextSlide, 
-          animated: true 
+        slideRef.current?.scrollToIndex({
+          index: nextSlide,
+          animated: true
         });
         return nextSlide;
       });
@@ -516,15 +398,14 @@ const HomeScreen = () => {
     return () => clearInterval(interval);
   }, [slideData.length]);
 
-  // Ads carousel auto-slide
   useEffect(() => {
     if (homescreenData?.myAds?.length > 1) {
       const interval = setInterval(() => {
         setCurrentAdSlide((prev) => {
           const nextSlide = (prev + 1) % homescreenData.myAds.length;
-          adsRef.current?.scrollToIndex({ 
-            index: nextSlide, 
-            animated: true 
+          adsRef.current?.scrollToIndex({
+            index: nextSlide,
+            animated: true
           });
           return nextSlide;
         });
@@ -546,17 +427,17 @@ const HomeScreen = () => {
 
   const goToSlide = (index) => {
     setCurrentSlide(index);
-    slideRef.current?.scrollToIndex({ 
-      index, 
-      animated: true 
+    slideRef.current?.scrollToIndex({
+      index,
+      animated: true
     });
   };
 
   const goToAdSlide = (index) => {
     setCurrentAdSlide(index);
-    adsRef.current?.scrollToIndex({ 
-      index, 
-      animated: true 
+    adsRef.current?.scrollToIndex({
+      index,
+      animated: true
     });
   };
 
@@ -564,16 +445,14 @@ const HomeScreen = () => {
     if (!homescreenData?.highlight) return;
 
     const highlight = homescreenData.highlight;
-    
-    if (trackUserBehavior) {
-      trackUserBehavior('highlight_click', 'Highlight', { 
-        title: highlight.title,
-        type: highlight.type 
-      });
-    }
+
+    trackUserBehavior('highlight_click', 'Highlight', {
+      title: highlight.title,
+      type: highlight.type
+    });
 
     if (highlight.targetScreen && highlight.targetId) {
-      navigation.navigate(highlight.targetScreen, { 
+      navigation.navigate(highlight.targetScreen, {
         id: highlight.targetId,
         ...(highlight.metadata || {})
       });
@@ -581,56 +460,56 @@ const HomeScreen = () => {
     }
 
     const highlightType = highlight.type?.toUpperCase();
-    
+
     if (highlightType === 'BLOG' || highlightType === 'ARTICLE' || highlightType === 'NEWS') {
       navigation.navigate('BlogsNavigator', { screen: 'Blogs' });
       return;
     }
-    
+
     if (highlightType === 'FOOD' || highlightType === 'RESTAURANT') {
       navigation.navigate('FoodStack', { screen: 'FoodHome' });
       return;
     }
-    
+
     if (highlightType === 'SHOP' || highlightType === 'MARKETPLACE' || highlightType === 'STORE') {
       navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
       return;
     }
-    
+
     if (highlightType === 'DATING' || highlightType === 'MATCH' || highlightType === 'LINKME') {
       navigation.navigate('LinkMe', { screen: 'LinkMeEntry' });
       return;
     }
-    
+
     if (highlightType === 'ROOMMATE' || highlightType === 'ACCOMMODATION' || highlightType === 'RENTAL') {
       navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' });
       return;
     }
-    
+
     if (highlightType === 'SECONDHAND' || highlightType === 'MARKET' || highlightType === 'SELL') {
       navigation.navigate('SecondHandStack');
       return;
     }
 
     const searchText = `${highlight.title} ${highlight.content || ''}`.toLowerCase();
-    
-    if (searchText.includes('blog') || searchText.includes('article') || 
+
+    if (searchText.includes('blog') || searchText.includes('article') ||
         searchText.includes('news') || searchText.includes('campus') ||
         searchText.includes('event') || searchText.includes('update')) {
       navigation.navigate('BlogsNavigator', { screen: 'Blogs' });
-    } else if (searchText.includes('food') || searchText.includes('restaurant') || 
+    } else if (searchText.includes('food') || searchText.includes('restaurant') ||
                searchText.includes('delivery') || searchText.includes('meal')) {
       navigation.navigate('FoodStack', { screen: 'FoodHome' });
-    } else if (searchText.includes('shop') || searchText.includes('buy') || 
+    } else if (searchText.includes('shop') || searchText.includes('buy') ||
                searchText.includes('store') || searchText.includes('product')) {
       navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
-    } else if (searchText.includes('date') || searchText.includes('linkme') || 
+    } else if (searchText.includes('date') || searchText.includes('linkme') ||
                searchText.includes('meet') || searchText.includes('match')) {
       navigation.navigate('LinkMe', { screen: 'LinkMeEntry' });
-    } else if (searchText.includes('room') || searchText.includes('rent') || 
+    } else if (searchText.includes('room') || searchText.includes('rent') ||
                searchText.includes('accommodation') || searchText.includes('roommate')) {
       navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' });
-    } else if (searchText.includes('second') || searchText.includes('sell') || 
+    } else if (searchText.includes('second') || searchText.includes('sell') ||
                searchText.includes('market') || searchText.includes('used')) {
       navigation.navigate('SecondHandStack');
     } else {
@@ -639,23 +518,19 @@ const HomeScreen = () => {
   };
 
   const handleVendorCTAPress = () => {
-    if (trackUserBehavior) {
-      trackUserBehavior('vendor_cta_click', 'OnboardingNavigator', { 
-        source: 'homescreen',
-        type: 'vendor_onboarding' 
-      });
-    }
-    
+    trackUserBehavior('vendor_cta_click', 'OnboardingNavigator', {
+      source: 'homescreen',
+      type: 'vendor_onboarding'
+    });
+
     navigation.navigate('OnboardingNavigator');
   };
 
   const handleAdPress = (ad) => {
-    if (trackUserBehavior) {
-      trackUserBehavior('ad_click', 'Ad', { 
-        title: ad.title,
-        adId: ad._id 
-      });
-    }
+    trackUserBehavior('ad_click', 'Ad', {
+      title: ad.title,
+      adId: ad._id
+    });
 
     const searchText = `${ad.title} ${ad.caption}`.toLowerCase();
 
@@ -664,9 +539,9 @@ const HomeScreen = () => {
     } else if (searchText.includes('shop') || searchText.includes('buy') || searchText.includes('store')) {
       navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
     } else if (searchText.includes('rent') || searchText.includes('room') || searchText.includes('accommodation')) {
-      navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' }); 
+      navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' });
     } else if (searchText.includes('second') || searchText.includes('sell') || searchText.includes('market')) {
-      navigation.navigate('SecondHandStack'); 
+      navigation.navigate('SecondHandStack');
     } else if (searchText.includes('date') || searchText.includes('link') || searchText.includes('dating')) {
       navigation.navigate('LinkMe', { screen: 'LinkMeEntry' });
     } else {
@@ -678,35 +553,19 @@ const HomeScreen = () => {
     <View style={[styles.slideItem, { backgroundColor: item.backgroundColor }]}>
       <View style={styles.slideContent}>
         <View style={styles.slideTextContainer}>
-          <Animatable.Text 
-            animation="fadeInDown" 
-            duration={1200} 
-            style={styles.slideTitle}
-          >
+          <Animatable.Text animation="fadeInDown" duration={1200} style={styles.slideTitle}>
             {item.title}
           </Animatable.Text>
-          <Animatable.Text 
-            animation="fadeInDown"
-            duration={1200}
-            delay={300}
-            style={styles.slideSubtitle}
-          >
+          <Animatable.Text animation="fadeInDown" duration={1200} delay={300} style={styles.slideSubtitle}>
             {item.subtitle}
           </Animatable.Text>
-          <TouchableOpacity
-            style={styles.slideButton}
-            onPress={item.buttonAction}
-          >
+          <TouchableOpacity style={styles.slideButton} onPress={item.buttonAction}>
             <Text style={styles.slideButtonText}>{item.buttonText}</Text>
             <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
         <View style={styles.slideImageContainer}>
-          <Image
-            source={item.image}
-            style={styles.slideImage}
-            resizeMode="cover"
-          />
+          <Image source={item.image} style={styles.slideImage} resizeMode="cover" />
         </View>
       </View>
     </View>
@@ -714,36 +573,22 @@ const HomeScreen = () => {
 
   const renderAdItem = ({ item }) => (
     <TouchableOpacity style={styles.adItem} onPress={() => handleAdPress(item)}>
-      <Image
-        source={{ uri: item.imageUrl }}
-        style={styles.adImage}
-        resizeMode="cover"
-      />
+      <Image source={{ uri: item.imageUrl }} style={styles.adImage} resizeMode="cover" />
       <View style={styles.adOverlay}>
         <Text style={styles.adTitle}>{item.title}</Text>
         <Text style={styles.adCaption}>{item.caption}</Text>
-        <TouchableOpacity
-          style={styles.adButton}
-          onPress={() => handleAdPress(item)}
-        >
+        <TouchableOpacity style={styles.adButton} onPress={() => handleAdPress(item)}>
           <Text style={styles.adButtonText}>Explore</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 
-  const renderFeedItem = ({ item }) => (
-    <TouchableOpacity style={styles.feedItem} onPress={item.action}>
-      <View style={styles.feedHeader}>
-        <Text style={styles.feedType}>{item.icon} {item.type}</Text>
-      </View>
-      <Text style={styles.feedTitle}>{item.title}</Text>
-      <Text style={styles.feedDescription}>{item.description}</Text>
-    </TouchableOpacity>
-  );
-
   const renderExploreItem = ({ item }) => (
     <TouchableOpacity style={styles.exploreItem} onPress={item.action}>
+      <View style={styles.exploreIconContainer}>
+        <Ionicons name={item.icon} size={20} color="#01604c" />
+      </View>
       <View style={styles.exploreContent}>
         <View style={styles.exploreHeader}>
           <Text style={styles.exploreTitle}>{item.title}</Text>
@@ -756,39 +601,23 @@ const HomeScreen = () => {
     </TouchableOpacity>
   );
 
-  const renderRecentItem = ({ item }) => (
-    <TouchableOpacity style={styles.recentItem} onPress={item.action}>
-      <View style={styles.recentContent}>
-        <View style={styles.recentHeader}>
-          <Text style={styles.recentTitle}>{item.title}</Text>
-        </View>
-        <Text style={styles.recentDescription}>{item.description}</Text>
-      </View>
-    </TouchableOpacity>
-  );
-
   return (
     <View style={styles.container}>
       <StatusBar backgroundColor="#02604c" barStyle="light-content" />
-      
+
       <WhatsAppFAB />
-      
-      {/* Header - ALWAYS VISIBLE */}
+
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.logoTextContainer}>
-            <Image
-              source={require('../assets/moihublogo.png')}
-              style={styles.logo}
-              resizeMode="contain"
-            />
+            <Image source={require('../assets/moihublogo.png')} style={styles.logo} resizeMode="contain" />
             <View>
               <Text style={styles.appName}>MoiHub</Text>
               <Text style={styles.greeting}>Welcome back, {currentUser?.username || 'Guest'}!</Text>
             </View>
           </View>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.notificationButton}
             onPress={() => navigation.navigate('Messages', { screen: 'ChatList' })}
           >
@@ -801,13 +630,11 @@ const HomeScreen = () => {
         </View>
       </View>
 
-      <ScrollView 
+      <ScrollView
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Interactive Slideshow - ALWAYS VISIBLE */}
+        {/* Slideshow */}
         <View style={styles.slideshowContainer}>
           <FlatList
             ref={slideRef}
@@ -824,7 +651,7 @@ const HomeScreen = () => {
               index,
             })}
           />
-          
+
           <View style={styles.indicatorContainer}>
             {slideData.map((_, index) => (
               <TouchableOpacity
@@ -839,18 +666,18 @@ const HomeScreen = () => {
           </View>
         </View>
 
-        {/* Service Categories - ALWAYS VISIBLE */}
-        <View style={styles.sectionContainer}>          
+        {/* Service Categories */}
+        <View style={styles.sectionContainer}>
           <View style={styles.categoriesContainer}>
             {serviceCategories.map((category, idx) => (
-              <Animatable.View 
+              <Animatable.View
                 key={idx}
                 animation="bounceIn"
                 delay={300 + (idx * 100)}
                 duration={1500}
                 style={styles.categoryItem}
               >
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.categoryIcon, { backgroundColor: category.color }]}
                   onPress={category.onPress}
                 >
@@ -862,7 +689,6 @@ const HomeScreen = () => {
           </View>
         </View>
 
-        {/* API-dependent content - PROGRESSIVE LOADING */}
         {loading ? (
           <View style={styles.loadingContentContainer}>
             <ActivityIndicator size="large" color="#01604c" />
@@ -873,16 +699,11 @@ const HomeScreen = () => {
             {/* Today's Mission */}
             {homescreenData?.todaysMission && (
               <View style={styles.sectionContainer}>
-                <Animatable.View 
-                  animation="fadeInUp"
-                  delay={500}
-                  duration={1000}
-                  style={styles.missionContainer}
-                >
+                <Animatable.View animation="fadeInUp" delay={500} duration={1000} style={styles.missionContainer}>
                   <LinearGradient
                     colors={['#FF6B6B', '#4ECDC4', '#45B7D1']}
-                    start={{x: 0, y: 0}}
-                    end={{x: 1, y: 1}}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
                     style={styles.missionGradient}
                   >
                     <View style={styles.missionHeader}>
@@ -900,34 +721,24 @@ const HomeScreen = () => {
                       ) : (
                         <View style={{ width: 16, height: 16, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 8 }} />
                       )}
-                      <Text style={styles.missionFooterText}>You've got this! 💪</Text>
+                      <Text style={styles.missionFooterText}>You've got this!</Text>
                     </View>
                   </LinearGradient>
                 </Animatable.View>
               </View>
             )}
 
-            {/* Services Showcase - Only show if not empty */}
+            {/* Services Showcase */}
             {servicesShowcase.length > 0 && (
               <View style={styles.sectionContainer}>
-               
-                <ServicesShowcase 
-                  items={servicesShowcase}
-                  loading={showcaseLoading}
-                  navigation={navigation}
-                />
+                <ServicesShowcase items={servicesShowcase} loading={showcaseLoading} navigation={navigation} />
               </View>
             )}
 
-            {/* Highlight Section */}
+            {/* Highlight */}
             {homescreenData?.highlight && (
               <View style={styles.sectionContainer}>
-                <Animatable.View 
-                  animation="fadeInUp"
-                  delay={600}
-                  duration={1000}
-                  style={styles.highlightContainer}
-                >
+                <Animatable.View animation="fadeInUp" delay={600} duration={1000} style={styles.highlightContainer}>
                   {homescreenData.highlight.graphicUrl && (
                     <View style={styles.highlightImageContainer}>
                       <Image
@@ -935,10 +746,7 @@ const HomeScreen = () => {
                         style={styles.highlightImage}
                         resizeMode="cover"
                       />
-                      <LinearGradient
-                        colors={['transparent', 'rgba(0,0,0,0.7)']}
-                        style={styles.highlightImageOverlay}
-                      />
+                      <LinearGradient colors={['transparent', 'rgba(0,0,0,0.7)']} style={styles.highlightImageOverlay} />
                     </View>
                   )}
                   <View style={styles.highlightContent}>
@@ -951,10 +759,7 @@ const HomeScreen = () => {
                       <Text style={styles.highlightTitle}>{homescreenData.highlight.title}</Text>
                     </View>
                     <Text style={styles.highlightText}>{homescreenData.highlight.content}</Text>
-                    <TouchableOpacity
-                      style={styles.highlightButton}
-                      onPress={handleHighlightPress}
-                    >
+                    <TouchableOpacity style={styles.highlightButton} onPress={handleHighlightPress}>
                       <Text style={styles.highlightButtonText}>Check out</Text>
                       {iconsLoaded ? (
                         <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
@@ -967,24 +772,17 @@ const HomeScreen = () => {
               </View>
             )}
 
-            {/* Marketplace Showcase - Only show if not empty */}
+            {/* Marketplace Showcase */}
             {marketplaceShowcase.length > 0 && (
               <View style={styles.sectionContainer}>
                 <View style={styles.showcaseHeader}>
                   <Text style={styles.sectionTitle}>Trending in Marketplace</Text>
-                  <TouchableOpacity 
-                    style={styles.viewAllButton}
-                    onPress={() => navigation.navigate('SecondHandStack')}
-                  >
+                  <TouchableOpacity style={styles.viewAllButton} onPress={() => navigation.navigate('SecondHandStack')}>
                     <Text style={styles.viewAllText}>View All</Text>
                     <Ionicons name="arrow-forward" size={14} color="#01604c" />
                   </TouchableOpacity>
                 </View>
-                <MarketplaceShowcase 
-                  items={marketplaceShowcase}
-                  loading={showcaseLoading}
-                  navigation={navigation}
-                />
+                <MarketplaceShowcase items={marketplaceShowcase} loading={showcaseLoading} navigation={navigation} />
               </View>
             )}
 
@@ -1008,7 +806,7 @@ const HomeScreen = () => {
                       index,
                     })}
                   />
-                  
+
                   {homescreenData.myAds.length > 1 && (
                     <View style={styles.adIndicatorContainer}>
                       {homescreenData.myAds.map((_, index) => (
@@ -1027,95 +825,42 @@ const HomeScreen = () => {
               </View>
             )}
 
-            {/* Personalized Feed */}
-            {personalizedFeed.length > 0 && (
-              <View style={styles.sectionContainer}>
-                <Text style={styles.sectionTitle}>Personalized Feed</Text>
-                <View style={styles.feedContainer}>
-                  {personalizedFeed.map((item) => (
-                    <Animatable.View
-                      key={item.id}
-                      animation="fadeInUp"
-                      duration={800}
-                      delay={item.id * 200}
-                    >
-                      {renderFeedItem({ item })}
-                    </Animatable.View>
-                  ))}
-                </View>
-              </View>
-            )}
-
             {/* Explore Sections */}
             <View style={styles.sectionContainer}>
               <Text style={styles.sectionTitle}>Explore Sections</Text>
               <View style={styles.exploreContainer}>
                 {exploreSections.map((item) => (
-                  <Animatable.View
-                    key={item.id}
-                    animation="fadeInUp"
-                    duration={800}
-                    delay={item.id * 200}
-                  >
+                  <Animatable.View key={item.id} animation="fadeInUp" duration={800} delay={item.id * 200}>
                     {renderExploreItem({ item })}
                   </Animatable.View>
                 ))}
               </View>
             </View>
 
-            {/* Recently Viewed */}
-            {recentlyViewed.length > 0 && (
-              <View style={styles.sectionContainer}>
-                <Text style={styles.sectionTitle}>Recently Viewed</Text>
-                <View style={styles.recentContainer}>
-                  {recentlyViewed.map((item) => (
-                    <Animatable.View
-                      key={item.id}
-                      animation="fadeInUp"
-                      duration={800}
-                      delay={item.id * 200}
-                    >
-                      {renderRecentItem({ item })}
-                    </Animatable.View>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* Vendor Call to Action - UPDATED TEXT */}
-            {homescreenData?.vendorCall && (
-              <View style={styles.sectionContainer}>
-                <Animatable.View 
-                  animation="fadeInUp"
-                  delay={700}
-                  duration={1000}
-                  style={styles.vendorCallContainer}
-                >
-                  <View style={styles.vendorCallContent}>
+            {/* Vendor Call to Action - always visible */}
+            <View style={styles.sectionContainer}>
+              <Animatable.View animation="fadeInUp" delay={700} duration={1000} style={styles.vendorCallContainer}>
+                <View style={styles.vendorCallContent}>
+                  {iconsLoaded ? (
+                    <Ionicons name="business" size={32} color="#FFFFFF" style={styles.vendorCallIcon} />
+                  ) : (
+                    <View style={{ width: 32, height: 32, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 16, marginBottom: 10 }} />
+                  )}
+                  <Text style={styles.vendorCallTitle}>List Your Business on MoiHub</Text>
+                  <Text style={styles.vendorCallText}>
+                    Reach thousands of students. Get your business listed today!
+                  </Text>
+                  <TouchableOpacity style={styles.vendorCallButton} onPress={handleVendorCTAPress}>
+                    <Text style={styles.vendorCallButtonText}>Become a Vendor</Text>
                     {iconsLoaded ? (
-                      <Ionicons name="business" size={32} color="#FFFFFF" style={styles.vendorCallIcon} />
+                      <Ionicons name="arrow-forward" size={16} color="#4CAF50" />
                     ) : (
-                      <View style={{ width: 32, height: 32, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 16, marginBottom: 10 }} />
+                      <View style={{ width: 16, height: 16, backgroundColor: 'rgba(76,175,80,0.3)', borderRadius: 8 }} />
                     )}
-                    <Text style={styles.vendorCallTitle}>List Your Business on MoiHub</Text>
-                    <Text style={styles.vendorCallText}>
-                      Reach thousands of students. Get your business listed today!
-                    </Text>
-                    <TouchableOpacity
-                      style={styles.vendorCallButton}
-                      onPress={handleVendorCTAPress}
-                    >
-                      <Text style={styles.vendorCallButtonText}>Become a Vendor</Text>
-                      {iconsLoaded ? (
-                        <Ionicons name="arrow-forward" size={16} color="#4CAF50" />
-                      ) : (
-                        <View style={{ width: 16, height: 16, backgroundColor: 'rgba(76,175,80,0.3)', borderRadius: 8 }} />
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </Animatable.View>
-              </View>
-            )}
+                  </TouchableOpacity>
+                </View>
+              </Animatable.View>
+            </View>
           </>
         )}
 
@@ -1140,17 +885,17 @@ const HomeScreen = () => {
       </ScrollView>
     </View>
   );
-}; 
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f0f0e1', 
+    backgroundColor: '#f0f0e1',
   },
   header: {
     backgroundColor: '#edeedf',
-    paddingTop: 8, // Reduced from 10
-    paddingBottom: 10, // Reduced from 15
+    paddingTop: 8,
+    paddingBottom: 10,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
@@ -1164,7 +909,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8, // Reduced from 15
+    marginBottom: 8,
   },
   logoTextContainer: {
     flexDirection: 'row',
@@ -1184,15 +929,14 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: 14,
     color: '#000',
-    marginTop: 0, // Reduced from 2
+    marginTop: 0,
   },
   notificationButton: {
     backgroundColor: '#E8F5E8',
     borderRadius: 20,
     padding: 8,
   },
-  
-  // Slideshow Styles - UNCHANGED (as requested)
+
   slideshowContainer: {
     marginHorizontal: 20,
     marginTop: 20,
@@ -1273,30 +1017,28 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
 
-  // Loading content container
   loadingContentContainer: {
-    marginTop: 20, // Reduced from 40
+    marginTop: 20,
     alignItems: 'center',
-    paddingVertical: 15, // Reduced from 30
+    paddingVertical: 15,
   },
   loadingText: {
-    marginTop: 8, // Reduced from 12
+    marginTop: 8,
     fontSize: 14,
     color: '#666',
   },
 
   sectionContainer: {
-    marginTop: 16, // Reduced from 24
+    marginTop: 16,
     paddingHorizontal: 20,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#000',
-    marginBottom: 10, // Reduced from 16
+    marginBottom: 10,
   },
 
-  // NEW: Showcase Header with View All
   showcaseHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1326,7 +1068,7 @@ const styles = StyleSheet.create({
   categoryItem: {
     width: '22%',
     alignItems: 'center',
-    marginBottom: 12, // Reduced from 16
+    marginBottom: 12,
   },
   categoryIcon: {
     width: 50,
@@ -1334,7 +1076,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4, // Reduced from 8
+    marginBottom: 4,
   },
   categoryText: {
     fontSize: 12,
@@ -1342,7 +1084,6 @@ const styles = StyleSheet.create({
     color: '#000',
   },
 
-  // Mission Styles
   missionContainer: {
     borderRadius: 16,
     overflow: 'hidden',
@@ -1353,12 +1094,12 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   missionGradient: {
-    padding: 15, // Reduced from 20
+    padding: 15,
   },
   missionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8, // Reduced from 12
+    marginBottom: 8,
   },
   missionTitle: {
     fontSize: 18,
@@ -1369,15 +1110,15 @@ const styles = StyleSheet.create({
   missionContent: {
     fontSize: 16,
     color: '#FFFFFF',
-    lineHeight: 22, // Reduced from 24
-    marginBottom: 8, // Reduced from 12
+    lineHeight: 22,
+    marginBottom: 8,
     textAlign: 'center',
   },
   missionFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4, // Reduced from 8
+    marginTop: 4,
   },
   missionFooterText: {
     fontSize: 14,
@@ -1386,7 +1127,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Highlight Styles
   highlightContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -1402,22 +1142,22 @@ const styles = StyleSheet.create({
   },
   highlightImage: {
     width: '100%',
-    height: 140, // Reduced from 160
+    height: 140,
   },
   highlightImageOverlay: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 40, // Reduced from 60
+    height: 40,
   },
   highlightContent: {
-    padding: 15, // Reduced from 20
+    padding: 15,
   },
   highlightTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6, // Reduced from 12
+    marginBottom: 6,
   },
   highlightTitle: {
     fontSize: 18,
@@ -1428,14 +1168,14 @@ const styles = StyleSheet.create({
   highlightText: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 10, // Reduced from 16
-    lineHeight: 20, // Reduced from 22
+    marginBottom: 10,
+    lineHeight: 20,
   },
   highlightButton: {
     backgroundColor: '#01604c',
     borderRadius: 12,
-    paddingVertical: 8, // Reduced from 12
-    paddingHorizontal: 16, // Reduced from 20
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
@@ -1452,7 +1192,6 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
 
-  // Ads Carousel Styles - UNCHANGED (as requested since it's a carousel)
   adsContainer: {
     borderRadius: 12,
     overflow: 'hidden',
@@ -1510,11 +1249,10 @@ const styles = StyleSheet.create({
     right: 0,
   },
 
-  // Vendor Call Styles
   vendorCallContainer: {
     backgroundColor: '#01604c',
     borderRadius: 12,
-    padding: 12, // Reduced from 16
+    padding: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
@@ -1528,21 +1266,21 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    marginBottom: 4, // Reduced from 8
+    marginBottom: 4,
     textAlign: 'center',
   },
   vendorCallText: {
     fontSize: 14,
     color: '#FFFFFF',
-    marginBottom: 10, // Reduced from 16
+    marginBottom: 10,
     textAlign: 'center',
-    lineHeight: 18, // Reduced from 20
+    lineHeight: 18,
   },
   vendorCallButton: {
     backgroundColor: '#FFFFFF',
     borderRadius: 25,
-    paddingVertical: 8, // Reduced from 12
-    paddingHorizontal: 16, // Reduced from 20
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -1553,45 +1291,6 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
 
-  // Personalized Feed Styles
-  feedContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  feedItem: {
-    padding: 12, // Reduced from 16
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  feedHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4, // Reduced from 8
-  },
-  feedType: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#01604c',
-  },
-  feedTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 4, // Reduced from 8
-  },
-  feedDescription: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 18, // Reduced from 20
-  },
-
-  // Explore Sections Styles
   exploreContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -1603,9 +1302,20 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   exploreItem: {
-    padding: 12, // Reduced from 16
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+  },
+  exploreIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E8F5E8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   exploreContent: {
     flex: 1,
@@ -1614,7 +1324,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4, // Reduced from 8
+    marginBottom: 4,
   },
   exploreTitle: {
     fontSize: 16,
@@ -1630,52 +1340,18 @@ const styles = StyleSheet.create({
   exploreSubtitle: {
     fontSize: 14,
     color: '#666',
-    lineHeight: 18, // Reduced from 20
-  },
-
-  // Recently Viewed Styles
-  recentContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  recentItem: {
-    padding: 12, // Reduced from 16
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  recentContent: {
-    flex: 1,
-  },
-  recentHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 2, // Reduced from 4
-  },
-  recentTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  recentDescription: {
-    fontSize: 12,
-    color: '#666',
+    lineHeight: 18,
   },
 
   footer: {
-    marginTop: 20, // Reduced from 30
-    marginBottom: 20, // Reduced from 40
+    marginTop: 20,
+    marginBottom: 20,
     alignItems: 'center',
     paddingHorizontal: 20,
   },
   footerLinks: {
     flexDirection: 'row',
-    marginBottom: 4, // Reduced from 8
+    marginBottom: 4,
   },
   footerLink: {
     fontSize: 12,
@@ -1684,18 +1360,19 @@ const styles = StyleSheet.create({
   footerDivider: {
     fontSize: 12,
     color: '#7F8C8D',
-    marginHorizontal: 6, // Reduced from 8
+    marginHorizontal: 6,
   },
   footerText: {
     fontSize: 10,
     color: '#95A5A6',
-    marginTop: 1, // Reduced from 2
+    marginTop: 1,
   },
   footerCopyright: {
     fontSize: 10,
     fontWeight: 'bold',
     color: '#4CAF50',
-    marginTop: 3, // Reduced from 6
+    marginTop: 3,
   },
 });
-export default HomeScreen; 
+
+export default HomeScreen;
