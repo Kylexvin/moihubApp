@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -25,14 +25,18 @@ const { width, height } = Dimensions.get('window');
 const BASE_URL = 'https://moihub.onrender.com';
 
 const ProfileScreen = () => {
-  const { currentUser, logout, setCurrentUser, token } = useAuth();
+  const { currentUser, logout, setCurrentUser, token, refreshUser } = useAuth();
   const navigation = useNavigation();
 
   const [editUsernameModal, setEditUsernameModal] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const rolesWithDashboard = ['vendor', 'shopowner', 'SERVICE_PROVIDER'];
+  useEffect(() => {
+    refreshUser();
+  }, []);
+
+  const rolesWithDashboard = ['vendor', 'shopowner', 'SERVICE_PROVIDER', 'writer'];
   const showDashboardCard = currentUser && rolesWithDashboard.includes(currentUser.role);
 
   const authHeaders = {
@@ -72,17 +76,13 @@ const ProfileScreen = () => {
       );
 
       if (response.data.success) {
-        // Update context
         const updatedUser = { ...currentUser, ...response.data.user };
         setCurrentUser(updatedUser);
-        
-        // Update AsyncStorage
         try {
           await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
         } catch (storageError) {
           console.error('Error updating storage:', storageError);
         }
-        
         setEditUsernameModal(false);
         setNewUsername('');
         Alert.alert('Success', 'Username updated successfully!');
@@ -154,20 +154,15 @@ const ProfileScreen = () => {
         );
 
         if (response.data.success) {
-          // Update context with new avatar
           const updatedUser = { ...currentUser, avatar: response.data.user.avatar };
           setCurrentUser(updatedUser);
-          
-          // Update AsyncStorage
           try {
             await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
           } catch (storageError) {
             console.error('Error updating storage:', storageError);
           }
-          
           Alert.alert('Success', 'Profile picture updated!');
         } else {
-          console.log('Avatar response:', JSON.stringify(response.data));
           Alert.alert('Error', response.data.message || 'Failed to update picture');
         }
       }
@@ -197,17 +192,13 @@ const ProfileScreen = () => {
                 { headers: authHeaders, timeout: 15000 }
               );
               if (response.data.success) {
-                // Update context
                 const updatedUser = { ...currentUser, avatar: null };
                 setCurrentUser(updatedUser);
-                
-                // Update AsyncStorage
                 try {
                   await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
                 } catch (storageError) {
                   console.error('Error updating storage:', storageError);
                 }
-                
                 Alert.alert('Success', 'Profile picture removed');
               }
             } catch (error) {
@@ -225,11 +216,13 @@ const ProfileScreen = () => {
   const getDashboardInfo = (role) => {
     switch (role) {
       case 'vendor':
-        return { title: 'VENDOR PORTAL', subtitle: 'Access Vendor Dashboard', icon: '📦', route: 'VendorDashboard' };
+        return { title: 'VENDOR PORTAL', subtitle: 'Access Vendor Dashboard', icon: 'cube', route: 'VendorDashboard' };
       case 'shopowner':
-        return { title: 'SHOP MANAGER', subtitle: 'Access Shop Dashboard', icon: '🏪', route: 'Eshop' };
+        return { title: 'SHOP MANAGER', subtitle: 'Access Shop Dashboard', icon: 'storefront', route: 'Eshop' };
       case 'SERVICE_PROVIDER':
-        return { title: 'SERVICE PROVIDER', subtitle: 'Manage Shop & Services', icon: '🔧', route: 'ServiceProviderDashboard' };
+        return { title: 'SERVICE PROVIDER', subtitle: 'Manage Shop & Services', icon: 'construct', route: 'ServiceProviderDashboard' };
+      case 'writer':
+        return { title: 'WRITER PORTAL', subtitle: 'Manage your blog posts', icon: 'create', route: 'WriterNavigator' };
       default:
         return null;
     }
@@ -240,6 +233,7 @@ const ProfileScreen = () => {
       case 'vendor':           return '#9c27b0';
       case 'shopowner':        return '#4caf50';
       case 'SERVICE_PROVIDER': return '#2196f3';
+      case 'writer':           return '#FF9800';
       default:                 return '#6c7ce7';
     }
   };
@@ -381,6 +375,7 @@ const ProfileScreen = () => {
         {/* ── Dashboard Card ── */}
         {showDashboardCard && (() => {
           const info = getDashboardInfo(currentUser.role);
+          if (!info) return null;
           return (
             <TouchableOpacity
               style={styles.actionCard}
@@ -393,14 +388,14 @@ const ProfileScreen = () => {
               >
                 <View style={styles.actionContent}>
                   <View style={styles.actionIcon}>
-                    <Text style={styles.actionIconText}>{info.icon}</Text>
+                    <Ionicons name={info.icon} size={24} color="#6c7ce7" />
                   </View>
                   <View style={styles.actionInfo}>
                     <Text style={styles.actionTitle}>{info.title}</Text>
                     <Text style={styles.actionSubtitle}>{info.subtitle}</Text>
                   </View>
                   <View style={styles.actionArrow}>
-                    <Text style={styles.actionArrowText}>→</Text>
+                    <Ionicons name="chevron-forward" size={20} color="#6c7ce7" />
                   </View>
                 </View>
               </LinearGradient>
@@ -641,9 +636,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 16,
   },
-  actionIconText: {
-    fontSize: 20,
-  },
   actionInfo: {
     flex: 1,
   },
@@ -663,11 +655,6 @@ const styles = StyleSheet.create({
     height: 30,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  actionArrowText: {
-    fontSize: 18,
-    color: '#6c7ce7',
-    fontWeight: 'bold',
   },
   logoutButton: {
     marginTop: 10,

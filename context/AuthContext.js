@@ -1,7 +1,7 @@
 import { createContext, useState, useEffect, useContext, useRef } from 'react';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
 
 const AuthContext = createContext();
 
@@ -218,6 +218,16 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
+  useEffect(() => {
+  const subscription = AppState.addEventListener('change', (nextState) => {
+    if (nextState === 'active') {
+      refreshUser();
+    }
+  });
+
+  return () => subscription.remove();
+}, []);
+
   const register = async (userData) => {
     setError('');
     setLoading(true);
@@ -390,6 +400,21 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+const refreshUser = async () => {
+  try {
+    const storedToken = await AsyncStorage.getItem('authToken');
+    if (!storedToken || isTokenExpired(storedToken)) return;
+
+    const response = await axios.get('/api/auth/me');
+    const updatedUser = response.data.user;
+
+    setCurrentUser(updatedUser);
+    await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+  } catch (error) {
+    console.error('Failed to refresh user:', error);
+  }
+};
+
   const value = {
     currentUser,
     token,
@@ -402,8 +427,9 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated,
     setIsAuthenticated,
     setError,
-    setCurrentUser,  // Add this line to expose setCurrentUser
-    updateUser,      // Optional: add a dedicated update function
+    setCurrentUser,  
+    refreshUser,
+    updateUser,      
     isTokenExpired: () => isTokenExpired(token),
     getTimeUntilExpiry: () => getTimeUntilExpiry(token),
   };

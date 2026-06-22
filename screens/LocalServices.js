@@ -12,10 +12,7 @@ import {
   ActivityIndicator,
   TextInput,
   Animated,
-  Modal,
   Linking,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,199 +25,6 @@ import localServicesDB from '../services/LocalServicesDatabase';
 const { width, height } = Dimensions.get('window');
 const { Colors, Gradients, Typography, Spacing, BorderRadius, Components, Shadows } = Theme;
 
-// ─── Typing effect hook ───────────────────────────────────────────────────────
-const useTypingEffect = (text, speed = 18, enabled = true) => {
-  const [displayed, setDisplayed] = useState('');
-  const [done, setDone] = useState(false);
-
-  useEffect(() => {
-    if (!enabled || !text) {
-      setDisplayed(text || '');
-      setDone(true);
-      return;
-    }
-    setDisplayed('');
-    setDone(false);
-    let i = 0;
-    const interval = setInterval(() => {
-      i++;
-      setDisplayed(text.slice(0, i));
-      if (i >= text.length) {
-        clearInterval(interval);
-        setDone(true);
-      }
-    }, speed);
-    return () => clearInterval(interval);
-  }, [text, speed, enabled]);
-
-  return { displayed, done };
-};
-
-// ─── Single bot message with typing + card pop-in ────────────────────────────
-const BotMessage = ({ msg, onSuggestion, navigation, setShowAIChatbot }) => {
-  const { displayed, done } = useTypingEffect(msg.text, 16, true);
-  const cardAnim = useRef(new Animated.Value(0)).current;
-  const cardTranslate = useRef(new Animated.Value(20)).current;
-
-  useEffect(() => {
-    if (done && msg.cards && msg.cards.length > 0) {
-      Animated.parallel([
-        Animated.timing(cardAnim, {
-          toValue: 1,
-          duration: 350,
-          useNativeDriver: true,
-        }),
-        Animated.timing(cardTranslate, {
-          toValue: 0,
-          duration: 350,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [done]);
-
-  const getBadgeColor = (score) => {
-    if (score >= 85) return '#10B981';
-    if (score >= 70) return '#3B82F6';
-    if (score >= 55) return '#F59E0B';
-    return '#6B7280';
-  };
-
-  const handleCall = (phoneNumber) => {
-    if (!phoneNumber) { Alert.alert('No Phone', 'This provider has no phone number'); return; }
-    const clean = phoneNumber.replace(/\s+/g, '');
-    const formatted = clean.startsWith('+') ? clean : `+${clean}`;
-    Linking.openURL(`tel:${formatted}`).catch(() => Alert.alert('Error', 'Could not make phone call'));
-  };
-
-  const renderCard = (card) => (
-    <View key={card.providerId} style={styles.providerCard}>
-      <View style={styles.cardHeader}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.cardName}>{card.name}</Text>
-          <Text style={styles.cardCategory}>{card.category}</Text>
-        </View>
-        {card.badge && (
-          <View style={[styles.badge, { backgroundColor: getBadgeColor(card.matchScore) }]}>
-            <Text style={styles.badgeText}>{card.badge}</Text>
-          </View>
-        )}
-      </View>
-
-      {card.matchScore && (
-        <View style={styles.matchScoreContainer}>
-          <View style={styles.matchScoreBackground}>
-            <View style={[styles.matchScoreFill, { width: `${card.matchScore}%`, backgroundColor: getBadgeColor(card.matchScore) }]} />
-          </View>
-          <Text style={styles.matchScoreText}>{card.matchScore}% match</Text>
-        </View>
-      )}
-
-      <View style={styles.cardInfo}>
-        <View style={styles.infoRow}>
-          <Ionicons name="location" size={14} color={Colors.textSecondary} />
-          <Text style={styles.infoText} numberOfLines={1}>
-            {card.quickInfo?.address || card.locations?.[0] || 'Location not specified'}
-          </Text>
-        </View>
-        {card.rating > 0 && (
-          <View style={styles.infoRow}>
-            <Ionicons name="star" size={14} color="#F59E0B" />
-            <Text style={styles.infoText}>{card.rating.toFixed(1)} ⭐ ({card.totalReviews} {card.totalReviews === 1 ? 'review' : 'reviews'})</Text>
-          </View>
-        )}
-        <View style={styles.infoRow}>
-          <Ionicons name="call" size={14} color="#10B981" />
-          <Text style={styles.infoText}>{card.phone}</Text>
-        </View>
-        {card.quickInfo?.availability && (
-          <View style={styles.infoRow}>
-            <View style={styles.availableDot} />
-            <Text style={[styles.infoText, { color: '#10B981', fontWeight: '600' }]}>{card.quickInfo.availability}</Text>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.cardActions}>
-        <TouchableOpacity style={[styles.ctaButton, styles.ctaButtonPrimary]} onPress={() => handleCall(card.phone)} activeOpacity={0.7}>
-          <Ionicons name="call" size={16} color="#FFFFFF" />
-          <Text style={[styles.ctaText, styles.ctaTextPrimary]}>Call Now</Text>
-        </TouchableOpacity>
-        {card.hasDashboard && (
-          <TouchableOpacity
-            style={[styles.ctaButton, styles.ctaButtonView]}
-            onPress={() => {
-              setShowAIChatbot(false);
-              navigation.navigate('ProviderProfile', {
-                providerId: card.providerId,
-                providerName: card.name,
-                providerType: 'dashboard',
-                providerPhone: card.phone,
-                providerAddress: card.quickInfo?.address || card.locations?.[0],
-                providerDescription: card.description
-              });
-            }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="eye" size={16} color={Colors.primary} />
-            <Text style={styles.ctaText}>View Profile</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
-  );
-
-  return (
-    <View style={styles.botMessageContainer}>
-      <View style={styles.botMessage}>
-        <Text style={styles.botMessageText}>{displayed}</Text>
-
-        {/* Cursor blink while typing */}
-        {!done && <Text style={styles.cursor}>▋</Text>}
-
-        {/* Cards animate in after text done */}
-        {done && msg.cards && msg.cards.length > 0 && (
-          <Animated.View style={[styles.cardsContainer, { opacity: cardAnim, transform: [{ translateY: cardTranslate }] }]}>
-            <View style={styles.cardsHeader}>
-              <Ionicons name="business" size={16} color={Colors.primary} />
-              <Text style={styles.cardsTitle}>{msg.cards.length} provider{msg.cards.length > 1 ? 's' : ''} found</Text>
-            </View>
-            {msg.cards.map(card => renderCard(card))}
-          </Animated.View>
-        )}
-
-        {/* Understood location tag */}
-        {done && msg.understood && msg.understood.location !== 'Any location' && (
-          <View style={styles.understoodBox}>
-            <View style={styles.understoodHeader}>
-              <Ionicons name="location" size={14} color={Colors.primary} />
-              <Text style={styles.understoodTitle}>Searching near {msg.understood.location}</Text>
-            </View>
-          </View>
-        )}
-
-        {/* Suggestions after done */}
-        {done && msg.suggestions && msg.suggestions.length > 0 && (
-          <View style={styles.suggestionsContainer}>
-            <View style={styles.suggestionsHeader}>
-              <Ionicons name="bulb" size={14} color="#F59E0B" />
-              <Text style={styles.suggestionsTitle}>Try asking:</Text>
-            </View>
-            <View style={styles.suggestionChips}>
-              {msg.suggestions.map((s, idx) => (
-                <TouchableOpacity key={idx} style={styles.suggestionChip} onPress={() => onSuggestion(s)} activeOpacity={0.7}>
-                  <Ionicons name="arrow-forward-circle" size={14} color={Colors.primary} />
-                  <Text style={styles.suggestionText}>{s}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-      </View>
-    </View>
-  );
-};
-
 // ─── Main component ───────────────────────────────────────────────────────────
 const Localservices = ({ navigation }) => {
   const [categories, setCategories] = useState([]);
@@ -231,13 +35,6 @@ const Localservices = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isOffline, setIsOffline] = useState(false);
   const [dbReady, setDbReady] = useState(false);
-
-  // AI Chat
-  const [showAIChatbot, setShowAIChatbot] = useState(false);
-  const [aiQuery, setAiQuery] = useState('');
-  const [chatMessages, setChatMessages] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const scrollViewRef = useRef(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -295,65 +92,9 @@ const Localservices = ({ navigation }) => {
     };
   };
 
-  // ─── AI Chat helpers ────────────────────────────────────────────────────────
-  const callAISearch = async (queryText) => {
-    if (!queryText.trim()) return;
-    setIsSearching(true);
-    setChatMessages(prev => [...prev, { type: 'user', text: queryText }]);
-
-    try {
-      const response = await axios.post('/api/services/ai-chat', { query: queryText });
-      setChatMessages(prev => [...prev, {
-        type: 'bot',
-        text: response.data.message,
-        cards: response.data.cards || [],
-        suggestions: response.data.suggestions || [],
-        understood: response.data.understood
-      }]);
-    } catch (error) {
-      console.error('AI Chat Error:', error);
-      setChatMessages(prev => [...prev, {
-        type: 'bot',
-        text: "Sorry, I'm having trouble connecting. Please try again in a moment.",
-        suggestions: ['boda boda near gate', 'best kinyozi', 'mama fua', 'matatu services'],
-        understood: null
-      }]);
-    }
-
-    setIsSearching(false);
-    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-  };
-
-  const handleSuggestion = (suggestion) => {
-    setAiQuery('');
-    callAISearch(suggestion);
-  };
-
-  const handleSendPress = () => {
-    if (aiQuery.trim() && !isSearching) {
-      const q = aiQuery;
-      setAiQuery('');
-      callAISearch(q);
-    }
-  };
-
-  const handleSubmitEditing = () => {
-    if (aiQuery.trim() && !isSearching) {
-      const q = aiQuery;
-      setAiQuery('');
-      callAISearch(q);
-    }
-  };
-
+  // ─── AI Chat navigation ────────────────────────────────────────────────────────
   const openAIChat = () => {
-    setShowAIChatbot(true);
-    if (chatMessages.length === 0) {
-      setChatMessages([{
-        type: 'bot',
-        text: "👋 Hey! I'm MoiHub's AI assistant.\n\nI can help you find services around Moi University — transport, kinyozi, laundry, gas, cyber café, and more!\n\nJust type what you need below.",
-        suggestions: ['boda boda near main gate', 'best kinyozi in hostel', 'cheap mama fua', 'matatu to town now']
-      }]);
-    }
+    navigation.navigate('AIChat');
   };
 
   // ─── Data loading ───────────────────────────────────────────────────────────────
@@ -574,91 +315,6 @@ const Localservices = ({ navigation }) => {
     );
   };
 
-  const renderChatMessage = (msg, index) => {
-    if (msg.type === 'user') {
-      return (
-        <View key={index} style={styles.userMessageContainer}>
-          <View style={styles.userMessage}>
-            <Text style={styles.userMessageText}>{msg.text}</Text>
-          </View>
-        </View>
-      );
-    }
-    return (
-      <BotMessage
-        key={index}
-        msg={msg}
-        onSuggestion={handleSuggestion}
-        navigation={navigation}
-        setShowAIChatbot={setShowAIChatbot}
-      />
-    );
-  };
-
-  const renderAIChatModal = () => (
-    <Modal animationType="slide" transparent={false} visible={showAIChatbot} onRequestClose={() => setShowAIChatbot(false)}>
-      <SafeAreaView style={styles.chatModalContainer}>
-        {/* Header */}
-        <View style={styles.chatHeader}>
-          <View style={styles.chatHeaderLeft}>
-            <View style={styles.chatHeaderIcon}>
-              <Ionicons name="sparkles" size={24} color={Colors.primary} />
-            </View>
-            <View>
-              <Text style={styles.chatTitle}>AI Service Finder</Text>
-              <Text style={styles.chatSubtitle}>Natural language search</Text>
-            </View>
-          </View>
-          <TouchableOpacity onPress={() => setShowAIChatbot(false)} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color={Colors.text} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Messages */}
-        <ScrollView ref={scrollViewRef} style={styles.chatMessages} contentContainerStyle={styles.chatMessagesContent} showsVerticalScrollIndicator={false}>
-          {chatMessages.map((msg, index) => renderChatMessage(msg, index))}
-          {isSearching && (
-            <View style={styles.botMessageContainer}>
-              <View style={styles.botMessage}>
-                <View style={styles.typingIndicator}>
-                  <ActivityIndicator size="small" color={Colors.primary} />
-                  <Text style={styles.typingText}>Searching for providers...</Text>
-                </View>
-              </View>
-            </View>
-          )}
-        </ScrollView>
-
-        {/* Input bar - No voice recording */}
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-          <View style={styles.chatInputContainer}>
-            <TextInput
-              value={aiQuery}
-              onChangeText={setAiQuery}
-              placeholder="Ask for any service (e.g., 'boda boda near main gate')..."
-              placeholderTextColor={Colors.textSecondary}
-              style={styles.chatTextInput}
-              multiline
-              maxLength={200}
-              onSubmitEditing={handleSubmitEditing}
-              returnKeyType="search"
-              blurOnSubmit={false}
-            />
-
-            {/* Send button */}
-            <TouchableOpacity
-              onPress={handleSendPress}
-              disabled={isSearching || !aiQuery.trim()}
-              style={[styles.sendButton, (!aiQuery.trim() || isSearching) && styles.sendButtonDisabled]}
-            >
-              <Ionicons name="send" size={20} color={!aiQuery.trim() || isSearching ? Colors.textSecondary : '#FFFFFF'} />
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </Modal>
-  );
-
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -688,13 +344,12 @@ const Localservices = ({ navigation }) => {
         <View style={styles.footerSpace} />
       </ScrollView>
 
+      {/* AI FAB - Now just navigates to the chat screen */}
       <TouchableOpacity style={styles.aiFab} onPress={openAIChat} activeOpacity={0.8}>
         <LinearGradient colors={['#3B82F6', '#2563EB']} style={styles.aiFabGradient}>
           <Ionicons name="sparkles" size={24} color="#FFFFFF" />
         </LinearGradient>
       </TouchableOpacity>
-
-      {renderAIChatModal()}
 
       {isOffline && !loading && (
         <View style={styles.offlineBanner}>
@@ -768,72 +423,9 @@ const styles = StyleSheet.create({
 
   offlineBanner: { position: 'absolute', bottom: Spacing.lg, left: Spacing.lg, right: Spacing.lg, backgroundColor: Colors.card, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: Spacing.sm, borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.cardBorder, gap: Spacing.xs },
   offlineText: { ...Typography.caption, color: Colors.text, fontWeight: '600' },
-
-  // Chat modal
-  chatModalContainer: { flex: 1, backgroundColor: Colors.background },
-  chatHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder, backgroundColor: Colors.card },
-  chatHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  chatHeaderIcon: { width: 48, height: 48, borderRadius: BorderRadius.round, backgroundColor: Colors.primary + '20', justifyContent: 'center', alignItems: 'center' },
-  chatTitle: { ...Typography.h3, color: Colors.text },
-  chatSubtitle: { ...Typography.caption, color: Colors.textSecondary, marginTop: 2 },
-  closeButton: { padding: Spacing.xs },
-
-  chatMessages: { flex: 1 },
-  chatMessagesContent: { paddingVertical: Spacing.md, paddingHorizontal: Spacing.lg },
-
-  userMessageContainer: { alignItems: 'flex-end', marginBottom: Spacing.md },
-  userMessage: { backgroundColor: Colors.primary, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.lg, maxWidth: '80%' },
-  userMessageText: { color: '#FFFFFF', fontSize: 15 },
-
-  botMessageContainer: { alignItems: 'flex-start', marginBottom: Spacing.md },
-  botMessage: { backgroundColor: Colors.card, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.lg, maxWidth: '95%', borderWidth: 1, borderColor: Colors.cardBorder },
-  botMessageText: { color: Colors.text, fontSize: 15, lineHeight: 22 },
-  cursor: { color: Colors.primary, fontSize: 15, fontWeight: '300' },
-
-  typingIndicator: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  typingText: { color: Colors.textSecondary, fontSize: 14 },
-
-  understoodBox: { marginTop: Spacing.sm, padding: Spacing.sm, backgroundColor: Colors.primary + '10', borderRadius: BorderRadius.sm, borderLeftWidth: 3, borderLeftColor: Colors.primary },
-  understoodHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  understoodTitle: { fontSize: 13, fontWeight: '600', color: Colors.text, marginLeft: 6 },
-
-  cardsContainer: { marginTop: Spacing.md, gap: Spacing.md },
-  cardsHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  cardsTitle: { fontSize: 14, fontWeight: '600', color: Colors.text, marginLeft: 6 },
-
-  providerCard: { backgroundColor: Colors.background, borderRadius: BorderRadius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.cardBorder, marginBottom: Spacing.sm },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: Spacing.sm },
-  cardName: { fontSize: 16, fontWeight: '700', color: Colors.text, marginBottom: 2 },
-  cardCategory: { fontSize: 12, color: Colors.textSecondary },
-  badge: { paddingHorizontal: Spacing.xs, paddingVertical: 2, borderRadius: BorderRadius.xs },
-  badgeText: { fontSize: 10, fontWeight: '700', color: '#FFFFFF' },
-  matchScoreContainer: { marginTop: 8, marginBottom: 8 },
-  matchScoreBackground: { height: 4, backgroundColor: '#E5E7EB', borderRadius: 2, overflow: 'hidden' },
-  matchScoreFill: { height: '100%', borderRadius: 2 },
-  matchScoreText: { fontSize: 10, color: Colors.textSecondary, marginTop: 4, textAlign: 'right' },
-  availableDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981', marginRight: 4 },
-  cardInfo: { marginBottom: Spacing.md },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  infoText: { fontSize: 13, color: Colors.textSecondary, flex: 1 },
-  cardActions: { flexDirection: 'row', gap: Spacing.sm },
-  ctaButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: Spacing.sm, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.primary, backgroundColor: 'transparent' },
-  ctaButtonPrimary: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  ctaButtonView: { backgroundColor: 'transparent', borderColor: Colors.primary },
-  ctaText: { fontSize: 13, fontWeight: '600', color: Colors.primary },
-  ctaTextPrimary: { color: '#FFFFFF' },
-
-  suggestionsContainer: { marginTop: Spacing.md },
-  suggestionsHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  suggestionsTitle: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, marginLeft: 6 },
-  suggestionChips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  suggestionChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#EFF6FF', borderRadius: 16, borderWidth: 1, borderColor: '#BFDBFE', gap: 6 },
-  suggestionText: { fontSize: 13, color: Colors.primary, fontWeight: '500' },
-
-  // Input bar
-  chatInputContainer: { flexDirection: 'row', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.cardBorder, backgroundColor: Colors.card, alignItems: 'center' },
-  chatTextInput: { flex: 1, backgroundColor: Colors.background, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, paddingVertical: Platform.OS === 'ios' ? Spacing.sm : Spacing.xs, marginRight: Spacing.sm, maxHeight: 100, fontSize: 15, color: Colors.text, borderWidth: 1, borderColor: Colors.cardBorder },
-  sendButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' },
-  sendButtonDisabled: { backgroundColor: Colors.cardBorder },
+  
+  syncIndicator: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: Colors.primary + '20', padding: Spacing.xs, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.xs },
+  syncText: { ...Typography.caption, color: Colors.primary, fontWeight: '600' },
 });
 
 export default Localservices;

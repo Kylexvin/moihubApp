@@ -32,7 +32,7 @@ const BlogColors = {
   textSecondary: '#B0B0B0', // Light Gray
   textMuted: '#757575',     // Muted Gray
   border: '#333333',        // Border
-  like: '#FF6B6B',         // Like color
+  like: '#da0c0c',         // Like color
   readTime: '#4ECDC4',     // Read time color
 };
 

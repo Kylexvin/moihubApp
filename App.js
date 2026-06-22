@@ -46,6 +46,8 @@ import Constants from 'expo-constants';
 import OnboardingNavigator from './navigation/OnboardingNavigator';
 import { handleNotificationNavigation } from './utils/notificationHandler';
 import ServiceProviderDashboardNavigator from './navigation/ServiceProviderDashboardNavigator';
+import WriterNavigator from './navigation/WriterNavigator';
+import AIChatScreen from './screens/AIChatScreen';
 import Icon from 'react-native-vector-icons/FontAwesome';  
 
 const isExpoGo = Constants?.appOwnership === 'expo';
@@ -469,7 +471,8 @@ function AppNavigator() {
             <Stack.Screen name="Eshop" component={EshopOwnerNavigator} />
             <Stack.Screen name="ServicesStack" component={ServicesStackNavigator} />
             <Stack.Screen name="OnboardingNavigator" component={OnboardingNavigator} /> 
-            
+            <Stack.Screen name="WriterNavigator" component={WriterNavigator} options={{ headerShown: false }} />
+            <Stack.Screen name="AIChat" component={AIChatScreen} />
             <Stack.Screen
               name="EditProduct"
               component={EditProductScreen}
