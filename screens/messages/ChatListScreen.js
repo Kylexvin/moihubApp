@@ -1,110 +1,294 @@
-import React, { useState, useEffect, useCallback } from 'react';
+// screens/messages/ChatListScreen.js
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   TextInput,
   ActivityIndicator,
   Alert,
   RefreshControl,
   Animated,
   ScrollView,
-  Image,
   Modal,
+  StatusBar,
+  Platform,
 } from 'react-native';
-import { MaterialIcons as Icon } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useAuth } from '../../context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
-import io from 'socket.io-client';
-import Svg, { Path } from 'react-native-svg';
-import { Swipeable } from 'react-native-gesture-handler';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
+import io from 'socket.io-client';
 
+// ─── Design Tokens (same as ChatScreen) ──────────────────────────────────────
+const C = {
+  bg:           '#07201A',
+  surface:      '#0D2E24',
+  surfaceAlt:   '#0A2820',
+  headerBg:     '#092318',
+  own:          '#1B5E3B',
+  border:       '#1A3D2E',
+  accent:       '#34C97A',
+  accentMuted:  '#1E6640',
+  white:        '#FFFFFF',
+  textPrimary:  '#E8F5EE',
+  textSecondary:'#7CA98A',
+  textMeta:     '#5A8570',
+  danger:       '#E05252',
+  warning:      '#F0A040',
+  blue:         '#4FC3F7',
+  overlay:      'rgba(4,14,10,0.82)',
+  linkme:       '#C026D3',
+  linkmeLight:  '#1A0820',
+  system:       '#2563EB',
+  systemLight:  '#0D1B3E',
+};
+
+const BASE_URL   = 'https://moihub.onrender.com/api';
+const SOCKET_URL = 'https://moihub.onrender.com';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const avatarPalette = ['#1B6B45','#2D5A8E','#7B3FA0','#B05A1A','#2E7D6B','#6B3A1B','#1B4A6B'];
+
+const getAvatarColor = (username) => {
+  if (!username) return avatarPalette[0];
+  return avatarPalette[username.charCodeAt(0) % avatarPalette.length];
+};
+
+const getInitial = (username) =>
+  (username || '?')[0].toUpperCase();
+
+const formatTime = (timestamp) => {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  const now  = new Date();
+  const diffMs = now - date;
+  const diffH  = diffMs / (1000 * 60 * 60);
+  const diffD  = diffMs / (1000 * 60 * 60 * 24);
+  if (diffH < 1)  return `${Math.floor(diffMs / (1000 * 60))}m`;
+  if (diffH < 24) return `${Math.floor(diffH)}h`;
+  if (diffD < 7)  return `${Math.floor(diffD)}d`;
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+};
+
+const truncate = (str, n = 38) =>
+  !str ? '' : str.length > n ? str.substring(0, n) + '…' : str;
+
+// ─── Avatar component — stable, never loses initial ───────────────────────────
+const ConversationAvatar = React.memo(({ user, isSystem, isLinkMe, isOnline }) => {
+  const bg    = isSystem ? C.systemLight : getAvatarColor(user?.username);
+  const label = isSystem ? null : getInitial(user?.username);
+
+  return (
+    <View style={styles.avatarWrap}>
+      <View style={[
+        styles.avatarCircle,
+        { backgroundColor: bg },
+        isSystem && styles.avatarSystem,
+        isLinkMe && styles.avatarLinkMe,
+      ]}>
+        {isSystem ? (
+          <Icon name="notifications" size={22} color={C.system} />
+        ) : (
+          <Text style={styles.avatarInitial}>{label}</Text>
+        )}
+        {isLinkMe && (
+          <View style={styles.linkMeBadge}>
+            <Text style={styles.linkMeBadgeText}>💘</Text>
+          </View>
+        )}
+      </View>
+      {!isSystem && isOnline && <View style={styles.onlineDot} />}
+    </View>
+  );
+});
+
+// ─── Conversation row ─────────────────────────────────────────────────────────
+const ConversationRow = React.memo(({
+  item, otherUser, isOnline, typingText,
+  isDeleting, onPress, onLongPress, onDeletePress,
+  deleteModalVisible,
+}) => {
+  const isLinkMe = item.chatType === 'linkme';
+  const isSystem = item.chatType === 'system';
+
+  if (isDeleting) {
+    return (
+      <View style={[styles.rowCard, styles.rowCardDeleting]}>
+        <ActivityIndicator color={C.accent} style={{ marginRight: 12 }} />
+        <Text style={styles.deletingText}>Deleting…</Text>
+      </View>
+    );
+  }
+
+  const previewText = typingText || truncate(item.lastMessage?.content);
+
+  return (
+    <Swipeable
+      renderRightActions={(progress, dragX) => (
+        <RightDeleteAction dragX={dragX} onPress={() => onDeletePress(item)} />
+      )}
+      rightThreshold={40}
+      overshootRight={false}
+      enabled={!deleteModalVisible}
+    >
+      <TouchableOpacity
+        style={[
+          styles.rowCard,
+          isLinkMe && styles.rowCardLinkMe,
+          isSystem && styles.rowCardSystem,
+        ]}
+        onPress={onPress}
+        onLongPress={onLongPress}
+        delayLongPress={450}
+        activeOpacity={0.75}
+      >
+        <ConversationAvatar
+          user={otherUser}
+          isSystem={isSystem}
+          isLinkMe={isLinkMe}
+          isOnline={isOnline}
+        />
+
+        <View style={styles.rowInfo}>
+          <View style={styles.rowTop}>
+            <Text style={[
+              styles.rowName,
+              isLinkMe && { color: '#E879F9' },
+              isSystem && { color: C.blue },
+            ]} numberOfLines={1}>
+              {otherUser?.username || 'Unknown User'}
+              {isSystem && ' · System'}
+            </Text>
+            <Text style={[
+              styles.rowTime,
+              isSystem && { color: '#93C5FD' },
+            ]}>
+              {formatTime(item.lastMessageAt)}
+            </Text>
+          </View>
+
+          <View style={styles.rowBottom}>
+            <Text style={[
+              styles.rowPreview,
+              typingText && styles.rowTyping,
+              isSystem && styles.rowPreviewSystem,
+            ]} numberOfLines={1}>
+              {previewText}
+            </Text>
+            {item.unreadCount > 0 && (
+              <View style={[
+                styles.unreadBadge,
+                isLinkMe && { backgroundColor: C.linkme },
+                isSystem && { backgroundColor: C.system },
+              ]}>
+                <Text style={styles.unreadText}>
+                  {item.unreadCount > 99 ? '99+' : item.unreadCount}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Swipeable>
+  );
+});
+
+// ─── Swipe delete action ──────────────────────────────────────────────────────
+const RightDeleteAction = React.memo(({ dragX, onPress }) => {
+  const scale = dragX.interpolate({
+    inputRange: [-80, 0],
+    outputRange: [1, 0.5],
+    extrapolate: 'clamp',
+  });
+  return (
+    <TouchableOpacity onPress={onPress} style={styles.swipeAction} activeOpacity={0.85}>
+      <Animated.View style={[styles.swipeActionInner, { transform: [{ scale }] }]}>
+        <Icon name="delete-outline" size={22} color={C.white} />
+        <Text style={styles.swipeActionText}>Delete</Text>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+});
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
 const ChatListScreen = ({ navigation }) => {
-  const [conversations, setConversations] = useState([]);
+  const [conversations,         setConversations]         = useState([]);
   const [filteredConversations, setFilteredConversations] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [fadeAnim] = useState(new Animated.Value(0));
-  const [socket, setSocket] = useState(null);
-  const [connectionState, setConnectionState] = useState('disconnected');
-  const [onlineUsers, setOnlineUsers] = useState(new Set());
-  const [typingUsers, setTypingUsers] = useState({});
-  const [activeTab, setActiveTab] = useState('all');
-  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
-  const [selectedConversation, setSelectedConversation] = useState(null);
-  const [deletingId, setDeletingId] = useState(null);
-  const [longPressedConversation, setLongPressedConversation] = useState(null);
+  const [searchQuery,           setSearchQuery]           = useState('');
+  const [loading,               setLoading]               = useState(true);
+  const [refreshing,            setRefreshing]            = useState(false);
+  const [connectionState,       setConnectionState]       = useState('disconnected');
+  const [onlineUsers,           setOnlineUsers]           = useState(new Set());
+  const [typingUsers,           setTypingUsers]           = useState({});
+  const [activeTab,             setActiveTab]             = useState('all');
+  const [deleteModalVisible,    setDeleteModalVisible]    = useState(false);
+  const [selectedConversation,  setSelectedConversation]  = useState(null);
+  const [deletingId,            setDeletingId]            = useState(null);
 
+  const socketRef = useRef(null);
   const { currentUser, token, logout, isAuthenticated } = useAuth();
 
-  const BASE_URL = 'https://moihub.onrender.com/api';
-  const SOCKET_URL = 'https://moihub.onrender.com';
-
-  // ── Re-fetch whenever screen comes into focus ──────────────────────────────
+  // ── Re-fetch on focus ──
   useFocusEffect(
     useCallback(() => {
-      if (isAuthenticated && token) {
-        fetchConversations();
-      }
+      if (isAuthenticated && token) fetchConversations();
     }, [isAuthenticated, token])
   );
 
-  // ── Socket ─────────────────────────────────────────────────────────────────
+  // ── Socket ──
   useEffect(() => {
     if (!isAuthenticated || !token || !currentUser) return;
 
-    const socketConnection = io(SOCKET_URL, {
+    const sock = io(SOCKET_URL, {
       auth: { token, userId: currentUser._id },
       transports: ['websocket', 'polling'],
       timeout: 20000,
       forceNew: true,
     });
 
-    socketConnection.on('connect', () => {
+    sock.on('connect', () => {
       setConnectionState('connected');
-      if (currentUser?._id) socketConnection.emit('join_user_room', currentUser._id);
+      if (currentUser?._id) sock.emit('join_user_room', currentUser._id);
     });
+    sock.on('disconnect', () => setConnectionState('disconnected'));
+    sock.on('connect_error', () => setConnectionState('error'));
 
-    socketConnection.on('disconnect', () => setConnectionState('disconnected'));
-    socketConnection.on('connect_error', () => setConnectionState('error'));
+    sock.on('new_message',        (m) => updateWithNewMessage(m));
+    sock.on('new_system_message', (m) => updateWithNewMessage(m));
 
-    socketConnection.on('new_message', (message) => updateConversationWithNewMessage(message));
-    socketConnection.on('new_system_message', (message) => updateConversationWithNewMessage(message));
-
-    socketConnection.on('conversation_updated', (updatedConversation) => {
+    sock.on('conversation_updated', (updated) => {
       setConversations(prev =>
-        prev.map(conv => conv._id === updatedConversation._id ? updatedConversation : conv)
+        prev.map(c => c._id === updated._id ? updated : c)
           .sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt))
       );
     });
 
-    socketConnection.on('user_status_changed', ({ userId, status }) => {
+    sock.on('user_status_changed', ({ userId, status }) => {
       setOnlineUsers(prev => {
-        const newSet = new Set(prev);
-        status === 'online' ? newSet.add(userId) : newSet.delete(userId);
-        return newSet;
+        const s = new Set(prev);
+        status === 'online' ? s.add(userId) : s.delete(userId);
+        return s;
       });
     });
 
-    socketConnection.on('user_typing', ({ conversationId, userId, isTyping }) => {
+    sock.on('user_typing', ({ conversationId, userId, isTyping }) => {
       setTypingUsers(prev => ({
         ...prev,
-        [conversationId]: isTyping ? { userId, isTyping } : null,
+        [conversationId]: isTyping ? { userId } : null,
       }));
     });
 
-    socketConnection.on('message_read', ({ conversationId, messageId, userId }) => {
+    sock.on('message_read', ({ conversationId, messageId, userId }) => {
       setConversations(prev =>
         prev.map(conv => {
           if (conv._id !== conversationId) return conv;
           if (!conv.lastMessage || conv.lastMessage._id !== messageId) return conv;
-          if (conv.lastMessage.readBy?.some(rb => rb.user === userId)) return conv;
+          if (conv.lastMessage.readBy?.some(r => r.user === userId)) return conv;
           return {
             ...conv,
             lastMessage: {
@@ -116,139 +300,71 @@ const ChatListScreen = ({ navigation }) => {
       );
     });
 
-    setSocket(socketConnection);
-    return () => socketConnection.disconnect();
+    socketRef.current = sock;
+    return () => sock.disconnect();
   }, [isAuthenticated, token, currentUser]);
 
-  // ── Initial load + fade ────────────────────────────────────────────────────
+  // ── Filter ──
   useEffect(() => {
-    if (!isAuthenticated || !token) { logout(); return; }
-
-    Animated.timing(fadeAnim, {
-      toValue: 1, duration: 300, useNativeDriver: true,
-    }).start();
-  }, [isAuthenticated, token]);
-
-  // ── Filter conversations ───────────────────────────────────────────────────
-  useEffect(() => {
-    let filtered = conversations;
-
-    if (activeTab === 'linkme') filtered = filtered.filter(c => c.chatType === 'linkme');
-    else if (activeTab === 'system') filtered = filtered.filter(c => c.chatType === 'system');
+    let list = conversations;
+    if (activeTab === 'linkme') list = list.filter(c => c.chatType === 'linkme');
+    else if (activeTab === 'system') list = list.filter(c => c.chatType === 'system');
 
     if (searchQuery.trim()) {
-      filtered = filtered.filter(conv => {
-        const other = getOtherUser(conv);
+      const q = searchQuery.toLowerCase();
+      list = list.filter(conv => {
         if (conv.chatType === 'system') {
-          return (
-            conv.lastMessage?.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            conv.lastMessage?.metadata?.title?.toLowerCase().includes(searchQuery.toLowerCase())
-          );
+          return conv.lastMessage?.content?.toLowerCase().includes(q) ||
+                 conv.lastMessage?.metadata?.title?.toLowerCase().includes(q);
         }
+        const other = getOtherUser(conv);
         return (
-          other?.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          other?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          conv.lastMessage?.content?.toLowerCase().includes(searchQuery.toLowerCase())
+          other?.username?.toLowerCase().includes(q) ||
+          other?.email?.toLowerCase().includes(q) ||
+          conv.lastMessage?.content?.toLowerCase().includes(q)
         );
       });
     }
 
-    setFilteredConversations(filtered);
+    setFilteredConversations(list);
   }, [searchQuery, conversations, activeTab]);
 
-  // ── Auth error ─────────────────────────────────────────────────────────────
-  const handleAuthError = () => {
-    Alert.alert('Session Expired', 'Please log in again.', [
-      { text: 'OK', onPress: () => logout() }
-    ]);
-  };
-
-  // ── Fetch conversations ────────────────────────────────────────────────────
+  // ── Fetch ──
   const fetchConversations = async () => {
-    if (!token) return handleAuthError();
-
+    if (!token) { logout(); return; }
     try {
-      const response = await fetch(`${BASE_URL}/messages/conversations`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+      const res = await fetch(`${BASE_URL}/messages/conversations`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       });
 
-      if (response.ok) {
-        const data = await response.json();
-
-        const valid = data.filter(conv => {
-          if (!conv._id) return false;
-          if (!Array.isArray(conv.participants) || conv.participants.length === 0) {
-            if (conv.chatType !== 'system') return false;
-          }
-          return true;
-        }).map(conv => ({
-          ...conv,
-          unreadCount:
-            typeof conv.unreadCount === 'number' ? conv.unreadCount :
-            Array.isArray(conv.unreadCount) ?
-              conv.unreadCount.find(uc => uc.user === currentUser._id)?.count || 0 : 0,
-        }));
-
+      if (res.ok) {
+        const data = await res.json();
+        const valid = data
+          .filter(c => {
+            if (!c._id) return false;
+            if (!Array.isArray(c.participants) || c.participants.length === 0) {
+              return c.chatType === 'system';
+            }
+            return true;
+          })
+          .map(c => ({
+            ...c,
+            unreadCount:
+              typeof c.unreadCount === 'number' ? c.unreadCount :
+              Array.isArray(c.unreadCount)
+                ? c.unreadCount.find(u => u.user === currentUser._id)?.count || 0
+                : 0,
+          }));
         setConversations(valid);
-      } else if (response.status === 401) {
-        handleAuthError();
+      } else if (res.status === 401) {
+        Alert.alert('Session Expired', 'Please log in again.', [{ text: 'OK', onPress: logout }]);
       } else {
-        throw new Error(`Failed: ${response.status}`);
+        throw new Error(`${res.status}`);
       }
-    } catch (error) {
-      console.error('Fetch conversations error:', error);
+    } catch (e) {
       Alert.alert('Error', 'Failed to load conversations');
     } finally {
       setLoading(false);
-    }
-  };
-
-  // ── Delete conversation ────────────────────────────────────────────────────
-  const handleDeletePress = (conversation) => {
-    setSelectedConversation(conversation);
-    setDeleteModalVisible(true);
-  };
-const handleLongPress = (conversation) => {
-  // Only show modal if not already deleting
-  if (deletingId !== conversation._id) {
-    setSelectedConversation(conversation);
-    setDeleteModalVisible(true);
-  }
-};
-  const confirmDelete = async () => {
-    if (!selectedConversation) return;
-    
-    setDeletingId(selectedConversation._id);
-    setDeleteModalVisible(false);
-    
-    try {
-      const response = await fetch(`${BASE_URL}/messages/conversations/${selectedConversation._id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        // Remove conversation from state
-        setConversations(prev => prev.filter(conv => conv._id !== selectedConversation._id));
-        Alert.alert('Success', 'Conversation deleted');
-      } else if (response.status === 401) {
-        handleAuthError();
-      } else {
-        const error = await response.json();
-        Alert.alert('Error', error.message || 'Failed to delete conversation');
-      }
-    } catch (error) {
-      console.error('Delete conversation error:', error);
-      Alert.alert('Error', 'Failed to delete conversation');
-    } finally {
-      setDeletingId(null);
-      setSelectedConversation(null);
     }
   };
 
@@ -258,830 +374,746 @@ const handleLongPress = (conversation) => {
     setRefreshing(false);
   }, []);
 
-  const updateConversationWithNewMessage = (message) => {
+  const updateWithNewMessage = (message) => {
     setConversations(prev =>
       prev.map(conv => {
         if (conv._id !== message.conversation) return conv;
-        const senderId = typeof message.sender === 'object' ? message.sender._id : message.sender;
-        const isFromOtherUser = senderId !== currentUser._id;
+        const sid = typeof message.sender === 'object' ? message.sender._id : message.sender;
+        const isOther = sid !== currentUser._id;
         return {
           ...conv,
           lastMessage: message,
           lastMessageAt: message.createdAt,
-          unreadCount: isFromOtherUser ? (conv.unreadCount || 0) + 1 : conv.unreadCount,
+          unreadCount: isOther ? (conv.unreadCount || 0) + 1 : conv.unreadCount,
         };
       }).sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt))
     );
   };
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
-  const getOtherUser = (conversation) => {
-    const rawUserId = currentUser?._id || currentUser?.userId;
-
+  // ── getOtherUser — stable, checks both profilePicture and avatar fields ──
+  const getOtherUser = useCallback((conversation) => {
     if (conversation?.chatType === 'system') {
-      return { _id: '000000000000000000000000', username: 'MoiHub', avatar: null, isSystem: true };
+      return { _id: 'system', username: 'MoiHub', isSystem: true };
     }
-
-    if (!rawUserId || !Array.isArray(conversation?.participants)) return defaultUnknownUser();
-
-    const currentUserId = rawUserId.toString();
+    const uid = (currentUser?._id || currentUser?.userId)?.toString();
+    if (!uid || !Array.isArray(conversation?.participants)) {
+      return { _id: 'unknown', username: 'Unknown User' };
+    }
     for (const p of conversation.participants) {
-      if (p?._id?.toString() !== currentUserId) {
+      if (p?._id?.toString() !== uid) {
         return {
           _id: p._id,
           username: p.username || 'Unknown User',
-          email: p.email || '',
-          avatar: p.avatar || null,
+          email:    p.email || '',
+          // handle both field names your API might return
+          avatar:   p.profilePicture || p.avatar || null,
         };
       }
     }
-    return defaultUnknownUser();
+    return { _id: 'unknown', username: 'Unknown User' };
+  }, [currentUser]);
+
+  // ── Delete ──
+  const handleDeletePress = (conversation) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSelectedConversation(conversation);
+    setDeleteModalVisible(true);
   };
 
-  const defaultUnknownUser = () => ({ _id: 'unknown', username: 'Unknown User', email: '', avatar: null });
-
-  const formatTime = (timestamp) => {
-    if (!timestamp) return '';
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffH = diffMs / (1000 * 60 * 60);
-    const diffD = diffMs / (1000 * 60 * 60 * 24);
-    if (diffH < 1) return `${Math.floor(diffMs / (1000 * 60))}m`;
-    if (diffH < 24) return `${Math.floor(diffH)}h`;
-    if (diffD < 7) return `${Math.floor(diffD)}d`;
-    return date.toLocaleDateString();
+  const handleLongPress = (conversation) => {
+    if (deletingId !== conversation._id) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setSelectedConversation(conversation);
+      setDeleteModalVisible(true);
+    }
   };
 
-  const truncateMessage = (message, maxLength = 35) => {
-    if (!message) return '';
-    return message.length > maxLength ? message.substring(0, maxLength) + '...' : message;
+  const confirmDelete = async () => {
+    if (!selectedConversation) return;
+    setDeletingId(selectedConversation._id);
+    setDeleteModalVisible(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+
+    try {
+      const res = await fetch(
+        `${BASE_URL}/messages/conversations/${selectedConversation._id}`,
+        {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        }
+      );
+      if (res.ok) {
+        setConversations(prev => prev.filter(c => c._id !== selectedConversation._id));
+      } else if (res.status === 401) {
+        Alert.alert('Session Expired', 'Please log in again.', [{ text: 'OK', onPress: logout }]);
+      } else {
+        const err = await res.json();
+        Alert.alert('Error', err.message || 'Failed to delete conversation');
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to delete conversation');
+    } finally {
+      setDeletingId(null);
+      setSelectedConversation(null);
+    }
   };
 
-  const getTypingIndicator = (conversationId) => {
-    const t = typingUsers[conversationId];
-    return t && t.userId !== currentUser._id ? 'typing...' : null;
-  };
-
-  const isUserOnline = (userId) => onlineUsers.has(userId);
-
-  const navigateToChat = (conversation) => {
-    navigation.navigate('ChatScreen', {
-      conversationId: conversation._id,
-      conversation,
-      otherUser: getOtherUser(conversation),
-    });
-  };
-
-  // ── Swipeable render ───────────────────────────────────────────────────────
-  const renderRightActions = (progress, dragX, conversation) => {
-    const scale = dragX.interpolate({
-      inputRange: [-100, 0],
-      outputRange: [1, 0],
-      extrapolate: 'clamp',
-    });
-
-    const isDeleting = deletingId === conversation._id;
+  // ── Render item ──
+  const renderItem = useCallback(({ item }) => {
+    const otherUser = getOtherUser(item);
+    const isOnline  = onlineUsers.has(otherUser?._id);
+    const typing    = typingUsers[item._id];
+    const typingText = typing && typing.userId !== currentUser._id ? 'typing…' : null;
+    const isDeleting = deletingId === item._id;
 
     return (
-      <TouchableOpacity
-        onPress={() => handleDeletePress(conversation)}
-        style={styles.deleteAction}
-        disabled={isDeleting}
-      >
-        <Animated.View style={[styles.deleteButton, { transform: [{ scale }] }]}>
-          {isDeleting ? (
-            <ActivityIndicator color="white" size="small" />
-          ) : (
-            <>
-              <Icon name="delete" size={24} color="white" />
-              <Text style={styles.deleteText}>Delete</Text>
-            </>
-          )}
-        </Animated.View>
-      </TouchableOpacity>
-    );
-  };
-
-  // ── Render helpers ─────────────────────────────────────────────────────────
-  const renderHeader = () => (
-    <View style={styles.header}>
-      <Text style={styles.headerTitle}>Messages</Text>
-      <View style={styles.headerRight}>
-        <View style={[styles.connectionStatus, connectionState === 'connected' && styles.connectedStatus]}>
-          <View style={[styles.connectionDot, connectionState === 'connected' && styles.connectedDot]} />
-          <Text style={styles.connectionText}>
-            {connectionState === 'connected' ? 'Online' : 'Offline'}
-          </Text>
-        </View>
+      <View style={styles.rowWrapper}>
+        <ConversationRow
+          item={item}
+          otherUser={otherUser}
+          isOnline={isOnline}
+          typingText={typingText}
+          isDeleting={isDeleting}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            navigation.navigate('ChatScreen', {
+              conversationId: item._id,
+              conversation: item,
+              otherUser,
+              chatType: item.chatType || 'normal',
+            });
+          }}
+          onLongPress={() => handleLongPress(item)}
+          onDeletePress={handleDeletePress}
+          deleteModalVisible={deleteModalVisible}
+        />
       </View>
-    </View>
-  );
+    );
+  }, [getOtherUser, onlineUsers, typingUsers, currentUser, deletingId, deleteModalVisible, navigation]);
 
-  const renderSearchBar = () => (
-    <View style={styles.searchContainer}>
-      <Icon name="search" size={20} color="#8E8E93" style={styles.searchIcon} />
-      <TextInput
-        style={styles.searchInput}
-        placeholder="Search conversations..."
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-        placeholderTextColor="#8E8E93"
-      />
-      {searchQuery.length > 0 && (
-        <TouchableOpacity onPress={() => setSearchQuery('')}>
-          <Icon name="clear" size={20} color="#8E8E93" />
-        </TouchableOpacity>
-      )}
-    </View>
-  );
+  const keyExtractor = useCallback((item) => item._id, []);
 
-  const renderTabs = () => (
-    <View style={styles.tabsContainer}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        {[
-          { key: 'all', label: 'All', icon: null },
-          { key: 'linkme', label: 'LinkMe', icon: '💘' },
-          { key: 'system', label: 'System', icon: 'notifications' },
-        ].map(tab => (
-          <TouchableOpacity
-            key={tab.key}
-            style={[styles.tab, activeTab === tab.key && styles.activeTab]}
-            onPress={() => setActiveTab(tab.key)}
-          >
-            <View style={styles.tabWithIcon}>
-              <Text style={[styles.tabText, activeTab === tab.key && styles.activeTabText]}>
-                {tab.label}
-              </Text>
-              {tab.icon === 'notifications' ? (
-                <Icon name="notifications" size={16} color={activeTab === tab.key ? '#1E90FF' : '#666'} style={{ marginLeft: 4 }} />
-              ) : tab.icon ? (
-                <Text style={[styles.linkmeIcon]}>{tab.icon}</Text>
-              ) : null}
-            </View>
-            {activeTab === tab.key && (
-              <View style={[
-                styles.tabIndicator,
-                tab.key === 'linkme' && styles.linkmeIndicator,
-                tab.key === 'system' && styles.systemIndicator,
-              ]} />
-            )}
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </View>
-  );
+  // ── Tabs ──
+  const TABS = [
+    { key: 'all',    label: 'All',    icon: null },
+    { key: 'linkme', label: 'LinkMe', icon: '💘' },
+    { key: 'system', label: 'System', icon: 'notifications' },
+  ];
 
-  const renderEmptyState = () => {
-    const messages = {
-      linkme: { title: 'No LinkMe conversations', sub: "You don't have any LinkMe matches yet" },
+  const tabCount = useMemo(() => ({
+    all:    conversations.length,
+    linkme: conversations.filter(c => c.chatType === 'linkme').length,
+    system: conversations.filter(c => c.chatType === 'system').length,
+  }), [conversations]);
+
+  // ── Empty state ──
+  const renderEmpty = () => {
+    const copy = {
+      linkme: { title: 'No LinkMe chats',         sub: "Your matches will appear here" },
       system: { title: 'No system notifications', sub: 'System announcements will appear here' },
-      all: { title: 'No conversations yet', sub: 'Start a new conversation by tapping the + button' },
+      all:    { title: 'No conversations yet',    sub: 'Tap + to start a new conversation' },
     };
-    const { title, sub } = messages[activeTab] || messages.all;
-
+    const { title, sub } = copy[activeTab] || copy.all;
     return (
-      <View style={styles.emptyContainer}>
+      <View style={styles.emptyWrap}>
         {activeTab === 'system' ? (
-          <Icon name="notifications-none" size={64} color="#ccc" />
+          <Icon name="notifications-none" size={60} color={C.textMeta} />
         ) : activeTab === 'linkme' ? (
-          <Text style={{ fontSize: 64 }}>💘</Text>
+          <Text style={{ fontSize: 60 }}>💘</Text>
         ) : (
-          <Icon name="chat-bubble-outline" size={64} color="#ccc" />
+          <Icon name="chat-bubble-outline" size={60} color={C.textMeta} />
         )}
         <Text style={styles.emptyTitle}>{title}</Text>
-        <Text style={styles.emptySubtitle}>{sub}</Text>
+        <Text style={styles.emptySub}>{sub}</Text>
       </View>
     );
   };
 
-const renderConversationItem = ({ item }) => {
-  const otherUser = getOtherUser(item);
-  const isOnline = isUserOnline(otherUser?._id);
-  const typingIndicator = getTypingIndicator(item._id);
-  const isLinkMe = item.chatType === 'linkme';
-  const isSystem = item.chatType === 'system';
-  const isDeleting = deletingId === item._id;
-
-  if (isDeleting) {
+  // ── Loading ──
+  if (loading) {
     return (
-      <View style={[styles.conversationItem, styles.deletingItem]}>
-        <View style={styles.conversationTouchable}>
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              <ActivityIndicator color="#4CAF50" />
-            </View>
+      <View style={styles.root}>
+        <StatusBar backgroundColor={C.headerBg} barStyle="light-content" translucent={false} />
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Messages</Text>
           </View>
-          <View style={styles.conversationInfo}>
-            <Text style={styles.deletingText}>Deleting conversation...</Text>
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="large" color={C.accent} />
+            <Text style={styles.loadingText}>Loading conversations…</Text>
           </View>
-        </View>
+        </SafeAreaView>
       </View>
     );
   }
 
-  return (
-    <Swipeable
-      renderRightActions={(progress, dragX) => renderRightActions(progress, dragX, item)}
-      rightThreshold={40}
-      overshootRight={false}
-      containerStyle={styles.swipeableContainer}
-      // Optional: Prevent swipe while long press menu is visible
-      enabled={!deleteModalVisible}
-    >
-      <Animated.View style={[
-        styles.conversationItem,
-        isLinkMe && styles.linkMeItem,
-        isSystem && styles.systemItem,
-        { opacity: fadeAnim },
-      ]}>
-        <TouchableOpacity
-          style={styles.conversationTouchable}
-          onPress={() => navigateToChat(item)}
-          onLongPress={() => handleLongPress(item)}
-          delayLongPress={500} // 500ms long press delay
-          activeOpacity={0.7}
-        >
-          <View style={styles.avatarContainer}>
-            <View style={[
-              styles.avatar,
-              isLinkMe && styles.linkMeAvatar,
-              isSystem && styles.systemAvatar,
-            ]}>
-              {isSystem ? (
-                <Icon name="notifications" size={22} color="#1E90FF" />
-              ) : otherUser?.avatar ? (
-                <Image source={{ uri: otherUser.avatar }} style={styles.avatarImage} />
-              ) : (
-                <Text style={[
-                  styles.avatarText,
-                  isLinkMe && styles.linkMeAvatarText,
-                  isSystem && styles.systemAvatarText,
-                ]}>
-                  {otherUser?.username?.charAt(0)?.toUpperCase() || '?'}
-                </Text>
-              )}
-
-              {isLinkMe && (
-                <Text style={styles.linkMeBadge}>💘</Text>
-              )}
-            </View>
-
-            {!isSystem && isOnline && <View style={styles.onlineIndicator} />}
-          </View>
-
-          <View style={styles.conversationInfo}>
-            <View style={styles.conversationHeader}>
-              <Text style={[
-                styles.username,
-                isLinkMe && styles.linkMeUsername,
-                isSystem && styles.systemUsername,
-              ]}>
-                {otherUser?.username || 'Unknown User'}
-                {isSystem && ' (System)'}
-              </Text>
-              <View style={styles.rightSection}>
-                <Text style={[styles.timestamp, isSystem && styles.systemTimestamp]}>
-                  {formatTime(item.lastMessageAt)}
-                </Text>
-                {item.unreadCount > 0 && (
-                  <View style={[
-                    styles.unreadBadge,
-                    isLinkMe && styles.linkMeUnreadBadge,
-                    isSystem && styles.systemUnreadBadge,
-                  ]}>
-                    <Text style={styles.unreadText}>
-                      {item.unreadCount > 99 ? '99+' : item.unreadCount}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-
-            <View style={styles.lastMessageContainer}>
-              <Text style={[styles.lastMessage, isSystem && styles.systemLastMessage]}>
-                {typingIndicator || truncateMessage(item.lastMessage?.content)}
-              </Text>
-              {connectionState !== 'connected' && (
-                <Icon name="schedule" size={12} color="#FF6B6B" style={styles.pendingIcon} />
-              )}
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Animated.View>
-    </Swipeable>
-  );
-};
-
-  // ── Loading state ──────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        {renderHeader()}
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading conversations...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // ── Main render ────────────────────────────────────────────────────────────
+  // ── Main ──
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaView style={styles.container}>
-        <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 0 }}>
-          <Svg height="100%" width="100%" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
-            <Path
-              d="
-                M12 18 C15 12, 25 12, 28 18
-                M62 14 C65 10, 75 10, 78 14
-                M20 80 C22 85, 28 85, 30 80
-                M70 82 C72 87, 78 87, 80 82
-                M34 34 Q40 28, 46 34
-                M60 60 Q66 66, 72 60
-                M25 65 C30 58, 40 58, 45 65
-                M10 45 C15 52, 25 52, 30 45
-                M58 26 Q64 20, 70 26
-                M42 78 Q48 72, 54 78
-                M5 5 C8 3, 12 3, 15 5
-                M85 95 C88 93, 92 93, 95 95
-              "
-              stroke="#1E90FF22"
-              strokeWidth="0.35"
-              fill="none"
-            />
-          </Svg>
-        </View>
+      <View style={styles.root}>
+        <StatusBar backgroundColor={C.headerBg} barStyle="light-content" translucent={false} />
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
 
-        {renderHeader()}
-        {renderSearchBar()}
-        {renderTabs()}
-
-        <FlatList
-          data={filteredConversations}
-          keyExtractor={(item) => item._id}
-          renderItem={renderConversationItem}
-          ListEmptyComponent={renderEmptyState}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={filteredConversations.length === 0 && styles.emptyListContainer}
-        />
-
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => navigation.navigate('NewChatScreen')}
-          activeOpacity={0.8}
-        >
-          <Icon name="add" size={28} color="white" />
-        </TouchableOpacity>
-
-        {/* Delete Confirmation Modal */}
-        <Modal
-          visible={deleteModalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setDeleteModalVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Icon name="delete" size={48} color="#FF6B6B" style={styles.modalIcon} />
-              <Text style={styles.modalTitle}>Delete Conversation?</Text>
-              <Text style={styles.modalText}>
-                This will hide the conversation from your list. The other person will still have access to it.
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Messages</Text>
+            <View style={[
+              styles.connPill,
+              connectionState === 'connected' && styles.connPillOnline,
+            ]}>
+              <View style={[
+                styles.connDot,
+                connectionState === 'connected' && styles.connDotOnline,
+              ]} />
+              <Text style={[
+                styles.connText,
+                connectionState === 'connected' && styles.connTextOnline,
+              ]}>
+                {connectionState === 'connected' ? 'Online' : 'Offline'}
               </Text>
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.cancelButton]}
-                  onPress={() => setDeleteModalVisible(false)}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.deleteConfirmButton]}
-                  onPress={confirmDelete}
-                >
-                  <Text style={styles.deleteConfirmText}>Delete</Text>
-                </TouchableOpacity>
-              </View>
             </View>
           </View>
-        </Modal>
-      </SafeAreaView>
+
+          {/* Search */}
+          <View style={styles.searchBar}>
+            <Icon name="search" size={18} color={C.textMeta} style={{ marginRight: 8 }} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search conversations…"
+              placeholderTextColor={C.textMeta}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Icon name="clear" size={18} color={C.textMeta} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Tabs */}
+          <View style={styles.tabsRow}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12 }}>
+              {TABS.map(tab => {
+                const active = activeTab === tab.key;
+                const count  = tabCount[tab.key];
+                return (
+                  <TouchableOpacity
+                    key={tab.key}
+                    style={[styles.tab, active && styles.tabActive]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setActiveTab(tab.key);
+                    }}
+                  >
+                    <View style={styles.tabInner}>
+                      <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+                        {tab.label}
+                      </Text>
+                      {tab.icon === 'notifications' ? (
+                        <Icon name="notifications" size={13} color={active ? C.blue : C.textMeta} style={{ marginLeft: 4 }} />
+                      ) : tab.icon ? (
+                        <Text style={{ fontSize: 13, marginLeft: 4 }}>{tab.icon}</Text>
+                      ) : null}
+                      {count > 0 && (
+                        <View style={[styles.tabCount, active && styles.tabCountActive]}>
+                          <Text style={styles.tabCountText}>{count}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {/* List */}
+          <FlatList
+            data={filteredConversations}
+            keyExtractor={keyExtractor}
+            renderItem={renderItem}
+            ListEmptyComponent={renderEmpty}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={C.accent}
+                colors={[C.accent]}
+              />
+            }
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[
+              styles.listContent,
+              filteredConversations.length === 0 && { flexGrow: 1 },
+            ]}
+          />
+
+          {/* FAB */}
+          <TouchableOpacity
+            style={styles.fab}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              navigation.navigate('NewChatScreen');
+            }}
+            activeOpacity={0.85}
+          >
+            <Icon name="edit" size={22} color={C.white} />
+          </TouchableOpacity>
+
+          {/* Delete modal */}
+          <Modal
+            visible={deleteModalVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setDeleteModalVisible(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalCard}>
+                <View style={styles.modalIconWrap}>
+                  <Icon name="delete-outline" size={32} color={C.danger} />
+                </View>
+                <Text style={styles.modalTitle}>Delete Conversation?</Text>
+                <Text style={styles.modalBody}>
+                  This hides the conversation from your list. The other person will still have access to it.
+                </Text>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={styles.modalBtnCancel}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
+                      setDeleteModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.modalBtnCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.modalBtnDelete} onPress={confirmDelete}>
+                    <Text style={styles.modalBtnDeleteText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+        </SafeAreaView>
+      </View>
     </GestureHandlerRootView>
   );
 };
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: '#083028',
+    backgroundColor: C.bg,
   },
+  safeArea: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+
+  // ── Header ──
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A2A2A',
+    backgroundColor: C.headerBg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '700',
+    color: C.textPrimary,
+    letterSpacing: 0.2,
   },
-  headerRight: {
+  connPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-  },
-  connectionStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    backgroundColor: '#2D1B2E',
+    backgroundColor: 'rgba(224,82,82,0.15)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(224,82,82,0.3)',
   },
-  connectedStatus: {
-    backgroundColor: '#1B2D1B',
+  connPillOnline: {
+    backgroundColor: 'rgba(52,201,122,0.12)',
+    borderColor: 'rgba(52,201,122,0.3)',
   },
-  connectionDot: {
+  connDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#FF6B6B',
-    marginRight: 4,
+    backgroundColor: C.danger,
+    marginRight: 5,
   },
-  connectedDot: {
-    backgroundColor: '#4CAF50',
+  connDotOnline: {
+    backgroundColor: C.accent,
   },
-  connectionText: {
-    fontSize: 10,
-    color: '#4CAF50',
-    fontWeight: '500',
+  connText: {
+    fontSize: 11,
+    color: C.danger,
+    fontWeight: '600',
   },
-  searchContainer: {
+  connTextOnline: {
+    color: C.accent,
+  },
+
+  // ── Search ──
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1A1A1A',
-    marginHorizontal: 16,
-    marginVertical: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-  searchIcon: {
-    marginRight: 8,
+    backgroundColor: C.surface,
+    marginHorizontal: 14,
+    marginTop: 10,
+    marginBottom: 4,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 6,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
-    color: '#FFFFFF',
+    fontSize: 15,
+    color: C.textPrimary,
   },
-  tabsContainer: {
-    backgroundColor: '#083028',
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A2A2A',
-    paddingVertical: 8,
+
+  // ── Tabs ──
+  tabsRow: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
+    paddingVertical: 6,
+    backgroundColor: C.bg,
   },
   tab: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    marginHorizontal: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginHorizontal: 4,
     borderRadius: 20,
   },
-  activeTab: {
-    backgroundColor: '#2E7D2E',
+  tabActive: {
+    backgroundColor: C.own,
   },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#AAAAAA',
-  },
-  activeTabText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-  },
-  tabWithIcon: {
+  tabInner: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  linkmeIcon: {
-    fontSize: 14,
-    marginLeft: 4,
+  tabLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: C.textMeta,
   },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: -8,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: '#4CAF50',
-    borderRadius: 1.5,
+  tabLabelActive: {
+    color: C.textPrimary,
+    fontWeight: '700',
   },
-  linkmeIndicator: {
-    backgroundColor: '#FF4081',
+  tabCount: {
+    marginLeft: 5,
+    backgroundColor: C.border,
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
   },
-  systemIndicator: {
-    backgroundColor: '#2196F3',
+  tabCountActive: {
+    backgroundColor: 'rgba(52,201,122,0.25)',
   },
-  swipeableContainer: {
-    marginHorizontal: 16,
-    marginVertical: 4,
+  tabCountText: {
+    fontSize: 10,
+    color: C.textMeta,
+    fontWeight: '600',
   },
-  conversationItem: {
-    backgroundColor: '#174f3a',
-    borderWidth: 1,
-    borderColor: '#2E7D2E',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 2,
+
+  // ── List ──
+  listContent: {
+    paddingTop: 8,
+    paddingBottom: 88,
   },
-  deletingItem: {
+  rowWrapper: {
+    marginHorizontal: 12,
+    marginVertical: 3,
+  },
+  rowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.surface,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
+  },
+  rowCardDeleting: {
     opacity: 0.5,
   },
-  linkMeItem: {
-    backgroundColor: '#230c3a',
-    borderLeftWidth: 4,
-    borderLeftColor: '#FF4081',
-    borderColor: '#4CAF50',
+  rowCardLinkMe: {
+    backgroundColor: C.linkmeLight,
+    borderLeftWidth: 3,
+    borderLeftColor: C.linkme,
+    borderColor: 'rgba(192,38,211,0.3)',
   },
-  systemItem: {
-    backgroundColor: '#0d2b52',
-    borderLeftWidth: 4,
-    borderLeftColor: '#2196F3',
-    borderColor: '#2196F3',
+  rowCardSystem: {
+    backgroundColor: C.systemLight,
+    borderLeftWidth: 3,
+    borderLeftColor: C.system,
+    borderColor: 'rgba(37,99,235,0.3)',
   },
-  conversationTouchable: {
-    flexDirection: 'row',
-    padding: 12,
-    alignItems: 'center',
-  },
-  avatarContainer: {
+
+  // ── Avatar ──
+  avatarWrap: {
     position: 'relative',
     marginRight: 12,
   },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#2E7D2E',
+  avatarCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
   },
-  linkMeAvatar: {
-    backgroundColor: '#4CAF50',
+  avatarSystem: {
+    borderWidth: 1.5,
+    borderColor: C.system,
   },
-  systemAvatar: {
-    backgroundColor: '#0d2b52',
-    borderWidth: 2,
-    borderColor: '#2196F3',
+  avatarLinkMe: {
+    borderWidth: 1.5,
+    borderColor: C.linkme,
   },
-  avatarImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-  },
-  avatarText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  linkMeAvatarText: {
-    color: '#FFF',
-  },
-  systemAvatarText: {
-    color: '#2196F3',
+  avatarInitial: {
+    color: C.white,
+    fontSize: 19,
+    fontWeight: '700',
   },
   linkMeBadge: {
     position: 'absolute',
-    bottom: -6,
-    right: -6,
-    fontSize: 14,
-    backgroundColor: 'white',
-    borderRadius: 10,
-    paddingHorizontal: 2,
-    overflow: 'hidden',
-  },
-  onlineIndicator: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#4CAF50',
-    borderWidth: 2,
-    borderColor: '#1C1C1C',
-  },
-  conversationInfo: {
-    flex: 1,
-  },
-  conversationHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    bottom: -4,
+    right: -4,
+    backgroundColor: C.bg,
+    borderRadius: 9,
+    width: 18,
+    height: 18,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
   },
-  username: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+  linkMeBadgeText: {
+    fontSize: 11,
+  },
+  onlineDot: {
+    position: 'absolute',
+    bottom: 1,
+    right: 1,
+    width: 11,
+    height: 11,
+    borderRadius: 5.5,
+    backgroundColor: C.accent,
+    borderWidth: 2,
+    borderColor: C.surface,
+  },
+
+  // ── Row info ──
+  rowInfo: {
     flex: 1,
+    justifyContent: 'center',
   },
-  linkMeUsername: {
-    color: '#66BB6A',
+  rowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 3,
   },
-  systemUsername: {
-    color: '#2196F3',
+  rowName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: C.textPrimary,
+    flex: 1,
+    marginRight: 8,
   },
-  rightSection: {
-    alignItems: 'flex-end',
-    gap: 4,
+  rowTime: {
+    fontSize: 11,
+    color: C.textMeta,
   },
-  timestamp: {
-    fontSize: 12,
-    color: '#888888',
+  rowBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  systemTimestamp: {
-    color: '#64B5F6',
+  rowPreview: {
+    fontSize: 13,
+    color: C.textSecondary,
+    flex: 1,
+    marginRight: 8,
+  },
+  rowTyping: {
+    color: C.accent,
+    fontStyle: 'italic',
+  },
+  rowPreviewSystem: {
+    color: '#93C5FD',
+    fontStyle: 'italic',
+  },
+  deletingText: {
+    fontSize: 14,
+    color: C.textMeta,
+    fontStyle: 'italic',
   },
   unreadBadge: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: C.accent,
     borderRadius: 10,
     minWidth: 20,
     height: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  linkMeUnreadBadge: {
-    backgroundColor: '#66BB6A',
-  },
-  systemUnreadBadge: {
-    backgroundColor: '#2196F3',
+    paddingHorizontal: 5,
   },
   unreadText: {
-    color: 'white',
+    color: C.white,
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
-  lastMessageContainer: {
-    flexDirection: 'row',
+
+  // ── Swipe delete ──
+  swipeAction: {
+    justifyContent: 'center',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    width: 80,
+    borderTopRightRadius: 14,
+    borderBottomRightRadius: 14,
+    backgroundColor: C.danger,
+    marginVertical: 3,
   },
-  lastMessage: {
-    fontSize: 14,
-    color: '#AAAAAA',
-    flex: 1,
+  swipeActionInner: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
   },
-  systemLastMessage: {
-    color: '#90CAF9',
-    fontStyle: 'italic',
+  swipeActionText: {
+    color: C.white,
+    fontSize: 11,
+    fontWeight: '600',
   },
-  pendingIcon: {
-    marginLeft: 4,
+
+  // ── FAB ──
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 20,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: C.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 6,
+    shadowColor: C.accent,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
   },
-  loadingContainer: {
+
+  // ── Loading ──
+  loadingWrap: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 16,
+    gap: 14,
   },
   loadingText: {
-    fontSize: 16,
-    color: '#888888',
+    fontSize: 14,
+    color: C.textSecondary,
   },
-  emptyContainer: {
+
+  // ── Empty ──
+  emptyWrap: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
-    gap: 16,
-  },
-  emptyListContainer: {
-    flexGrow: 1,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#AAAAAA',
-  },
-  emptySubtitle: {
-    fontSize: 16,
-    color: '#888888',
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#4CAF50',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  // Delete action styles
-  deleteAction: {
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    height: '100%',
-  },
-  deleteButton: {
-    backgroundColor: '#FF6B6B',
-    width: 80,
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderTopRightRadius: 12,
-    borderBottomRightRadius: 12,
-  },
-  deleteText: {
-    color: 'white',
-    fontSize: 12,
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  deletingText: {
-    color: '#888888',
-    fontSize: 14,
-    fontStyle: 'italic',
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#1A1A1A',
-    borderRadius: 20,
-    padding: 24,
-    width: '80%',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  modalIcon: {
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 12,
-  },
-  modalText: {
-    fontSize: 14,
-    color: '#AAAAAA',
-    textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 20,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
     gap: 12,
   },
-  modalButton: {
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: C.textSecondary,
+    marginTop: 8,
+  },
+  emptySub: {
+    fontSize: 14,
+    color: C.textMeta,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  // ── Modal ──
+  modalOverlay: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
+    backgroundColor: C.overlay,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  cancelButton: {
-    backgroundColor: '#333',
+  modalCard: {
+    backgroundColor: C.surface,
+    borderRadius: 20,
+    padding: 24,
+    width: '82%',
+    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
   },
-  cancelButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+  modalIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(224,82,82,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: C.textPrimary,
+    marginBottom: 8,
+  },
+  modalBody: {
+    fontSize: 13,
+    color: C.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 22,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 10,
+  },
+  modalBtnCancel: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: C.surfaceAlt,
+    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
+  },
+  modalBtnCancelText: {
+    color: C.textSecondary,
+    fontSize: 15,
     fontWeight: '600',
   },
-  deleteConfirmButton: {
-    backgroundColor: '#FF6B6B',
+  modalBtnDelete: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: C.danger,
+    alignItems: 'center',
   },
-  deleteConfirmText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+  modalBtnDeleteText: {
+    color: C.white,
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
 
-export default ChatListScreen; 
+export default ChatListScreen;

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+// screens/messages/ChatScreen.js
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,109 +7,243 @@ import {
   TouchableOpacity,
   StyleSheet,
   TextInput,
-  KeyboardAvoidingView,
   Platform,
   Alert,
   ActivityIndicator,
-  Keyboard,
   Clipboard,
   Modal,
   Animated,
   StatusBar,
-  Dimensions,
+  KeyboardAvoidingView,
   Image,
 } from 'react-native';
 import { TouchableWithoutFeedback } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons as Icon } from '@expo/vector-icons';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import * as Haptics from 'expo-haptics';
 import { useAuth } from '../../context/AuthContext';
 import io from 'socket.io-client';
-import Svg, { Path } from 'react-native-svg';
 
+// ─── Design Tokens ────────────────────────────────────────────────────────────
+const C = {
+  bg:           '#07201A',
+  surface:      '#0D2E24',
+  surfaceAlt:   '#0A2820',
+  headerBg:     '#092318',
+  own:          '#1B5E3B',
+  other:        '#112B22',
+  inputBg:      '#0F2A20',
+  border:       '#1A3D2E',
+  accent:       '#34C97A',
+  accentMuted:  '#1E6640',
+  white:        '#FFFFFF',
+  textPrimary:  '#E8F5EE',
+  textSecondary:'#7CA98A',
+  textMeta:     '#5A8570',
+  danger:       '#E05252',
+  warning:      '#F0A040',
+  blue:         '#4FC3F7',
+  overlay:      'rgba(4,14,10,0.72)',
+};
+
+const BASE_URL   = 'https://moihub.onrender.com/api';
+const SOCKET_URL = 'https://moihub.onrender.com';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const formatTime = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const now  = new Date();
+  const timePart = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (date.toDateString() === now.toDateString()) return timePart;
+  const yesterday = new Date(); yesterday.setDate(now.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return `Yesterday ${timePart}`;
+  return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${timePart}`;
+};
+
+const avatarInitial = (user) =>
+  (user?.username || user?.name || '?')[0].toUpperCase();
+
+const avatarColor = (user) => {
+  const palette = ['#1B6B45','#2D5A8E','#7B3FA0','#B05A1A','#2E7D6B'];
+  const name = user?.username || user?.name || '';
+  return palette[name.charCodeAt(0) % palette.length] || C.own;
+};
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+const Avatar = React.memo(({ user, size = 34 }) => (
+  <View style={[
+    styles.avatar,
+    { width: size, height: size, borderRadius: size / 2, backgroundColor: avatarColor(user) }
+  ]}>
+    <Text style={[styles.avatarText, { fontSize: size * 0.42 }]}>{avatarInitial(user)}</Text>
+  </View>
+));
+
+const TickIcon = React.memo(({ status, isReadByOther }) => {
+  if (isReadByOther) return (
+    <View style={styles.blueTickWrap}>
+      <Icon name="done-all" size={13} color={C.blue} />
+    </View>
+  );
+  if (status === 'delivered') return <Icon name="done-all" size={13} color={C.textMeta} />;
+  if (status === 'sent')      return <Icon name="check"    size={13} color={C.textMeta} />;
+  if (status === 'sending')   return <Icon name="schedule" size={13} color={C.textMeta} />;
+  return <Icon name="check" size={13} color={C.textMeta} />;
+});
+
+const TypingIndicator = React.memo(({ user }) => {
+  const dot1 = useRef(new Animated.Value(0)).current;
+  const dot2 = useRef(new Animated.Value(0)).current;
+  const dot3 = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const anim = (d, delay) => Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(d, { toValue: 1, duration: 300, useNativeDriver: true }),
+        Animated.timing(d, { toValue: 0, duration: 300, useNativeDriver: true }),
+        Animated.delay(600),
+      ])
+    ).start();
+    anim(dot1, 0); anim(dot2, 150); anim(dot3, 300);
+    return () => { dot1.stopAnimation(); dot2.stopAnimation(); dot3.stopAnimation(); };
+  }, []);
+
+  const dotStyle = (anim) => ({
+    opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }),
+    transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }],
+  });
+
+  return (
+    <View style={styles.typingRow}>
+      <Avatar user={user} size={28} />
+      <View style={styles.typingBubble}>
+        {[dot1, dot2, dot3].map((d, i) => (
+          <Animated.View key={i} style={[styles.typingDot, dotStyle(d)]} />
+        ))}
+      </View>
+    </View>
+  );
+});
+
+// ─── Message bubble ───────────────────────────────────────────────────────────
+const MessageBubble = React.memo(({ message, isOwn, otherUserId, onLongPress }) => {
+  const readByOther = useMemo(() => {
+    const ids = (message.readBy || []).map(e =>
+      String(e.user?._id || e.user?.id || e.user || ''));
+    return ids.includes(String(otherUserId));
+  }, [message.readBy, otherUserId]);
+
+  return (
+    <TouchableOpacity
+      onLongPress={() => onLongPress(message)}
+      activeOpacity={0.85}
+      style={[styles.bubbleRow, isOwn ? styles.bubbleRowOwn : styles.bubbleRowOther]}
+    >
+      {!isOwn && <Avatar user={message.sender} size={30} />}
+
+      <View style={[
+        styles.bubble,
+        isOwn ? styles.bubbleOwn : styles.bubbleOther,
+        !isOwn && { marginLeft: 8 },
+      ]}>
+        <View style={[styles.tail, isOwn ? styles.tailOwn : styles.tailOther]} />
+        <Text style={styles.bubbleText}>{message.content}</Text>
+        <View style={styles.bubbleMeta}>
+          <Text style={styles.bubbleTime}>{formatTime(message.createdAt)}</Text>
+          {isOwn && <TickIcon status={message.status} isReadByOther={readByOther} />}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
+// ─── Date separator ───────────────────────────────────────────────────────────
+const DateSeparator = React.memo(({ date }) => (
+  <View style={styles.dateSepRow}>
+    <View style={styles.dateSepLine} />
+    <View style={styles.dateSepPill}>
+      <Text style={styles.dateSepText}>{date}</Text>
+    </View>
+    <View style={styles.dateSepLine} />
+  </View>
+));
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 const ChatScreen = ({ route, navigation }) => {
-  
   const routeParams = route?.params || {};
   const {
     conversationId = null,
-    conversation = null,
-    otherUser = null,
-    chatType = 'normal'
+    conversation   = null,
+    otherUser      = null,
+    chatType       = 'normal',
   } = routeParams;
 
   const { currentUser, token, logout } = useAuth();
-  
-  // State management
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMoreMessages, setHasMoreMessages] = useState(true);
-  const [page, setPage] = useState(1);
-  const [isTyping, setIsTyping] = useState(false);
-  const [otherUserTyping, setOtherUserTyping] = useState(false);
-  const [otherUserOnline, setOtherUserOnline] = useState(false);
-  const [reconnecting, setReconnecting] = useState(false);
-  
-  // Long press modal state
-  const [selectedMessage, setSelectedMessage] = useState(null);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  
-  // Three dots menu state
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [blocking, setBlocking] = useState(false);
-  
-  // Keyboard state
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  
-  // Derived other user
+
+  const [messages,         setMessages]         = useState([]);
+  const [newMessage,       setNewMessage]       = useState('');
+  const [loading,          setLoading]          = useState(true);
+  const [sending,          setSending]          = useState(false);
+  const [loadingMore,      setLoadingMore]      = useState(false);
+  const [hasMoreMessages,  setHasMoreMessages]  = useState(true);
+  const [page,             setPage]             = useState(1);
+  const [isTyping,         setIsTyping]         = useState(false);
+  const [otherUserTyping,  setOtherUserTyping]  = useState(false);
+  const [otherUserOnline,  setOtherUserOnline]  = useState(false);
+  const [reconnecting,     setReconnecting]     = useState(false);
+  const [initialLoadDone,  setInitialLoadDone]  = useState(false);
   const [derivedOtherUser, setDerivedOtherUser] = useState(null);
 
-  // Refs
-  const flatListRef = useRef(null);
-  const socketRef = useRef(null);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [modalVisible,    setModalVisible]    = useState(false);
+  const [deleting,        setDeleting]        = useState(false);
+  const [menuVisible,     setMenuVisible]     = useState(false);
+  const [blocking,        setBlocking]        = useState(false);
+
+  const flatListRef      = useRef(null);
+  const socketRef        = useRef(null);
   const typingTimeoutRef = useRef(null);
-  const lastMessageIdRef = useRef(null);
-  const currentUserIdRef = useRef(null);
-  const modalAnimatedValue = useRef(new Animated.Value(0)).current;
-  const menuAnimatedValue = useRef(new Animated.Value(0)).current;
-  const inputRef = useRef(null);
-  const menuButtonRef = useRef(null);
+  const modalAnim        = useRef(new Animated.Value(0)).current;
+  const menuAnim         = useRef(new Animated.Value(0)).current;
+  const inputRef         = useRef(null);
 
-  const BASE_URL = 'https://moihub.onrender.com/api';
-  const SOCKET_URL = 'https://moihub.onrender.com';
+  const getCurrentUserId = useCallback(() =>
+    currentUser?.userId || currentUser?._id || currentUser?.id,
+  [currentUser]);
 
-  // Helper function to get consistent user ID
-  const getCurrentUserId = () => {
-    return currentUser?.userId || currentUser?._id || currentUser?.id || currentUserIdRef.current;
-  };
+  const normalizeMessage = useCallback((msg) => ({
+    ...msg,
+    readBy:             msg.readBy || [],
+    readByUserIds:      (msg.readBy || []).map(r => r.user),
+    deliveredToUserIds: (msg.deliveredTo || []).map(d =>
+      typeof d === 'string' ? d : d.user),
+  }), []);
 
+  const listData = useMemo(() => {
+    const result = [];
+    let lastDate = null;
+    for (const msg of messages) {
+      const d = new Date(msg.createdAt);
+      const label = d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+      if (label !== lastDate) {
+        result.push({ type: 'date', id: `date_${msg._id}`, label });
+        lastDate = label;
+      }
+      result.push({ type: 'message', ...msg });
+    }
+    return result;
+  }, [messages]);
+
+  // ── Original working two-effect pattern ──
   useEffect(() => {
     if (!conversationId) {
       Alert.alert('Error', 'Invalid conversation', [
-        { text: 'OK', onPress: () => navigation.goBack() }
+        { text: 'OK', onPress: () => navigation.goBack() },
       ]);
+      return;
     }
-  }, [conversationId, navigation]);
-
-  // Keyboard listeners
-  useEffect(() => {
-    const showSubscription = Keyboard.addListener('keyboardDidShow', (e) => {
-      setKeyboardHeight(e.endCoordinates.height);
-    });
-    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
-      setKeyboardHeight(0);
-    });
-
-    return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
-    };
-  }, []);
-
-  // Initialize other user
-  useEffect(() => {
     if (otherUser) {
       setDerivedOtherUser(otherUser);
     } else if (conversation?.participants?.length) {
@@ -125,829 +260,462 @@ const ChatScreen = ({ route, navigation }) => {
     if (conversationId && (derivedOtherUser || !conversation)) {
       initializeChat();
     }
-    return () => {
-      cleanup();
-    };
+    return () => cleanup();
   }, [conversationId, derivedOtherUser]);
 
-  // Enhanced message normalization
-  const normalizeMessage = (msg) => {
-    const readByUserIds = msg.readBy ? msg.readBy.map(readItem => readItem.user) : [];
-    
-    return {
-      ...msg,
-      readByUserIds,
-      readBy: msg.readBy || [],
-      deliveredToUserIds: msg.deliveredTo ? msg.deliveredTo.map(item => 
-        typeof item === 'string' ? item : item.user
-      ) : [],
-    };
-  };
-
   const initializeChat = async () => {
-    if (!conversationId) {
-      return;
-    }
-
     try {
       await loadMessages();
-      await connectSocket();
+      connectSocket();
       await markConversationAsRead();
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to load chat. Please try again.');
+    } finally {
+      setInitialLoadDone(true);
     }
   };
 
-  const connectSocket = async () => {
-    if (!token) {
-      logout();
-      return;
-    }
+  // ── Socket ──
+  const connectSocket = () => {
+    if (!token) { logout(); return; }
 
-    try {
-      socketRef.current = io(SOCKET_URL, {
-        auth: { token },
-        transports: ['websocket'],
-        timeout: 20000,
-      });
+    socketRef.current = io(SOCKET_URL, {
+      auth: { token },
+      transports: ['websocket'],
+      timeout: 20000,
+    });
 
-      socketRef.current.on('connect', () => {
-        setReconnecting(false);
-        socketRef.current.emit('join_conversation', { conversationId });
-      });
+    socketRef.current.on('connect', () => {
+      setReconnecting(false);
+      socketRef.current.emit('join_conversation', { conversationId });
+    });
 
-      socketRef.current.on('disconnect', (reason) => {
-        if (reason === 'io server disconnect') {
-          setReconnecting(true);
-        }
-      });
+    socketRef.current.on('disconnect', (reason) => {
+      if (reason === 'io server disconnect') setReconnecting(true);
+    });
 
-      socketRef.current.on('connect_error', (error) => {
-        if (error.message.includes('Authentication')) {
-          logout();
-        } else {
-          setReconnecting(true);
-        }
-      });
+    socketRef.current.on('connect_error', (err) => {
+      if (err.message.includes('Authentication')) logout();
+      else setReconnecting(true);
+    });
 
-      socketRef.current.on('new_message', (messageData) => {
-        handleNewMessage(messageData);
-      });
+    socketRef.current.on('new_message', handleNewMessage);
 
-      socketRef.current.on('message_sent', (messageData) => {
-        updateMessageStatus(messageData.tempId, messageData, 'sent');
-      });
+    socketRef.current.on('message_sent', ({ tempId, ...rest }) => {
+      updateMessageStatus(tempId, rest, 'sent');
+    });
 
-      socketRef.current.on('message_delivered', (data) => {
-        updateMessageStatus(data.messageId, null, 'delivered');
-      });
+    socketRef.current.on('message_delivered', ({ messageId }) => {
+      updateMessageStatus(messageId, null, 'delivered');
+    });
 
-      socketRef.current.on('message_read', (data) => {
-        updateMessageReadStatus(data.messageId, data.readBy);
-      });
+    socketRef.current.on('message_read', ({ messageId, readBy }) => {
+      setMessages(prev => prev.map(m =>
+        m._id === messageId
+          ? { ...m, readBy: readBy || [], status: 'read' }
+          : m
+      ));
+    });
 
-      socketRef.current.on('message_deleted', (data) => {
-        // Remove deleted message from UI
-        setMessages(prev => prev.filter(msg => msg._id !== data.messageId));
-      });
-
-      socketRef.current.on('user_typing', (data) => {
-        const currentUserId = getCurrentUserId();
-        if (data.userId !== currentUserId) {
-          setOtherUserTyping(data.isTyping);
-          if (data.isTyping) {
-            setTimeout(() => setOtherUserTyping(false), 3000);
-          }
-        }
-      });
-
-      socketRef.current.on('user_status_changed', (data) => {
-        if (data.userId === (derivedOtherUser?._id || derivedOtherUser?.id)) {
-          setOtherUserOnline(data.status === 'online');
-        }
-      });
-
-      socketRef.current.on('error', (error) => {
-        Alert.alert('Connection Error', error.message);
-      });
-
-    } catch (error) {
-      setReconnecting(true);
-    }
-  };
-
-  const loadMessages = async (pageNum = 1, isLoadMore = false) => {
-    if (!token) {
-      logout();
-      return;
-    }
-
-    if (!conversationId) {
-      return;
-    }
-
-    try {
-      if (isLoadMore) {
-        setLoadingMore(true);
-      } else {
-        setLoading(true);
+    socketRef.current.on('user_typing', ({ userId, isTyping: t }) => {
+      if (userId !== getCurrentUserId()) {
+        setOtherUserTyping(t);
+        if (t) setTimeout(() => setOtherUserTyping(false), 3000);
       }
+    });
 
-      const response = await fetch(
+    socketRef.current.on('user_status_changed', ({ userId, status }) => {
+      const otherId = derivedOtherUser?._id || derivedOtherUser?.id;
+      if (userId === otherId) setOtherUserOnline(status === 'online');
+    });
+
+    socketRef.current.on('error', (err) => Alert.alert('Connection Error', err.message));
+  };
+
+  // ── Load messages ──
+  const loadMessages = async (pageNum = 1, isLoadMore = false) => {
+    if (!token) { logout(); return; }
+    if (!conversationId) return;
+
+    isLoadMore ? setLoadingMore(true) : setLoading(true);
+
+    try {
+      const res = await fetch(
         `${BASE_URL}/messages/conversations/${conversationId}/messages?page=${pageNum}&limit=20`,
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
+        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
       );
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          logout();
-        } else {
-          throw new Error('Failed to load messages');
-        }
-        return;
+      if (!res.ok) {
+        if (res.status === 401) logout();
+        throw new Error('Failed to load');
       }
 
-      const raw = await response.json();
-      const rawMessages = raw.messages || raw.data || raw || [];
+      const raw = await res.json();
+      const rawMsgs = raw.messages || raw.data || raw || [];
 
-      const normalizedMessages = rawMessages.map((msg) => ({
+      const normalized = rawMsgs.map(msg => ({
         ...msg,
-        sender: msg.sender || {},
-        readByUserIds: (msg.readBy || []).map((r) => r.user),
-        deliveredToUserIds: (msg.deliveredTo || []).map((d) => d.user),
+        sender:             msg.sender || {},
+        readByUserIds:      (msg.readBy || []).map(r => r.user),
+        deliveredToUserIds: (msg.deliveredTo || []).map(d => d.user),
       }));
 
-      if (isLoadMore) {
-        setMessages((prev) => [...prev, ...normalizedMessages]);
-      } else {
-        setMessages(normalizedMessages);
-      }
-
-      setHasMoreMessages(normalizedMessages.length === 20);
+      setMessages(prev => isLoadMore ? [...normalized, ...prev] : normalized);
+      setHasMoreMessages(normalized.length === 20);
       setPage(pageNum);
 
-      if (normalizedMessages.length > 0) {
-        const latest = normalizedMessages[normalizedMessages.length - 1];
-        lastMessageIdRef.current = latest._id;
-
-        if (!derivedOtherUser) {
-          const currentUserId = getCurrentUserId();
-          const other = normalizedMessages.find(
-            (m) => (m.sender._id || m.sender.id) !== currentUserId
-          )?.sender;
-
-          if (other) {
-            setDerivedOtherUser(other);
-          }
-        }
+      if (!isLoadMore && normalized.length > 0 && !derivedOtherUser) {
+        const uid = getCurrentUserId();
+        const other = normalized.find(m => (m.sender._id || m.sender.id) !== uid)?.sender;
+        if (other) setDerivedOtherUser(other);
       }
 
-      // Scroll to bottom after initial load
       if (!isLoadMore) {
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: false });
-        }, 100);
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 120);
       }
-
-    } catch (error) {
-      Alert.alert('Error', 'Could not load chat messages');
+    } catch {
+      Alert.alert('Error', 'Could not load messages');
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
   };
 
-  const handleNewMessage = (messageData) => {
-    const normalized = normalizeMessage(messageData);
+  const handleNewMessage = useCallback((data) => {
+    const normalized = normalizeMessage(data);
+
+    // Ensure sender is always a populated object
+    if (!normalized.sender?.username) {
+      normalized.sender = {
+        ...normalized.sender,
+        username: derivedOtherUser?.username || 'User',
+        _id: normalized.sender?._id || normalized.sender || derivedOtherUser?._id,
+      };
+    }
 
     setMessages(prev => {
-      const isDuplicate = prev.some(msg =>
-        (msg._id && msg._id === normalized._id) ||
-        (msg.tempId && msg.tempId === normalized.tempId)
+      const dup = prev.some(m =>
+        (m._id && m._id === normalized._id) ||
+        (m.tempId && m.tempId === normalized.tempId)
       );
-      if (isDuplicate) return prev;
-
-      return [...prev, normalized];
+      return dup ? prev : [...prev, normalized];
     });
 
-    const messageSenderId = normalized.sender._id || normalized.sender.id;
-    const currentUserId = getCurrentUserId();
-    if (messageSenderId !== currentUserId) {
+    const sid = normalized.sender._id || normalized.sender.id;
+    if (sid !== getCurrentUserId())
       setTimeout(() => markMessageAsRead(normalized._id), 500);
-    }
 
-    // Scroll to bottom
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
-  };
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+  }, [getCurrentUserId, normalizeMessage, derivedOtherUser]);
 
-  const updateMessageStatus = (identifier, messageData, status) => {
-    setMessages(prev => prev.map(msg => {
-      if (msg._id === identifier || msg.tempId === identifier) {
-        const updatedMessage = {
-          ...msg,
-          ...(messageData ? normalizeMessage(messageData) : {}),
-          status,
-        };
-
-        if (messageData && messageData._id) {
-          delete updatedMessage.tempId;
-        }
-
-        return updatedMessage;
-      }
-      return msg;
+  const updateMessageStatus = useCallback((identifier, messageData, status) => {
+    setMessages(prev => prev.map(m => {
+      if (m._id !== identifier && m.tempId !== identifier) return m;
+      const updated = {
+        ...m,
+        ...(messageData ? normalizeMessage(messageData) : {}),
+        status,
+      };
+      if (messageData?._id) delete updated.tempId;
+      return updated;
     }));
-  };
+  }, [normalizeMessage]);
 
-  const updateMessageReadStatus = (messageId, readByArray) => {
-    setMessages(prev => prev.map(msg => {
-      if (msg._id === messageId) {
-        const readByUserIds = readByArray ? readByArray.map(item =>
-          typeof item === 'string' ? item : item.user
-        ) : [];
-
-        return {
-          ...msg,
-          readBy: readByArray || [],
-          readByUserIds,
-          status: 'read',
-        };
-      }
-      return msg;
-    }));
-  };
-
-  const sendMessage = async () => {
+  // ── Send ──
+  const sendMessage = useCallback(async () => {
     const content = newMessage.trim();
-    if (!content || sending) {
-      return;
-    }
+    if (!content || sending) return;
 
     if (!socketRef.current?.connected) {
-      Alert.alert('Connection Error', 'Not connected to server. Please check your connection.');
+      Alert.alert('Not connected', 'Check your connection and try again.');
       return;
     }
 
-    const tempId = 'temp_' + Date.now();
-    const currentUserId = getCurrentUserId();
-    const tempMessage = {
-      _id: tempId,
-      tempId,
-      content,
-      sender: {
-        _id: currentUserId,
-        id: currentUserId,
-        username: currentUser?.username,
-        ...currentUser
-      },
+    const tempId = `temp_${Date.now()}`;
+    const uid    = getCurrentUserId();
+
+    setMessages(prev => [...prev, {
+      _id: tempId, tempId, content,
+      sender: { _id: uid, id: uid, username: currentUser?.username, ...currentUser },
       createdAt: new Date().toISOString(),
       status: 'sending',
       messageType: 'text',
-      readByUserIds: [],
-      deliveredToUserIds: [],
-    };
+      readByUserIds: [], deliveredToUserIds: [],
+    }]);
 
-    setMessages(prev => [...prev, tempMessage]);
     setNewMessage('');
     setSending(true);
 
     try {
       socketRef.current.emit('send_message', {
-        conversationId,
-        content,
-        messageType: 'text',
-        tempId,
-        chatType
+        conversationId, content, messageType: 'text', tempId, chatType,
       });
-
       handleTyping(false);
-
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     } catch {
-      setMessages(prev => prev.filter(msg => msg.tempId !== tempId));
+      setMessages(prev => prev.filter(m => m.tempId !== tempId));
       Alert.alert('Error', 'Failed to send message');
     } finally {
       setSending(false);
     }
-  };
+  }, [newMessage, sending, getCurrentUserId, conversationId, chatType, currentUser]);
 
-  const handleTyping = (typing) => {
+  const handleTyping = useCallback((typing) => {
     if (!socketRef.current?.connected) return;
-
     setIsTyping(typing);
-    
-    socketRef.current.emit('typing', {
-      conversationId,
-      isTyping: typing,
-    });
-
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-
-    if (typing) {
-      typingTimeoutRef.current = setTimeout(() => {
-        handleTyping(false);
-      }, 3000);
-    }
-  };
+    socketRef.current.emit('typing', { conversationId, isTyping: typing });
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    if (typing) typingTimeoutRef.current = setTimeout(() => handleTyping(false), 3000);
+  }, [conversationId]);
 
   const markConversationAsRead = async () => {
     if (!token || !conversationId) return;
-
     try {
       await fetch(`${BASE_URL}/messages/conversations/${conversationId}/read`, {
         method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       });
-    } catch {
-      // Silently fail
-    }
+    } catch { /* silent */ }
   };
 
-  const markMessageAsRead = async (messageId) => {
+  const markMessageAsRead = (messageId) => {
     if (!socketRef.current?.connected) return;
-
-    socketRef.current.emit('mark_read', {
-      messageId,
-      conversationId,
-    });
+    socketRef.current.emit('mark_read', { messageId, conversationId });
   };
 
   const loadMoreMessages = () => {
-    if (hasMoreMessages && !loadingMore) {
-      loadMessages(page + 1, true);
-    }
+    if (hasMoreMessages && !loadingMore) loadMessages(page + 1, true);
   };
 
-  // Long press handlers
-  const handleLongPress = (message) => {
+  const cleanup = () => {
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    socketRef.current?.disconnect();
+  };
+
+  // ── Long-press modal ──
+  const openModal = useCallback((message) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSelectedMessage(message);
     setModalVisible(true);
-    
-    Animated.spring(modalAnimatedValue, {
-      toValue: 1,
-      useNativeDriver: true,
-      tension: 150,
-      friction: 8,
-    }).start();
-  };
+    Animated.spring(modalAnim, { toValue: 1, useNativeDriver: true, tension: 160, friction: 9 }).start();
+  }, [modalAnim]);
 
-  const closeModal = () => {
-    Animated.timing(modalAnimatedValue, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
+  const closeModal = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
+    Animated.timing(modalAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => {
       setModalVisible(false);
       setSelectedMessage(null);
     });
-  };
+  }, [modalAnim]);
 
   const copyMessage = async () => {
     if (selectedMessage?.content) {
       try {
         await Clipboard.setString(selectedMessage.content);
         Alert.alert('Copied', 'Message copied to clipboard');
-      } catch (error) {
-        Alert.alert('Error', 'Failed to copy message');
-      }
+      } catch { Alert.alert('Error', 'Failed to copy'); }
     }
     closeModal();
   };
 
-  const deleteMessage = async () => {
+  const deleteMessage = () => {
     if (!selectedMessage?._id || deleting) return;
-
-    Alert.alert(
-      'Delete Message',
-      'Are you sure you want to delete this message? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setDeleting(true);
-            try {
-              const response = await fetch(`${BASE_URL}/messages/messages/${selectedMessage._id}`, {
-                method: 'DELETE',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                },
-              });
-
-              if (response.ok) {
-                // Remove message from local state
-                setMessages(prev => prev.filter(msg => msg._id !== selectedMessage._id));
-                
-                // Notify others via socket
-                if (socketRef.current?.connected) {
-                  socketRef.current.emit('delete_message', {
-                    messageId: selectedMessage._id,
-                    conversationId,
-                  });
-                }
-                
-                Alert.alert('Success', 'Message deleted');
-              } else {
-                const error = await response.json();
-                Alert.alert('Error', error.message || 'Failed to delete message');
-              }
-            } catch (error) {
+    Alert.alert('Delete Message', 'Delete this message?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          setDeleting(true);
+          try {
+            const res = await fetch(`${BASE_URL}/messages/messages/${selectedMessage._id}`, {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            });
+            if (res.ok) {
+              setMessages(prev => prev.filter(m => m._id !== selectedMessage._id));
+            } else {
               Alert.alert('Error', 'Failed to delete message');
-            } finally {
-              setDeleting(false);
-              closeModal();
             }
+          } catch {
+            Alert.alert('Error', 'Failed to delete message');
+          } finally {
+            setDeleting(false);
+            closeModal();
           }
-        }
-      ]
-    );
+        },
+      },
+    ]);
   };
 
-  // Three dots menu handlers
-  const showMenu = () => {
+  // ── Three-dot menu ──
+  const openMenu = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setMenuVisible(true);
-    Animated.spring(menuAnimatedValue, {
-      toValue: 1,
-      useNativeDriver: true,
-      tension: 150,
-      friction: 8,
-    }).start();
+    Animated.spring(menuAnim, { toValue: 1, useNativeDriver: true, tension: 160, friction: 9 }).start();
   };
 
   const closeMenu = () => {
-    Animated.timing(menuAnimatedValue, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
-      setMenuVisible(false);
-    });
+    Animated.timing(menuAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(() =>
+      setMenuVisible(false)
+    );
   };
 
-  const blockUser = async () => {
+  const blockUser = () => {
     if (!derivedOtherUser || blocking) return;
-
-    Alert.alert(
-      'Block User',
-      `Are you sure you want to block ${derivedOtherUser.username}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Block',
-          style: 'destructive',
-          onPress: async () => {
-            setBlocking(true);
-            closeMenu();
-            
-            try {
-              const response = await fetch(`${BASE_URL}/users/block/${derivedOtherUser._id || derivedOtherUser.id}`, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                },
-              });
-
-              if (response.ok) {
-                Alert.alert('Success', 'User blocked successfully', [
-                  { text: 'OK', onPress: () => navigation.goBack() }
-                ]);
-              } else {
-                Alert.alert('Error', 'Failed to block user');
-              }
-            } catch (error) {
-              Alert.alert('Error', 'Failed to block user');
-            } finally {
-              setBlocking(false);
-            }
-          }
-        }
-      ]
-    );
+    Alert.alert('Block User', `Block ${derivedOtherUser.username}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Block', style: 'destructive',
+        onPress: async () => {
+          setBlocking(true);
+          closeMenu();
+          try {
+            const res = await fetch(
+              `${BASE_URL}/users/block/${derivedOtherUser._id || derivedOtherUser.id}`,
+              { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+            );
+            if (res.ok) {
+              Alert.alert('Blocked', 'User blocked.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+            } else Alert.alert('Error', 'Failed to block user');
+          } catch { Alert.alert('Error', 'Failed to block user'); }
+          finally { setBlocking(false); }
+        },
+      },
+    ]);
   };
 
-  const reportUser = async () => {
+  const reportUser = () => {
     if (!derivedOtherUser) return;
-
     closeMenu();
-
-    Alert.alert(
-      'Report User',
-      `Report ${derivedOtherUser.username} for inappropriate behavior?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Report',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const response = await fetch(`${BASE_URL}/users/report/${derivedOtherUser._id || derivedOtherUser.id}`, {
+    Alert.alert('Report User', `Report ${derivedOtherUser.username}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Report', style: 'destructive',
+        onPress: async () => {
+          try {
+            const res = await fetch(
+              `${BASE_URL}/users/report/${derivedOtherUser._id || derivedOtherUser.id}`,
+              {
                 method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  reason: 'inappropriate_behavior',
-                  conversationId
-                })
-              });
-
-              if (response.ok) {
-                Alert.alert('Success', 'User reported successfully');
-              } else {
-                Alert.alert('Error', 'Failed to report user');
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason: 'inappropriate_behavior', conversationId }),
               }
-            } catch (error) {
-              Alert.alert('Error', 'Failed to report user');
-            }
-          }
-        }
-      ]
-    );
+            );
+            if (res.ok) Alert.alert('Reported', 'Thank you for the report.');
+            else Alert.alert('Error', 'Failed to report user');
+          } catch { Alert.alert('Error', 'Failed to report user'); }
+        },
+      },
+    ]);
   };
 
-  const renderMenu = () => {
-    if (!menuVisible) return null;
+  // ── Render item ──
+  const renderItem = useCallback(({ item }) => {
+    if (item.type === 'date') return <DateSeparator date={item.label} />;
+
+    const uid     = String(getCurrentUserId() || '');
+    const sid     = String(item.sender?._id || item.sender?.id || '');
+    const isOwn   = sid === uid;
+    const otherId = derivedOtherUser?._id || derivedOtherUser?.id;
 
     return (
-      <Modal
-        transparent
-        visible={menuVisible}
-        onRequestClose={closeMenu}
-        animationType="none"
-      >
-        <TouchableWithoutFeedback onPress={closeMenu}>
-          <View style={styles.menuOverlay}>
-            <Animated.View
-              style={[
-                styles.menuContainer,
-                {
-                  transform: [
-                    {
-                      scale: menuAnimatedValue.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.8, 1],
-                      }),
-                    },
-                  ],
-                  opacity: menuAnimatedValue,
-                  position: 'absolute',
-                  top: 60,
-                  right: 16,
-                },
-              ]}
-            >
-              <TouchableOpacity 
-                style={styles.menuItem} 
-                onPress={blockUser}
-                disabled={blocking}
-              >
-                <Icon name="block" size={20} color="#FF9500" />
-                <Text style={styles.menuItemText}>
-                  {blocking ? 'Blocking...' : 'Block User'}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={[styles.menuItem, { borderTopWidth: 1, borderTopColor: '#2A2A2A' }]} 
-                onPress={reportUser}
-              >
-                <Icon name="report" size={20} color="#FF3B30" />
-                <Text style={[styles.menuItemText, { color: '#FF3B30' }]}>
-                  Report User
-                </Text>
-              </TouchableOpacity>
-            </Animated.View>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+      <MessageBubble
+        message={item}
+        isOwn={isOwn}
+        otherUserId={otherId}
+        onLongPress={openModal}
+      />
     );
-  };
+  }, [getCurrentUserId, derivedOtherUser, openModal]);
 
-  const cleanup = () => {
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
+  const keyExtractor = useCallback((item) =>
+    item.id || item._id || item.tempId, []);
 
-    if (socketRef.current) {
-      socketRef.current.disconnect();
-    }
-  };
-
-  const formatTime = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-
-    const isToday = date.toDateString() === now.toDateString();
-
-    const yesterday = new Date();
-    yesterday.setDate(now.getDate() - 1);
-    const isYesterday = date.toDateString() === yesterday.toDateString();
-
-    const timePart = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    if (isToday) return timePart;
-    if (isYesterday) return `Yesterday ${timePart}`;
-
-    return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${timePart}`;
-  };
-
-  const getMessageStatus = (message, currentUserId, otherUserId) => {
-    const messageSenderId = String(message.sender?._id || message.sender?.id || '');
-
-    if (messageSenderId !== currentUserId) return null;
-
-    const readUserIds = (message.readBy || []).map(entry =>
-      String(entry.user?._id || entry.user?.id || entry.user || '')
-    );
-    const deliveredUserIds = (message.deliveredTo || []).map(entry =>
-      String(entry.user?._id || entry.user?.id || entry.user || '')
-    );
-
-    const isReadByOther = readUserIds.includes(String(otherUserId));
-    const isDeliveredToOther = deliveredUserIds.includes(String(otherUserId));
-
-    if (isReadByOther) {
-      return (
-        <View style={styles.blueTickContainer}>
-          <Icon name="done-all" size={14} color="#4FC3F7" />
-        </View>
-      );
-    } else if (isDeliveredToOther || message.status === 'delivered') {
-      return <Icon name="done-all" size={14} color="rgba(255, 255, 255, 0.7)" />;
-    } else if (message.status === 'sent') {
-      return <Icon name="check" size={14} color="rgba(255, 255, 255, 0.7)" />;
-    } else if (message.status === 'sending') {
-      return <Icon name="schedule" size={14} color="rgba(255, 255, 255, 0.7)" />;
-    }
-
-    return <Icon name="check" size={14} color="#8E8E93" />;
-  };
-
-  const renderMessage = ({ item: message }) => {
-    if (!message || !message.sender) return null;
-
-    const messageSenderId = String(message.sender._id || message.sender.id || '');
-    const currentUserId = String(getCurrentUserId() || '');
-    const otherUserId = String(derivedOtherUser?._id || derivedOtherUser?.id || '');
-    const isOwnMessage = messageSenderId === currentUserId;
-
-    const avatarText = (message.sender?.username || '?')[0].toUpperCase();
-    const messageStatus = getMessageStatus(message, currentUserId, otherUserId);
-
-    return (
-      <TouchableOpacity
-        onLongPress={() => handleLongPress(message)}
-        activeOpacity={0.8}
-        style={[
-          styles.messageContainer,
-          isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer
-        ]}
-      >
-        <View style={[
-          styles.messageWrapper,
-          isOwnMessage ? styles.ownMessageWrapper : styles.otherMessageWrapper
-        ]}>
-          {!isOwnMessage && (
-            <View style={styles.otherAvatar}>
-              {derivedOtherUser?.avatar ? (
-                <Image source={{ uri: derivedOtherUser.avatar }} style={styles.avatarImage} />
-              ) : (
-                <Text style={styles.avatarText}>{avatarText}</Text>
-              )}
-            </View>
-          )}
-
-          <View style={[
-            styles.messageBubble,
-            isOwnMessage ? styles.ownBubble : styles.otherBubble
-          ]}>
-            <Text style={[
-              styles.messageText,
-              isOwnMessage ? styles.ownMessageText : styles.otherMessageText
-            ]}>
-              {message.content}
-            </Text>
-
-            <View style={styles.messageFooter}>
-              <Text style={[
-                styles.messageTime,
-                isOwnMessage ? styles.ownMessageTime : styles.otherMessageTime
-              ]}>
-                {formatTime(message.createdAt)}
-              </Text>
-              {isOwnMessage && messageStatus && (
-                <View style={styles.messageStatus}>
-                  {messageStatus}
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
-  const renderTypingIndicator = () => {
-    if (!otherUserTyping || !derivedOtherUser) return null;
-
-    return (
-      <View style={[styles.messageContainer, styles.otherMessageContainer]}>
-        <View style={styles.messageWrapper}>
-          <View style={styles.otherAvatar}>
-            {derivedOtherUser?.avatar ? (
-              <Image source={{ uri: derivedOtherUser.avatar }} style={styles.avatarImage} />
-            ) : (
-              <Text style={styles.avatarText}>
-                {derivedOtherUser.username?.charAt(0).toUpperCase() || '?'}
-              </Text>
-            )}
-          </View>
-          <View style={[styles.messageBubble, styles.otherBubble, styles.typingBubble]}>
-            <View style={styles.typingDots}>
-              <Animated.View style={[styles.typingDot, { opacity: 0.6 }]} />
-              <Animated.View style={[styles.typingDot, { opacity: 0.8 }]} />
-              <Animated.View style={[styles.typingDot, { opacity: 1 }]} />
-            </View>
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  // Render long press modal
-  const renderLongPressModal = () => {
+  // ── Modals ──
+  const LongPressModal = () => {
     if (!modalVisible || !selectedMessage) return null;
-
-    const currentUserId = getCurrentUserId();
-    const isOwnMessage = (selectedMessage.sender?._id || selectedMessage.sender?.id) === currentUserId;
+    const uid   = getCurrentUserId();
+    const sid   = selectedMessage.sender?._id || selectedMessage.sender?.id;
+    const isOwn = String(sid) === String(uid);
 
     return (
-      <Modal
-        transparent
-        visible={modalVisible}
-        onRequestClose={closeModal}
-        animationType="none"
-      >
+      <Modal transparent visible={modalVisible} onRequestClose={closeModal} animationType="none">
         <TouchableWithoutFeedback onPress={closeModal}>
-          <View style={styles.modalOverlay}>
-            <Animated.View
-              style={[
-                styles.modalContent,
+          <View style={styles.overlayFull}>
+            <TouchableWithoutFeedback>
+              <Animated.View style={[
+                styles.actionSheet,
                 {
-                  transform: [
-                    {
-                      scale: modalAnimatedValue.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.8, 1],
-                      }),
-                    },
-                  ],
-                  opacity: modalAnimatedValue,
+                  transform: [{ translateY: modalAnim.interpolate({ inputRange: [0,1], outputRange: [80, 0] }) }],
+                  opacity: modalAnim,
                 },
-              ]}
-            >
-              <Text style={styles.modalTitle}>Message Options</Text>
-              
-              <TouchableOpacity style={styles.modalOption} onPress={copyMessage}>
-                <Icon name="content-copy" size={20} color="#007AFF" />
-                <Text style={styles.modalOptionText}>Copy</Text>
-              </TouchableOpacity>
-
-              {isOwnMessage && (
-                <TouchableOpacity 
-                  style={[styles.modalOption, styles.deleteOption]} 
-                  onPress={deleteMessage}
-                  disabled={deleting}
-                >
-                  <Icon name="delete" size={20} color="#FF3B30" />
-                  <Text style={[styles.modalOptionText, styles.deleteOptionText]}>
-                    {deleting ? 'Deleting...' : 'Delete'}
+              ]}>
+                <View style={styles.actionSheetPreview}>
+                  <Text style={styles.actionSheetPreviewText} numberOfLines={2}>
+                    {selectedMessage.content}
                   </Text>
-                </TouchableOpacity>
-              )}
+                </View>
 
-              <TouchableOpacity style={styles.modalCancel} onPress={closeModal}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <TouchableOpacity style={styles.actionSheetItem} onPress={copyMessage}>
+                  <View style={[styles.actionIcon, { backgroundColor: 'rgba(79,195,247,0.15)' }]}>
+                    <Icon name="content-copy" size={18} color={C.blue} />
+                  </View>
+                  <Text style={styles.actionSheetLabel}>Copy message</Text>
+                  <Icon name="chevron-right" size={20} color={C.textMeta} />
+                </TouchableOpacity>
+
+                {isOwn && (
+                  <TouchableOpacity
+                    style={styles.actionSheetItem}
+                    onPress={deleteMessage}
+                    disabled={deleting}
+                  >
+                    <View style={[styles.actionIcon, { backgroundColor: 'rgba(224,82,82,0.15)' }]}>
+                      <Icon name="delete-outline" size={18} color={C.danger} />
+                    </View>
+                    <Text style={[styles.actionSheetLabel, { color: C.danger }]}>
+                      {deleting ? 'Deleting…' : 'Delete message'}
+                    </Text>
+                    <Icon name="chevron-right" size={20} color={C.textMeta} />
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity style={styles.actionSheetCancel} onPress={closeModal}>
+                  <Text style={styles.actionSheetCancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </Animated.View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+    );
+  };
+
+  const MenuModal = () => {
+    if (!menuVisible) return null;
+    return (
+      <Modal transparent visible={menuVisible} onRequestClose={closeMenu} animationType="none">
+        <TouchableWithoutFeedback onPress={closeMenu}>
+          <View style={styles.overlayFull}>
+            <Animated.View style={[
+              styles.dropMenu,
+              {
+                transform: [{ scale: menuAnim.interpolate({ inputRange: [0,1], outputRange: [0.85, 1] }) }],
+                opacity: menuAnim,
+              },
+            ]}>
+              <TouchableOpacity style={styles.dropMenuItem} onPress={blockUser} disabled={blocking}>
+                <Icon name="block" size={18} color={C.warning} />
+                <Text style={[styles.dropMenuLabel, { color: C.warning }]}>
+                  {blocking ? 'Blocking…' : 'Block user'}
+                </Text>
+              </TouchableOpacity>
+              <View style={styles.dropMenuDivider} />
+              <TouchableOpacity style={styles.dropMenuItem} onPress={reportUser}>
+                <Icon name="flag" size={18} color={C.danger} />
+                <Text style={[styles.dropMenuLabel, { color: C.danger }]}>Report user</Text>
               </TouchableOpacity>
             </Animated.View>
           </View>
@@ -956,458 +724,538 @@ const ChatScreen = ({ route, navigation }) => {
     );
   };
 
-  if (loading || !conversationId) {
+  // ── Loading screen ──
+  if (loading || !initialLoadDone) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#083028' }}>
-        <StatusBar backgroundColor="#0a3a2d" barStyle="light-content" />
-        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
-            <Text style={styles.loadingText}>Loading chat...</Text>
+      <View style={styles.root}>
+        <StatusBar backgroundColor={C.headerBg} barStyle="light-content" translucent={false} />
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.headerBack} onPress={() => navigation.goBack()}>
+              <Icon name="arrow-back" size={22} color={C.white} />
+            </TouchableOpacity>
+            <View style={styles.headerMeta}>
+              <View style={[styles.skelLine, { width: 120, height: 14, marginBottom: 6 }]} />
+              <View style={[styles.skelLine, { width: 60, height: 10 }]} />
+            </View>
+          </View>
+          <View style={styles.loadingBody}>
+            <ActivityIndicator size="large" color={C.accent} />
+            <Text style={styles.loadingLabel}>Loading messages…</Text>
           </View>
         </SafeAreaView>
       </View>
     );
   }
 
+  // ── Main render ──
   return (
-    <View style={{ flex: 1, backgroundColor: '#083028' }}>
-      <StatusBar backgroundColor="#0a3a2d" barStyle="light-content" />
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        {/* SVG Futuristic Background */}
-        <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 0 }}>
-          <Svg
-            height="100%"
-            width="100%"
-            viewBox="0 0 100 100"
-            preserveAspectRatio="xMidYMid slice"
-          >
-            <Path
-              d="
-                M12 18 C15 12, 25 12, 28 18
-                M62 14 C65 10, 75 10, 78 14
-                M20 80 C22 85, 28 85, 30 80
-                M70 82 C72 87, 78 87, 80 82
-                M34 34 Q40 28, 46 34
-                M60 60 Q66 66, 72 60
-                M25 65 C30 58, 40 58, 45 65
-                M10 45 C15 52, 25 52, 30 45
-                M58 26 Q64 20, 70 26
-                M42 78 Q48 72, 54 78
-                M5 5 C8 3, 12 3, 15 5
-                M85 95 C88 93, 92 93, 95 95
-              "
-              stroke="#1E90FF22"
-              strokeWidth="0.35"
-              fill="none"
-            />
-          </Svg>
-        </View>
+    <View style={styles.root}>
+      {/* Fixed background image — outside layout, never re-renders */}
+      <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+        <Image
+          source={require('../../assets/chat-bg.jpg')}
+          style={StyleSheet.absoluteFillObject}
+          resizeMode="cover"
+          fadeDuration={0}
+        />
+      </View>
 
+      <StatusBar backgroundColor={C.headerBg} barStyle="light-content" translucent={false} />
+
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={0}
         >
-          <View style={{ flex: 1 }}>
-            {/* Header */}
-            <View style={styles.header}>
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => navigation.goBack()}
-              >
-                <Icon name="arrow-back" size={24} color="white" />
-              </TouchableOpacity>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.headerBack} onPress={() => navigation.goBack()}>
+              <Icon name="arrow-back" size={22} color={C.white} />
+            </TouchableOpacity>
 
-              <View style={styles.headerInfo}>
-                <Text style={styles.headerTitle}>
-                  {derivedOtherUser?.username || 'Chat'}
-                </Text>
-                <Text style={styles.headerSubtitle}>
-                  {reconnecting ? 'Connecting...' : otherUserOnline ? 'Online' : 'Offline'}
-                </Text>
-              </View>
-
-              <TouchableOpacity 
-                ref={menuButtonRef}
-                style={styles.headerAction} 
-                onPress={showMenu}
-              >
-                <Icon name="more-vert" size={24} color="white" />
-              </TouchableOpacity>
+            <View style={styles.headerAvatarWrap}>
+              <Avatar user={derivedOtherUser} size={38} />
+              {otherUserOnline && <View style={styles.onlineDot} />}
             </View>
 
-            {/* Reconnecting status */}
-            {reconnecting && (
-              <View style={styles.connectionStatus}>
-                <Text style={styles.connectionText}>Reconnecting...</Text>
-              </View>
-            )}
+            <View style={styles.headerMeta}>
+              <Text style={styles.headerName} numberOfLines={1}>
+                {derivedOtherUser?.username || 'Chat'}
+              </Text>
+              <Text style={styles.headerStatus}>
+                {reconnecting
+                  ? 'Reconnecting…'
+                  : otherUserTyping
+                    ? 'typing…'
+                    : otherUserOnline
+                      ? 'online'
+                      : 'offline'}
+              </Text>
+            </View>
 
-            {/* Messages List */}
-            <FlatList
-              ref={flatListRef}
-              data={messages}
-              keyExtractor={(item) => item._id || item.tempId}
-              renderItem={renderMessage}
-              inverted={false}
-              showsVerticalScrollIndicator={false}
-              onEndReached={loadMoreMessages}
-              onEndReachedThreshold={0.5}
-              ListHeaderComponent={
-                loadingMore ? (
-                  <View style={styles.loadingMore}>
-                    <ActivityIndicator size="small" color="#007AFF" />
-                    <Text style={styles.loadingMoreText}>Loading more messages...</Text>
-                  </View>
-                ) : null
+            <TouchableOpacity style={styles.headerMenu} onPress={openMenu}>
+              <Icon name="more-vert" size={22} color={C.white} />
+            </TouchableOpacity>
+          </View>
+
+          {reconnecting && (
+            <View style={styles.reconnectBanner}>
+              <ActivityIndicator size="small" color={C.white} style={{ marginRight: 8 }} />
+              <Text style={styles.reconnectText}>Reconnecting…</Text>
+            </View>
+          )}
+
+          {/* Messages */}
+          <FlatList
+            ref={flatListRef}
+            data={listData}
+            keyExtractor={keyExtractor}
+            renderItem={renderItem}
+            showsVerticalScrollIndicator={false}
+            onEndReached={loadMoreMessages}
+            onEndReachedThreshold={0.4}
+            ListHeaderComponent={
+              loadingMore ? (
+                <View style={styles.loadMoreRow}>
+                  <ActivityIndicator size="small" color={C.accent} />
+                  <Text style={styles.loadMoreLabel}>Loading older messages…</Text>
+                </View>
+              ) : null
+            }
+            ListFooterComponent={
+              otherUserTyping && derivedOtherUser
+                ? <TypingIndicator user={derivedOtherUser} />
+                : <View style={{ height: 8 }} />
+            }
+            contentContainerStyle={styles.messageList}
+            removeClippedSubviews={Platform.OS === 'android'}
+            maxToRenderPerBatch={15}
+            windowSize={21}
+            initialNumToRender={20}
+            style={{ flex: 1 }}
+          />
+
+          {/* Input bar */}
+          <View style={styles.inputBar}>
+            <View style={styles.inputWrap}>
+              <TextInput
+                ref={inputRef}
+                style={styles.input}
+                value={newMessage}
+                onChangeText={(text) => {
+                  setNewMessage(text);
+                  const hasText = text.trim().length > 0;
+                  if (hasText && !isTyping) handleTyping(true);
+                  else if (!hasText && isTyping) handleTyping(false);
+                }}
+                placeholder="Message"
+                placeholderTextColor={C.textMeta}
+                multiline
+                maxLength={1000}
+                returnKeyType="send"
+                onSubmitEditing={sendMessage}
+                blurOnSubmit={false}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.sendBtn, (!newMessage.trim() || sending) && styles.sendBtnDisabled]}
+              onPress={sendMessage}
+              disabled={!newMessage.trim() || sending}
+              activeOpacity={0.8}
+            >
+              {sending
+                ? <ActivityIndicator size="small" color={C.white} />
+                : <Icon name="send" size={18} color={C.white} style={{ marginLeft: 2 }} />
               }
-              ListFooterComponent={renderTypingIndicator}
-              contentContainerStyle={styles.messagesList}
-              onScrollToIndexFailed={() => {}}
-              removeClippedSubviews={false}
-              maxToRenderPerBatch={20}
-              windowSize={21}
-              initialNumToRender={20}
-            />
-
-            {/* Input Container */}
-            <View style={styles.inputContainer}>
-              <View style={styles.inputRow}>
-                <TextInput
-                  ref={inputRef}
-                  style={styles.textInput}
-                  value={newMessage}
-                  onChangeText={(text) => {
-                    setNewMessage(text);
-                    if (text.trim().length > 0 && !isTyping) {
-                      handleTyping(true);
-                    } else if (text.trim().length === 0 && isTyping) {
-                      handleTyping(false);
-                    }
-                  }}
-                  placeholder="Type a message..."
-                  placeholderTextColor="#8E8E93"
-                  multiline
-                  maxLength={1000}
-                  returnKeyType="send"
-                  onSubmitEditing={sendMessage}
-                  blurOnSubmit={false}
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.sendButton,
-                    (!newMessage.trim() || sending) && styles.sendButtonDisabled
-                  ]}
-                  onPress={sendMessage}
-                  disabled={!newMessage.trim() || sending}
-                >
-                  {sending ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Icon name="send" size={20} color="#FFFFFF" />
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
+            </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
-
-        {/* Three Dots Menu */}
-        {renderMenu()}
-
-        {/* Long Press Modal */}
-        {renderLongPressModal()}
       </SafeAreaView>
+
+      <LongPressModal />
+      <MenuModal />
     </View>
   );
 };
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: '#083028',
+    backgroundColor: C.bg,
+  },
+  safeArea: {
+    flex: 1,
+    backgroundColor: 'transparent',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 0,
-    backgroundColor: '#0a3a2d',
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A2A2A',
-    zIndex: 10,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: '#AAAAAA',
-    marginTop: 2,
-  },
-  headerAction: {
-    padding: 8,
-  },
-  connectionStatus: {
-    backgroundColor: '#FF6B6B',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
-  connectionText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-  },
-  messagesList: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    flexGrow: 1,
-  },
-  messageContainer: {
-    marginBottom: 12,
-  },
-  ownMessageContainer: {
-    alignItems: 'flex-end',
-  },
-  otherMessageContainer: {
-    alignItems: 'flex-start',
-  },
-  messageWrapper: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    maxWidth: '80%',
-  },
-  ownMessageWrapper: {
-    justifyContent: 'flex-end',
-  },
-  otherMessageWrapper: {
-    justifyContent: 'flex-start',
-  },
-  otherAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#2E7D2E',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-    overflow: 'hidden',
-  },
-  avatarImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  avatarText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  messageBubble: {
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    maxWidth: '100%',
-  },
-  ownBubble: {
-    backgroundColor: '#2E7D2E',
-    borderTopRightRadius: 4,
-  },
-  otherBubble: {
-    backgroundColor: '#174f3a',
-    borderTopLeftRadius: 4,
-  },
-  typingBubble: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  typingDots: {
-    flexDirection: 'row',
-  },
-  typingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#AAAAAA',
-    marginHorizontal: 2,
-  },
-  messageText: {
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  ownMessageText: {
-    color: '#FFFFFF',
-  },
-  otherMessageText: {
-    color: '#FFFFFF',
-  },
-  messageFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    marginTop: 4,
-  },
-  messageTime: {
-    fontSize: 10,
-  },
-  ownMessageTime: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginRight: 4,
-  },
-  otherMessageTime: {
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
-  messageStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  blueTickContainer: {
-    backgroundColor: '#e9f0e9',
-    borderRadius: 8,
-    padding: 2,
-  },
-  inputContainer: {
-    backgroundColor: '#0a3a2d',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
-    borderTopWidth: 1,
-    borderTopColor: '#2A2A2A',
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  textInput: {
-    flex: 1,
-    backgroundColor: '#1A1A1A',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 10,
-    fontSize: 16,
-    color: '#FFFFFF',
-    minHeight: 44,
-    maxHeight: 100,
-  },
-  sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#4CAF50',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 12,
-  },
-  sendButtonDisabled: {
-    backgroundColor: '#2E7D2E',
-    opacity: 0.5,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#AAAAAA',
-  },
-  loadingMore: {
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
-  loadingMoreText: {
-    marginTop: 8,
-    fontSize: 12,
-    color: '#888888',
-  },
-  menuOverlay: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  menuContainer: {
-    backgroundColor: '#1A1A1A',
-    borderRadius: 8,
-    padding: 8,
-    width: 180,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    backgroundColor: C.headerBg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
+    elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.3,
     shadowRadius: 4,
-    elevation: 5,
-    borderWidth: 1,
-    borderColor: '#2A2A2A',
   },
-  menuItem: {
+  headerBack: {
+    padding: 6,
+    marginRight: 4,
+  },
+  headerAvatarWrap: {
+    position: 'relative',
+    marginRight: 10,
+  },
+  onlineDot: {
+    position: 'absolute',
+    bottom: 1,
+    right: 1,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: C.accent,
+    borderWidth: 2,
+    borderColor: C.headerBg,
+  },
+  headerMeta: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  headerName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: C.textPrimary,
+    letterSpacing: 0.1,
+  },
+  headerStatus: {
+    fontSize: 11,
+    color: C.textMeta,
+    marginTop: 1,
+    textTransform: 'lowercase',
+  },
+  headerMenu: {
+    padding: 8,
+  },
+  reconnectBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    justifyContent: 'center',
+    backgroundColor: '#7A3020',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+  },
+  reconnectText: {
+    color: C.white,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  messageList: {
     paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 8,
+    flexGrow: 1,
   },
-  menuItemText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    marginLeft: 12,
+  bubbleRow: {
+    flexDirection: 'row',
+    marginBottom: 6,
+    alignItems: 'flex-end',
+    maxWidth: '82%',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  bubbleRowOwn: {
+    alignSelf: 'flex-end',
+    justifyContent: 'flex-end',
+  },
+  bubbleRowOther: {
+    alignSelf: 'flex-start',
+    justifyContent: 'flex-start',
+  },
+  bubble: {
+    borderRadius: 18,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    maxWidth: '100%',
+    position: 'relative',
+  },
+  bubbleOwn: {
+    backgroundColor: C.own,
+    borderBottomRightRadius: 4,
+  },
+  bubbleOther: {
+    backgroundColor: C.other,
+    borderBottomLeftRadius: 4,
+  },
+  tail: {
+    position: 'absolute',
+    bottom: 0,
+    width: 0,
+    height: 0,
+  },
+  tailOwn: {
+    right: -6,
+    borderTopWidth: 8,
+    borderTopColor: C.own,
+    borderLeftWidth: 8,
+    borderLeftColor: 'transparent',
+    borderBottomWidth: 0,
+    borderRightWidth: 0,
+  },
+  tailOther: {
+    left: -6,
+    borderTopWidth: 8,
+    borderTopColor: C.other,
+    borderRightWidth: 8,
+    borderRightColor: 'transparent',
+    borderBottomWidth: 0,
+    borderLeftWidth: 0,
+  },
+  bubbleText: {
+    fontSize: 15,
+    lineHeight: 21,
+    color: C.textPrimary,
+  },
+  bubbleMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: 3,
+    gap: 4,
+  },
+  bubbleTime: {
+    fontSize: 10,
+    color: C.textMeta,
+  },
+  blueTickWrap: {
+    backgroundColor: 'rgba(79,195,247,0.12)',
+    borderRadius: 6,
+    padding: 2,
+  },
+  avatar: {
     justifyContent: 'center',
     alignItems: 'center',
   },
-  modalContent: {
-    backgroundColor: '#1A1A1A',
-    borderRadius: 12,
-    padding: 20,
-    width: '80%',
-    maxWidth: 300,
+  avatarText: {
+    color: C.white,
+    fontWeight: '700',
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 16,
+  typingRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: 12,
+    paddingBottom: 6,
+    gap: 8,
   },
-  modalOption: {
+  typingBubble: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: C.other,
+    borderRadius: 16,
+    borderBottomLeftRadius: 4,
+    paddingHorizontal: 14,
     paddingVertical: 12,
+    gap: 4,
   },
-  modalOptionText: {
-    fontSize: 16,
-    color: '#007AFF',
-    marginLeft: 12,
+  typingDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: C.textSecondary,
   },
-  deleteOption: {
-    borderTopWidth: 1,
-    borderTopColor: '#2A2A2A',
-    marginTop: 8,
-    paddingTop: 16,
+  dateSepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 14,
+    paddingHorizontal: 4,
   },
-  deleteOptionText: {
-    color: '#FF3B30',
+  dateSepLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: C.border,
   },
-  modalCancel: {
-    marginTop: 16,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#2A2A2A',
+  dateSepPill: {
+    backgroundColor: C.surfaceAlt,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    marginHorizontal: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
+  },
+  dateSepText: {
+    fontSize: 11,
+    color: C.textMeta,
+    fontWeight: '500',
+  },
+  inputBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 14,
+    backgroundColor: C.headerBg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: C.border,
+    gap: 10,
+  },
+  inputWrap: {
+    flex: 1,
+    backgroundColor: C.inputBg,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
+    paddingHorizontal: 16,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 6,
+    minHeight: 44,
+    maxHeight: 120,
+    justifyContent: 'center',
+  },
+  input: {
+    fontSize: 15,
+    color: C.textPrimary,
+    lineHeight: 20,
+  },
+  sendBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: C.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: C.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+  },
+  sendBtnDisabled: {
+    backgroundColor: C.accentMuted,
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  loadingBody: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  modalCancelText: {
-    fontSize: 16,
-    color: '#888888',
+  loadingLabel: {
+    marginTop: 14,
+    fontSize: 14,
+    color: C.textSecondary,
+  },
+  skelLine: {
+    backgroundColor: C.border,
+    borderRadius: 4,
+  },
+  loadMoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 8,
+  },
+  loadMoreLabel: {
+    fontSize: 12,
+    color: C.textSecondary,
+  },
+  overlayFull: {
+    flex: 1,
+    backgroundColor: C.overlay,
+    justifyContent: 'flex-end',
+  },
+  actionSheet: {
+    backgroundColor: C.surfaceAlt,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    overflow: 'hidden',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
+  },
+  actionSheetPreview: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
+    backgroundColor: C.surface,
+  },
+  actionSheetPreviewText: {
+    fontSize: 13,
+    color: C.textSecondary,
+    fontStyle: 'italic',
+  },
+  actionSheetItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 14,
+  },
+  actionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionSheetLabel: {
+    flex: 1,
+    fontSize: 15,
+    color: C.textPrimary,
+    fontWeight: '500',
+  },
+  actionSheetCancel: {
+    marginHorizontal: 20,
+    marginTop: 8,
+    paddingVertical: 14,
+    backgroundColor: C.surface,
+    borderRadius: 14,
+    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
+  },
+  actionSheetCancelText: {
+    fontSize: 15,
+    color: C.textSecondary,
+    fontWeight: '600',
+  },
+  dropMenu: {
+    position: 'absolute',
+    top: 56,
+    right: 14,
+    backgroundColor: C.surface,
+    borderRadius: 12,
+    width: 190,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    overflow: 'hidden',
+  },
+  dropMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    gap: 12,
+  },
+  dropMenuLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: C.textPrimary,
+  },
+  dropMenuDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: C.border,
+    marginHorizontal: 12,
   },
 });
 
