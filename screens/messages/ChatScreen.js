@@ -23,6 +23,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '../../context/AuthContext';
 import io from 'socket.io-client';
+import MessageDbService from '../../services/MessageDbService';
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const C = {
@@ -120,7 +121,7 @@ const TypingIndicator = React.memo(({ user }) => {
       <Avatar user={user} size={28} />
       <View style={styles.typingBubble}>
         {[dot1, dot2, dot3].map((d, i) => (
-          <Animated.View key={i} style={[styles.typingDot, dotStyle(d)]} />
+          <Animated.View key={`typing_dot_${i}`} style={[styles.typingDot, dotStyle(d)]} />
         ))}
       </View>
     </View>
@@ -137,6 +138,7 @@ const MessageBubble = React.memo(({ message, isOwn, otherUserId, onLongPress }) 
 
   return (
     <TouchableOpacity
+      key={message._id || message.tempId}
       onLongPress={() => onLongPress(message)}
       activeOpacity={0.85}
       style={[styles.bubbleRow, isOwn ? styles.bubbleRowOwn : styles.bubbleRowOther]}
@@ -195,6 +197,7 @@ const ChatScreen = ({ route, navigation }) => {
   const [reconnecting,     setReconnecting]     = useState(false);
   const [initialLoadDone,  setInitialLoadDone]  = useState(false);
   const [derivedOtherUser, setDerivedOtherUser] = useState(null);
+  const [dbInitialized,    setDbInitialized]    = useState(false);
 
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [modalVisible,    setModalVisible]    = useState(false);
@@ -213,28 +216,19 @@ const ChatScreen = ({ route, navigation }) => {
     currentUser?.userId || currentUser?._id || currentUser?.id,
   [currentUser]);
 
-  const normalizeMessage = useCallback((msg) => ({
-    ...msg,
-    readBy:             msg.readBy || [],
-    readByUserIds:      (msg.readBy || []).map(r => r.user),
-    deliveredToUserIds: (msg.deliveredTo || []).map(d =>
-      typeof d === 'string' ? d : d.user),
-  }), []);
-
-  const listData = useMemo(() => {
-    const result = [];
-    let lastDate = null;
-    for (const msg of messages) {
-      const d = new Date(msg.createdAt);
-      const label = d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
-      if (label !== lastDate) {
-        result.push({ type: 'date', id: `date_${msg._id}`, label });
-        lastDate = label;
+  // ── Initialize Database ──
+  useEffect(() => {
+    const initDB = async () => {
+      try {
+        await MessageDbService.init();
+        setDbInitialized(true);
+      } catch (error) {
+        console.error('Failed to initialize DB:', error);
+        setDbInitialized(false);
       }
-      result.push({ type: 'message', ...msg });
-    }
-    return result;
-  }, [messages]);
+    };
+    initDB();
+  }, []);
 
   // ── Original working two-effect pattern ──
   useEffect(() => {
@@ -257,16 +251,21 @@ const ChatScreen = ({ route, navigation }) => {
   }, [otherUser, conversation, currentUser]);
 
   useEffect(() => {
-    if (conversationId && (derivedOtherUser || !conversation)) {
+    if (conversationId && (derivedOtherUser || !conversation) && dbInitialized) {
       initializeChat();
     }
     return () => cleanup();
-  }, [conversationId, derivedOtherUser]);
+  }, [conversationId, derivedOtherUser, dbInitialized]);
 
   const initializeChat = async () => {
     try {
-      await loadMessages();
+      // 1. Load from local DB instantly
+      await loadMessagesFromLocal();
+      
+      // 2. Connect socket for real-time
       connectSocket();
+      
+      // 3. Mark as read
       await markConversationAsRead();
     } catch {
       Alert.alert('Error', 'Failed to load chat. Please try again.');
@@ -274,6 +273,36 @@ const ChatScreen = ({ route, navigation }) => {
       setInitialLoadDone(true);
     }
   };
+
+  // ── Load messages from local DB (INSTANT!) ──
+  const loadMessagesFromLocal = useCallback(async () => {
+    if (!dbInitialized || !conversationId) return;
+
+    try {
+      const localMessages = await MessageDbService.getMessages(conversationId, 50);
+      if (localMessages && localMessages.length > 0) {
+        // Format messages to match expected structure
+        const formatted = localMessages.map(msg => ({
+          ...msg,
+          _id: msg.id || msg._id,
+          sender: {
+            _id: msg.senderId,
+            id: msg.senderId,
+            username: msg.senderName || 'Unknown',
+          },
+          readBy: msg.readBy || [],
+          deliveredTo: msg.deliveredTo || [],
+          status: msg.status || 'sent',
+        }));
+        setMessages(formatted);
+        setLoading(false);
+        
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
+      }
+    } catch (error) {
+      console.error('Failed to load from local DB:', error);
+    }
+  }, [dbInitialized, conversationId]);
 
   // ── Socket ──
   const connectSocket = () => {
@@ -315,6 +344,10 @@ const ChatScreen = ({ route, navigation }) => {
           ? { ...m, readBy: readBy || [], status: 'read' }
           : m
       ));
+      // Update local DB
+      if (dbInitialized) {
+        MessageDbService.markMessageRead(messageId, getCurrentUserId());
+      }
     });
 
     socketRef.current.on('user_typing', ({ userId, isTyping: t }) => {
@@ -332,7 +365,7 @@ const ChatScreen = ({ route, navigation }) => {
     socketRef.current.on('error', (err) => Alert.alert('Connection Error', err.message));
   };
 
-  // ── Load messages ──
+  // ── Load messages from server (background sync) ──
   const loadMessages = async (pageNum = 1, isLoadMore = false) => {
     if (!token) { logout(); return; }
     if (!conversationId) return;
@@ -360,6 +393,23 @@ const ChatScreen = ({ route, navigation }) => {
         deliveredToUserIds: (msg.deliveredTo || []).map(d => d.user),
       }));
 
+      // Save to local DB
+      if (dbInitialized) {
+        for (const msg of normalized) {
+          await MessageDbService.saveMessage({
+            _id: msg._id,
+            conversationId: msg.conversationId || conversationId,
+            content: msg.content,
+            senderId: msg.sender._id || msg.sender.id,
+            senderName: msg.sender.username || 'Unknown',
+            createdAt: msg.createdAt,
+            status: msg.status || 'sent',
+            readBy: msg.readBy || [],
+            deliveredTo: msg.deliveredTo || [],
+          });
+        }
+      }
+
       setMessages(prev => isLoadMore ? [...normalized, ...prev] : normalized);
       setHasMoreMessages(normalized.length === 20);
       setPage(pageNum);
@@ -381,7 +431,7 @@ const ChatScreen = ({ route, navigation }) => {
     }
   };
 
-  const handleNewMessage = useCallback((data) => {
+  const handleNewMessage = useCallback(async (data) => {
     const normalized = normalizeMessage(data);
 
     // Ensure sender is always a populated object
@@ -391,6 +441,21 @@ const ChatScreen = ({ route, navigation }) => {
         username: derivedOtherUser?.username || 'User',
         _id: normalized.sender?._id || normalized.sender || derivedOtherUser?._id,
       };
+    }
+
+    // Save to local DB
+    if (dbInitialized) {
+      await MessageDbService.saveMessage({
+        _id: normalized._id,
+        conversationId: normalized.conversationId || conversationId,
+        content: normalized.content,
+        senderId: normalized.sender._id || normalized.sender.id,
+        senderName: normalized.sender.username || 'Unknown',
+        createdAt: normalized.createdAt,
+        status: normalized.status || 'sent',
+        readBy: normalized.readBy || [],
+        deliveredTo: normalized.deliveredTo || [],
+      });
     }
 
     setMessages(prev => {
@@ -406,9 +471,17 @@ const ChatScreen = ({ route, navigation }) => {
       setTimeout(() => markMessageAsRead(normalized._id), 500);
 
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-  }, [getCurrentUserId, normalizeMessage, derivedOtherUser]);
+  }, [getCurrentUserId, derivedOtherUser, dbInitialized, conversationId]);
 
-  const updateMessageStatus = useCallback((identifier, messageData, status) => {
+  const normalizeMessage = useCallback((msg) => ({
+    ...msg,
+    readBy:             msg.readBy || [],
+    readByUserIds:      (msg.readBy || []).map(r => r.user),
+    deliveredToUserIds: (msg.deliveredTo || []).map(d =>
+      typeof d === 'string' ? d : d.user),
+  }), []);
+
+  const updateMessageStatus = useCallback(async (identifier, messageData, status) => {
     setMessages(prev => prev.map(m => {
       if (m._id !== identifier && m.tempId !== identifier) return m;
       const updated = {
@@ -419,7 +492,27 @@ const ChatScreen = ({ route, navigation }) => {
       if (messageData?._id) delete updated.tempId;
       return updated;
     }));
-  }, [normalizeMessage]);
+
+    // Update local DB
+    if (dbInitialized) {
+      await MessageDbService.updateMessageStatus(identifier, status);
+    }
+  }, [normalizeMessage, dbInitialized]);
+
+  const listData = useMemo(() => {
+    const result = [];
+    let lastDate = null;
+    for (const msg of messages) {
+      const d = new Date(msg.createdAt);
+      const label = d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+      if (label !== lastDate) {
+        result.push({ type: 'date', id: `date_${msg._id}`, label });
+        lastDate = label;
+      }
+      result.push({ type: 'message', ...msg });
+    }
+    return result;
+  }, [messages]);
 
   // ── Send ──
   const sendMessage = useCallback(async () => {
@@ -434,17 +527,37 @@ const ChatScreen = ({ route, navigation }) => {
     const tempId = `temp_${Date.now()}`;
     const uid    = getCurrentUserId();
 
-    setMessages(prev => [...prev, {
-      _id: tempId, tempId, content,
+    const tempMessage = {
+      _id: tempId,
+      tempId,
+      content,
       sender: { _id: uid, id: uid, username: currentUser?.username, ...currentUser },
       createdAt: new Date().toISOString(),
       status: 'sending',
       messageType: 'text',
-      readByUserIds: [], deliveredToUserIds: [],
-    }]);
+      readByUserIds: [],
+      deliveredToUserIds: [],
+      readBy: [],
+      deliveredTo: [],
+    };
 
+    setMessages(prev => [...prev, tempMessage]);
     setNewMessage('');
     setSending(true);
+
+    // Save to local DB instantly
+    if (dbInitialized) {
+      await MessageDbService.saveMessage({
+        _id: tempId,
+        conversationId: conversationId,
+        content: content,
+        senderId: uid,
+        senderName: currentUser?.username || 'You',
+        createdAt: new Date().toISOString(),
+        status: 'sending',
+        tempId: tempId,
+      });
+    }
 
     try {
       socketRef.current.emit('send_message', {
@@ -459,7 +572,7 @@ const ChatScreen = ({ route, navigation }) => {
     } finally {
       setSending(false);
     }
-  }, [newMessage, sending, getCurrentUserId, conversationId, chatType, currentUser]);
+  }, [newMessage, sending, getCurrentUserId, conversationId, chatType, currentUser, dbInitialized]);
 
   const handleTyping = useCallback((typing) => {
     if (!socketRef.current?.connected) return;
@@ -476,6 +589,10 @@ const ChatScreen = ({ route, navigation }) => {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       });
+      // Update local DB
+      if (dbInitialized) {
+        await MessageDbService.markConversationMessagesRead(conversationId, getCurrentUserId());
+      }
     } catch { /* silent */ }
   };
 
@@ -535,6 +652,10 @@ const ChatScreen = ({ route, navigation }) => {
             });
             if (res.ok) {
               setMessages(prev => prev.filter(m => m._id !== selectedMessage._id));
+              // Delete from local DB
+              if (dbInitialized) {
+                await MessageDbService.deleteMessage(selectedMessage._id);
+              }
             } else {
               Alert.alert('Error', 'Failed to delete message');
             }
@@ -613,7 +734,7 @@ const ChatScreen = ({ route, navigation }) => {
 
   // ── Render item ──
   const renderItem = useCallback(({ item }) => {
-    if (item.type === 'date') return <DateSeparator date={item.label} />;
+    if (item.type === 'date') return <DateSeparator key={item.id} date={item.label} />;
 
     const uid     = String(getCurrentUserId() || '');
     const sid     = String(item.sender?._id || item.sender?.id || '');
@@ -622,6 +743,7 @@ const ChatScreen = ({ route, navigation }) => {
 
     return (
       <MessageBubble
+        key={item._id || item.tempId}
         message={item}
         isOwn={isOwn}
         otherUserId={otherId}
@@ -658,7 +780,7 @@ const ChatScreen = ({ route, navigation }) => {
                   </Text>
                 </View>
 
-                <TouchableOpacity style={styles.actionSheetItem} onPress={copyMessage}>
+                <TouchableOpacity key="copy_action" style={styles.actionSheetItem} onPress={copyMessage}>
                   <View style={[styles.actionIcon, { backgroundColor: 'rgba(79,195,247,0.15)' }]}>
                     <Icon name="content-copy" size={18} color={C.blue} />
                   </View>
@@ -668,6 +790,7 @@ const ChatScreen = ({ route, navigation }) => {
 
                 {isOwn && (
                   <TouchableOpacity
+                    key="delete_action"
                     style={styles.actionSheetItem}
                     onPress={deleteMessage}
                     disabled={deleting}
@@ -682,7 +805,7 @@ const ChatScreen = ({ route, navigation }) => {
                   </TouchableOpacity>
                 )}
 
-                <TouchableOpacity style={styles.actionSheetCancel} onPress={closeModal}>
+                <TouchableOpacity key="cancel_action" style={styles.actionSheetCancel} onPress={closeModal}>
                   <Text style={styles.actionSheetCancelText}>Cancel</Text>
                 </TouchableOpacity>
               </Animated.View>
@@ -706,14 +829,14 @@ const ChatScreen = ({ route, navigation }) => {
                 opacity: menuAnim,
               },
             ]}>
-              <TouchableOpacity style={styles.dropMenuItem} onPress={blockUser} disabled={blocking}>
+              <TouchableOpacity key="block_action" style={styles.dropMenuItem} onPress={blockUser} disabled={blocking}>
                 <Icon name="block" size={18} color={C.warning} />
                 <Text style={[styles.dropMenuLabel, { color: C.warning }]}>
                   {blocking ? 'Blocking…' : 'Block user'}
                 </Text>
               </TouchableOpacity>
               <View style={styles.dropMenuDivider} />
-              <TouchableOpacity style={styles.dropMenuItem} onPress={reportUser}>
+              <TouchableOpacity key="report_action" style={styles.dropMenuItem} onPress={reportUser}>
                 <Icon name="flag" size={18} color={C.danger} />
                 <Text style={[styles.dropMenuLabel, { color: C.danger }]}>Report user</Text>
               </TouchableOpacity>
