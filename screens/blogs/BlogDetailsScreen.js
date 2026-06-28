@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+// screens/blogs/BlogDetailsScreen.js
+import React, { useEffect, useState, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -11,44 +12,145 @@ import {
   Alert,
   Share,
   Dimensions,
-  SafeAreaView,
-  StatusBar
+  StatusBar,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import * as Animatable from 'react-native-animatable';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
+import BlogDbService from '../../services/BlogDbService';
 
 const { width } = Dimensions.get('window');
 
-// Blog-themed color palette matching BlogsScreen
 const BlogColors = {
-  primary: '#187013',      // Vibrant Purple
-  secondary: '#187013',    // Coral
-  accent: '#4ECDC4',       // Turquoise
-  background: '#0A0A0A',   // Dark Background
-  surface: '#1A1A1A',      // Surface Dark
-  card: '#242424',         // Card Background
-  text: '#FFFFFF',         // White
-  textSecondary: '#B0B0B0', // Light Gray
-  textMuted: '#757575',     // Muted Gray
-  border: '#333333',        // Border
-  like: '#FF6B6B',         // Like color
+  primary: '#187013',
+  secondary: '#187013',
+  accent: '#4ECDC4',
+  background: '#0A0A0A',
+  surface: '#1A1A1A',
+  card: '#242424',
+  text: '#FFFFFF',
+  textSecondary: '#B0B0B0',
+  textMuted: '#757575',
+  border: '#333333',
+  like: '#FF6B6B',
+};
+
+// ─── Helper to parse content ──────────────────────────────────────────
+const parseContent = (content) => {
+  if (!content) return [];
+  if (Array.isArray(content)) return content;
+  if (typeof content === 'string') {
+    try {
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (e) {
+      return [{ type: 'paragraph', text: content }];
+    }
+  }
+  if (typeof content === 'object' && content.content) {
+    return parseContent(content.content);
+  }
+  return [];
+};
+
+// ─── Normalize blog from any source ──────────────────────────────────
+const normalizeBlog = (blog) => {
+  if (!blog) return null;
+  
+  return {
+    ...blog,
+    _id: blog._id || blog.id,
+    id: blog._id || blog.id,
+    title: blog.title || 'Untitled',
+    excerpt: blog.excerpt || '',
+    content: parseContent(blog.content),
+    image: blog.image || 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=400',
+    category: blog.category || 'General',
+    readTime: blog.readTime || 5,
+    date: blog.date || blog.createdAt || new Date().toISOString(),
+    author: blog.author || { username: blog.authorName || 'Unknown' },
+    likes: blog.likes || [],
+    comments: blog.comments || [],
+    saved: blog.saved || false,
+  };
 };
 
 const BlogDetailsScreen = ({ route, navigation }) => {
   const { id } = route.params;
+  // Try to get blog data from navigation params (passed from BlogsScreen)
+  const routeBlog = route.params?.blog;
+  
   const [blog, setBlog] = useState(null);
   const [comment, setComment] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!routeBlog); // Only loading if no data passed
   const [commentLoading, setCommentLoading] = useState(false);
   const [liked, setLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(0);
   const [saved, setSaved] = useState(false);
+  const [dbInitialized, setDbInitialized] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const { currentUser, token } = useAuth();
 
-  // Create axios instance with auth header
+  // ── Init DB ──
+  useEffect(() => {
+    const initDb = async () => {
+      try {
+        await BlogDbService.init();
+        setDbInitialized(true);
+        console.log('✅ Blog DB initialized in Details');
+      } catch (error) {
+        console.error('❌ Blog DB init failed:', error);
+        setDbInitialized(false);
+      }
+    };
+    initDb();
+  }, []);
+
+  // ── If blog data was passed from BlogsScreen, use it immediately ──
+  useEffect(() => {
+    if (routeBlog) {
+      const normalized = normalizeBlog(routeBlog);
+      setBlog(normalized);
+      setLikesCount(normalized.likes?.length || 0);
+      setLiked(normalized.likes?.includes(currentUser?._id));
+      setSaved(normalized.saved || false);
+      setLoading(false);
+      console.log('✅ Using blog data from navigation params');
+    }
+  }, [routeBlog, currentUser]);
+
+  // ── If no data was passed, try to load from DB ──
+  useEffect(() => {
+    if (dbInitialized && !routeBlog && !blog) {
+      fetchBlogFromDB();
+    }
+  }, [dbInitialized, routeBlog, blog]);
+
+  const fetchBlogFromDB = useCallback(async () => {
+    if (!dbInitialized) return;
+
+    try {
+      const localBlog = await BlogDbService.getBlog(id);
+      if (localBlog) {
+        const normalized = normalizeBlog(localBlog);
+        setBlog(normalized);
+        setLikesCount(normalized.likes?.length || 0);
+        setLiked(normalized.likes?.includes(currentUser?._id));
+        setSaved(normalized.saved || false);
+        setLoading(false);
+        console.log('✅ Loaded blog from DB');
+      } else {
+        // If not in DB, fetch from server
+        await fetchBlogFromServer();
+      }
+    } catch (error) {
+      console.warn('Failed to load blog from DB:', error);
+      await fetchBlogFromServer();
+    }
+  }, [dbInitialized, id, currentUser]);
+
   const apiClient = axios.create({
     baseURL: 'https://moihub.onrender.com/api',
     headers: {
@@ -57,24 +159,45 @@ const BlogDetailsScreen = ({ route, navigation }) => {
     }
   });
 
-  const fetchBlog = async () => {
+  // ── Fetch from server (only if needed) ──
+  const fetchBlogFromServer = useCallback(async () => {
+    if (!token) return;
+
+    setIsSyncing(true);
     try {
       const res = await apiClient.get(`/posts/${id}`);
-      setBlog(res.data.post);
-      setLikesCount(res.data.post.likes?.length || 0);
-      setLiked(res.data.post.likes?.includes(currentUser?._id));
+      const serverBlog = res.data.post;
+
+      if (serverBlog) {
+        const normalized = normalizeBlog(serverBlog);
+        
+        // Save to DB for next time
+        if (dbInitialized) {
+          await BlogDbService.saveBlog(serverBlog);
+        }
+
+        setBlog(normalized);
+        setLikesCount(normalized.likes?.length || 0);
+        setLiked(normalized.likes?.includes(currentUser?._id));
+        setSaved(normalized.saved || false);
+        setLoading(false);
+      }
     } catch (error) {
-      console.error('Failed to load blog:', error);
-      Alert.alert('Error', 'Failed to load blog post. Please try again.');
+      console.error('Failed to fetch from server:', error);
+      if (!blog) {
+        Alert.alert(
+          'Error',
+          'Failed to load blog post. Please try again.',
+          [{ text: 'OK' }]
+        );
+        setLoading(false);
+      }
     } finally {
-      setLoading(false);
+      setIsSyncing(false);
     }
-  };
+  }, [id, token, dbInitialized, currentUser, blog, apiClient]);
 
-  useEffect(() => {
-    fetchBlog();
-  }, []);
-
+  // ── Handle like ──
   const handleLike = async () => {
     if (!currentUser) {
       Alert.alert('Authentication Required', 'Please log in to like posts.');
@@ -83,7 +206,6 @@ const BlogDetailsScreen = ({ route, navigation }) => {
 
     const newLikedState = !liked;
     
-    // Optimistic update
     setLiked(newLikedState);
     setLikesCount(prev => newLikedState ? prev + 1 : prev - 1);
 
@@ -92,47 +214,67 @@ const BlogDetailsScreen = ({ route, navigation }) => {
         liked: newLikedState
       });
 
-      // Update with actual server response
       setLikesCount(response.data.likeCount);
       setLiked(response.data.liked);
+
+      if (dbInitialized && blog) {
+        const updatedBlog = {
+          ...blog,
+          likes: response.data.liked 
+            ? [...(blog.likes || []), currentUser._id]
+            : (blog.likes || []).filter(uid => uid !== currentUser._id)
+        };
+        await BlogDbService.saveBlog(updatedBlog);
+      }
     } catch (error) {
       console.error('Failed to like post:', error);
-      // Revert optimistic update on error
       setLiked(!newLikedState);
       setLikesCount(prev => newLikedState ? prev - 1 : prev + 1);
       Alert.alert('Error', 'Failed to update like. Please try again.');
     }
   };
 
-const handleShare = async () => {
-  try {
-    const blogUrl = `https://moihub-silk.vercel.app/blog/${blog._id}`;
-    
-    const result = await Share.share({
-      message: `Check out this amazing blog post: "${blog.title}" - ${blog.excerpt}\n\nRead more at: ${blogUrl}`,
-      title: blog.title,
-      url: blogUrl, // For iOS, this can be used to share the link directly
-    });
-    
-    if (result.action === Share.sharedAction) {
-      console.log('Shared successfully');
+  // ── Handle share ──
+  const handleShare = async () => {
+    try {
+      const blogUrl = `https://moihub-silk.vercel.app/blog/${blog._id}`;
+      
+      const result = await Share.share({
+        message: `Check out this amazing blog post: "${blog.title}" - ${blog.excerpt}\n\nRead more at: ${blogUrl}`,
+        title: blog.title,
+        url: blogUrl,
+      });
+      
+      if (result.action === Share.sharedAction) {
+        console.log('Shared successfully');
+      }
+    } catch (error) {
+      console.error('Error sharing:', error);
     }
-  } catch (error) {
-    console.error('Error sharing:', error);
-  }
-};
-  const handleSave = () => {
+  };
+
+  // ── Handle save ──
+  const handleSave = async () => {
     if (!currentUser) {
       Alert.alert('Authentication Required', 'Please log in to save posts.');
       return;
     }
-    setSaved(!saved);
+
+    const newSavedState = !saved;
+    setSaved(newSavedState);
+
+    if (dbInitialized && blog) {
+      const result = await BlogDbService.toggleSaved(id, currentUser._id);
+      setSaved(result.saved);
+    }
+
     Alert.alert(
       saved ? 'Removed' : 'Saved',
       saved ? 'Article removed from your reading list' : 'Article saved to your reading list'
     );
   };
 
+  // ── Handle comment ──
   const handleComment = async () => {
     if (!currentUser) {
       Alert.alert('Authentication Required', 'Please log in to comment.');
@@ -150,11 +292,18 @@ const handleShare = async () => {
         text: comment.trim()
       });
 
-      // Update the blog state with new comments
       setBlog(prevBlog => ({
         ...prevBlog,
-        comments: response.data // Backend returns populated comments
+        comments: response.data
       }));
+
+      if (dbInitialized && blog) {
+        const updatedBlog = {
+          ...blog,
+          comments: response.data
+        };
+        await BlogDbService.saveBlog(updatedBlog);
+      }
 
       setComment('');
       Alert.alert('Success', 'Your comment has been posted!');
@@ -166,7 +315,9 @@ const handleShare = async () => {
     }
   };
 
+  // ── Format date ──
   const formatDate = (dateString) => {
+    if (!dateString) return 'Recent';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { 
       month: 'long', 
@@ -190,7 +341,10 @@ const handleShare = async () => {
     return 'Just now';
   };
 
+  // ── Render content block ──
   const renderContentBlock = (block, index) => {
+    if (!block) return null;
+    
     switch (block.type) {
       case 'header':
         return (
@@ -229,14 +383,18 @@ const handleShare = async () => {
         );
       
       default:
-        return (
-          <Animatable.View key={block._id || index} animation="fadeInUp" delay={index * 100}>
-            <Text style={styles.contentText}>{block.text}</Text>
-          </Animatable.View>
-        );
+        if (block.text) {
+          return (
+            <Animatable.View key={block._id || index} animation="fadeInUp" delay={index * 100}>
+              <Text style={styles.contentText}>{block.text}</Text>
+            </Animatable.View>
+          );
+        }
+        return null;
     }
   };
 
+  // ── Loading state ──
   if (loading) {
     return (
       <View style={styles.container}>
@@ -258,6 +416,7 @@ const handleShare = async () => {
     );
   }
 
+  // ── Error state ──
   if (!blog) {
     return (
       <View style={styles.container}>
@@ -284,8 +443,9 @@ const handleShare = async () => {
     );
   }
 
+  // ── Main render ──
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={BlogColors.background} />
       
       <LinearGradient
@@ -310,9 +470,14 @@ const handleShare = async () => {
           <Icon name="arrow-back" size={24} color={BlogColors.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>Article</Text>
-        <TouchableOpacity style={styles.menuButton}>
-          <Icon name="more-vert" size={24} color={BlogColors.textSecondary} />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          {isSyncing && (
+            <ActivityIndicator size="small" color={BlogColors.primary} style={{ marginRight: 8 }} />
+          )}
+          <TouchableOpacity style={styles.menuButton}>
+            <Icon name="more-vert" size={24} color={BlogColors.textSecondary} />
+          </TouchableOpacity>
+        </View>
       </View>
       
       <ScrollView 
@@ -332,7 +497,7 @@ const handleShare = async () => {
                 colors={[BlogColors.primary, BlogColors.secondary]}
                 style={styles.categoryBadge}
               >
-                <Text style={styles.categoryText}>{blog.category}</Text>
+                <Text style={styles.categoryText}>{blog.category || 'General'}</Text>
               </LinearGradient>
             </View>
           </LinearGradient>
@@ -352,11 +517,11 @@ const handleShare = async () => {
                 style={styles.authorAvatar}
               >
                 <Text style={styles.authorInitial}>
-                  {blog.author?.username?.charAt(0)?.toUpperCase()}
+                  {blog.author?.username?.charAt(0)?.toUpperCase() || 'U'}
                 </Text>
               </LinearGradient>
               <View>
-                <Text style={styles.authorName}>{blog.author?.username}</Text>
+                <Text style={styles.authorName}>{blog.author?.username || 'Unknown'}</Text>
                 <Text style={styles.date}>{formatDate(blog.date)}</Text>
               </View>
             </View>
@@ -415,7 +580,11 @@ const handleShare = async () => {
 
           {/* Article Content */}
           <View style={styles.articleContent}>
-            {blog.content?.map((block, index) => renderContentBlock(block, index))}
+            {blog.content && blog.content.length > 0 ? (
+              blog.content.map((block, index) => renderContentBlock(block, index))
+            ) : (
+              <Text style={styles.contentText}>{blog.excerpt || 'No content available'}</Text>
+            )}
           </View>
 
           {/* Comments Section */}
@@ -512,11 +681,11 @@ const handleShare = async () => {
                           style={styles.commentAvatar}
                         >
                           <Text style={styles.commentAvatarText}>
-                            {c.user?.username?.charAt(0)?.toUpperCase()}
+                            {c.user?.username?.charAt(0)?.toUpperCase() || 'U'}
                           </Text>
                         </LinearGradient>
                         <View style={styles.commentMeta}>
-                          <Text style={styles.commentUser}>{c.user?.username}</Text>
+                          <Text style={styles.commentUser}>{c.user?.username || 'Unknown'}</Text>
                           <Text style={styles.commentDate}>
                             {formatCommentDate(c.createdAt || c.date)}
                           </Text>
@@ -538,7 +707,7 @@ const handleShare = async () => {
           </Animatable.View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -586,6 +755,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     zIndex: 10,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   backButton: {
     width: 40,

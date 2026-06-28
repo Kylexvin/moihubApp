@@ -14,14 +14,29 @@ import {
   Modal,
   StatusBar,
   Platform,
+  UIManager,
+  LayoutAnimation,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useAuth } from '../../context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import io from 'socket.io-client';
 import MessageDbService from '../../services/MessageDbService';
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// Smooth reorder animation config — subtle, not bouncy
+const smoothReorder = {
+  duration: 220,
+  create:  { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+  update:  { type: LayoutAnimation.Types.easeInEaseOut },
+  delete:  { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+};
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const C = {
@@ -62,8 +77,8 @@ const getInitial = (username) => (username || '?')[0].toUpperCase();
 
 const formatTime = (timestamp) => {
   if (!timestamp) return '';
-  const date  = new Date(timestamp);
-  const now   = new Date();
+  const date   = new Date(timestamp);
+  const now    = new Date();
   const diffMs = now - date;
   const diffH  = diffMs / (1000 * 60 * 60);
   const diffD  = diffMs / (1000 * 60 * 60 * 24);
@@ -73,9 +88,47 @@ const formatTime = (timestamp) => {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 };
 
-const truncate = (val, n = 40) => {
-  const str = typeof val === 'string' ? val : val?.content || '';
+// Always returns a string regardless of what lastMessage is
+const getPreviewText = (lastMessage, n = 40) => {
+  if (!lastMessage) return '';
+  const str = typeof lastMessage === 'string'
+    ? lastMessage
+    : (lastMessage?.content || '');
   return str.length > n ? str.substring(0, n) + '…' : str;
+};
+
+// Normalize a raw conversation from either SQLite or API into a stable shape
+const normalizeConversation = (c, currentUserId) => {
+  const id = (c._id || c.id || '').toString();
+  const lastMessage = typeof c.lastMessage === 'string'
+    ? c.lastMessage
+    : (c.lastMessage?.content || '');
+  const unreadCount =
+    typeof c.unreadCount === 'number' ? c.unreadCount :
+    Array.isArray(c.unreadCount)
+      ? c.unreadCount.find(u => u.user === currentUserId)?.count || 0
+      : 0;
+  const participants = Array.isArray(c.participants)
+    ? c.participants
+    : (typeof c.participants === 'string' ? JSON.parse(c.participants) : []);
+
+  return {
+    ...c,
+    // Always _id, never id — FlatList key is always stable
+    _id: id,
+    lastMessage,
+    unreadCount,
+    participants,
+    lastMessageAt: c.lastMessageAt || c.updatedAt || '',
+    chatType: c.chatType || 'normal',
+  };
+};
+
+// Sort conversations by lastMessageAt (newest first)
+const sortConversations = (conversations) => {
+  return [...conversations].sort((a, b) => 
+    new Date(b.lastMessageAt || b.updatedAt || 0) - new Date(a.lastMessageAt || a.updatedAt || 0)
+  );
 };
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
@@ -104,13 +157,13 @@ const ConversationAvatar = React.memo(({ user, isSystem, isLinkMe, isOnline }) =
   );
 });
 
-// ─── Conversation row — NO Swipeable, uses long-press ─────────────────────────
+// ─── Conversation row ─────────────────────────────────────────────────────────
 const ConversationRow = React.memo(({
   item, otherUser, isOnline, typingText, isDeleting, onPress, onLongPress,
 }) => {
   const isLinkMe = item.chatType === 'linkme';
   const isSystem = item.chatType === 'system';
-  const preview  = typingText || truncate(item.lastMessage) || 'No messages yet';
+  const preview  = typingText || getPreviewText(item.lastMessage) || 'No messages yet';
 
   if (isDeleting) {
     return (
@@ -139,7 +192,6 @@ const ConversationRow = React.memo(({
         isLinkMe={isLinkMe}
         isOnline={isOnline}
       />
-
       <View style={styles.rowInfo}>
         <View style={styles.rowTop}>
           <Text style={[
@@ -154,7 +206,6 @@ const ConversationRow = React.memo(({
             {formatTime(item.lastMessageAt)}
           </Text>
         </View>
-
         <View style={styles.rowBottom}>
           <Text style={[
             styles.rowPreview,
@@ -178,10 +229,23 @@ const ConversationRow = React.memo(({
       </View>
     </TouchableOpacity>
   );
+}, (prev, next) => {
+  // Custom comparison — only re-render if these specific fields changed
+  return (
+    prev.item._id           === next.item._id &&
+    prev.item.lastMessage   === next.item.lastMessage &&
+    prev.item.lastMessageAt === next.item.lastMessageAt &&
+    prev.item.unreadCount   === next.item.unreadCount &&
+    prev.isOnline           === next.isOnline &&
+    prev.typingText         === next.typingText &&
+    prev.isDeleting         === next.isDeleting &&
+    prev.otherUser?.username === next.otherUser?.username
+  );
 });
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 const ChatListScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const [conversations,         setConversations]         = useState([]);
   const [filteredConversations, setFilteredConversations] = useState([]);
   const [searchQuery,           setSearchQuery]           = useState('');
@@ -196,9 +260,15 @@ const ChatListScreen = ({ navigation }) => {
   const [deletingId,            setDeletingId]            = useState(null);
   const [dbInitialized,         setDbInitialized]         = useState(false);
 
-  const sheetAnim  = useRef(new Animated.Value(0)).current;
-  const socketRef  = useRef(null);
+  const sheetAnim = useRef(new Animated.Value(0)).current;
+  const socketRef = useRef(null);
   const { currentUser, token, logout, isAuthenticated } = useAuth();
+
+  // Stable setter that applies LayoutAnimation before mutating list state
+  const setConversationsAnimated = useCallback((updater) => {
+    LayoutAnimation.configureNext(smoothReorder);
+    setConversations(updater);
+  }, []);
 
   // ── DB init ──
   useEffect(() => {
@@ -207,20 +277,48 @@ const ChatListScreen = ({ navigation }) => {
       .catch(() => setDbInitialized(false));
   }, []);
 
-  // ── Load ──
+  // ── getOtherUser — handles both API (_id) and SQLite (id) rows ──
+  const getOtherUser = useCallback((conv) => {
+    if (conv?.chatType === 'system') {
+      return { _id: 'system', username: 'MoiHub', isSystem: true };
+    }
+    const uid = (currentUser?._id || currentUser?.userId)?.toString();
+    if (!uid || !Array.isArray(conv?.participants)) {
+      return { _id: 'unknown', username: 'Unknown User' };
+    }
+    for (const p of conv.participants) {
+      const pid = (p?._id || p?.id)?.toString();
+      if (pid && pid !== uid) {
+        return {
+          _id:      p._id || p.id,
+          username: p.username || 'Unknown User',
+          email:    p.email || '',
+          avatar:   p.profilePicture || p.avatar || null,
+        };
+      }
+    }
+    return { _id: 'unknown', username: 'Unknown User' };
+  }, [currentUser]);
+
+  // ── Load local then sync ──
   const loadConversations = useCallback(async () => {
     setLoading(true);
-    // 1. local first
+
     if (dbInitialized) {
       try {
         const local = await MessageDbService.getConversations();
-        if (local?.length) setConversations(local);
+        if (local?.length) {
+          const normalized = local.map(c => normalizeConversation(c, currentUser?._id));
+          // Sort by newest first
+          const sorted = sortConversations(normalized);
+          setConversations(sorted);
+        }
       } catch { /* silent */ }
     }
-    // 2. server sync
+
     await syncWithServer();
     setLoading(false);
-  }, [dbInitialized]);
+  }, [dbInitialized, currentUser]);
 
   const syncWithServer = useCallback(async () => {
     if (!token) { logout(); return; }
@@ -238,27 +336,19 @@ const ChatListScreen = ({ navigation }) => {
             }
             return true;
           })
-          .map(c => ({
-            ...c,
-            lastMessage: typeof c.lastMessage === 'string'
-              ? c.lastMessage
-              : (c.lastMessage?.content || ''),
-            unreadCount:
-              typeof c.unreadCount === 'number' ? c.unreadCount :
-              Array.isArray(c.unreadCount)
-                ? c.unreadCount.find(u => u.user === currentUser._id)?.count || 0
-                : 0,
-          }));
+          .map(c => normalizeConversation(c, currentUser?._id));
 
         if (dbInitialized) {
           for (const conv of valid) await MessageDbService.saveConversation(conv);
         }
-        setConversations(valid);
+        // Sort and animate the sync update
+        const sorted = sortConversations(valid);
+        setConversationsAnimated(() => sorted);
       } else if (res.status === 401) {
         Alert.alert('Session Expired', 'Please log in again.', [{ text: 'OK', onPress: logout }]);
       }
     } catch { /* silent */ }
-  }, [token, logout, currentUser, dbInitialized]);
+  }, [token, logout, currentUser, dbInitialized, setConversationsAnimated]);
 
   useFocusEffect(
     useCallback(() => {
@@ -294,11 +384,12 @@ const ChatListScreen = ({ navigation }) => {
     sock.on('new_system_message', handleNewMessage);
 
     sock.on('conversation_updated', (updated) => {
-      setConversations(prev =>
-        prev.map(c => c._id === updated._id ? updated : c)
-          .sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt))
-      );
-      if (dbInitialized) MessageDbService.saveConversation(updated);
+      const normalized = normalizeConversation(updated, currentUser._id);
+      setConversationsAnimated(prev => {
+        const updatedList = prev.map(c => c._id === normalized._id ? normalized : c);
+        return sortConversations(updatedList);
+      });
+      if (dbInitialized) MessageDbService.saveConversation(normalized);
     });
 
     sock.on('user_status_changed', ({ userId, status }) => {
@@ -317,12 +408,13 @@ const ChatListScreen = ({ navigation }) => {
     });
 
     sock.on('message_read', ({ conversationId }) => {
-      setConversations(prev =>
-        prev.map(c => c._id === conversationId
+      setConversations(prev => {
+        const updated = prev.map(c => c._id === conversationId
           ? { ...c, unreadCount: Math.max(0, (c.unreadCount || 1) - 1) }
           : c
-        )
-      );
+        );
+        return sortConversations(updated);
+      });
       if (dbInitialized) MessageDbService.resetUnreadCount(conversationId);
     });
 
@@ -330,63 +422,74 @@ const ChatListScreen = ({ navigation }) => {
     return () => sock.disconnect();
   }, [isAuthenticated, token, currentUser, dbInitialized]);
 
-  const handleNewMessage = async (message) => {
+  const handleNewMessage = useCallback(async (message) => {
+    const convId  = message.conversation || message.conversationId;
+    const content = message.content || '';
+    const sid     = typeof message.sender === 'object' ? message.sender._id : message.sender;
+    const isOther = sid !== currentUser?._id;
+
     if (dbInitialized) {
       await MessageDbService.saveMessage({
-        _id: message._id,
-        conversationId: message.conversation,
-        content: message.content,
-        senderId: typeof message.sender === 'object' ? message.sender._id : message.sender,
-        senderName: message.sender?.username || 'Unknown',
-        createdAt: message.createdAt,
-        status: 'sent',
+        _id:            message._id,
+        conversationId: convId,
+        content,
+        senderId:       sid,
+        senderName:     message.sender?.username || 'Unknown',
+        createdAt:      message.createdAt,
+        status:         'sent',
       });
     }
-    setConversations(prev =>
-      prev.map(conv => {
-        if (conv._id !== message.conversation) return conv;
-        const sid    = typeof message.sender === 'object' ? message.sender._id : message.sender;
-        const isOther = sid !== currentUser._id;
+
+    setConversationsAnimated(prev => {
+      const updated = prev.map(conv => {
+        if (conv._id !== convId) return conv;
         return {
           ...conv,
-          lastMessage:      message.content,
-          lastMessageAt:    message.createdAt,
+          lastMessage:         content,
+          lastMessageAt:       message.createdAt,
           lastMessageSenderId: sid,
           unreadCount: isOther ? (conv.unreadCount || 0) + 1 : conv.unreadCount,
         };
-      }).sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt))
-    );
-  };
+      });
+      return sortConversations(updated);
+    });
+  }, [currentUser, dbInitialized, setConversationsAnimated]);
 
-  // ── getOtherUser ──
-  const getOtherUser = useCallback((conv) => {
-    if (conv?.chatType === 'system') return { _id: 'system', username: 'MoiHub', isSystem: true };
-    const uid = (currentUser?._id || currentUser?.userId)?.toString();
-    if (!uid || !Array.isArray(conv?.participants)) return { _id: 'unknown', username: 'Unknown User' };
-    for (const p of conv.participants) {
-      if (p?._id?.toString() !== uid) {
-        return {
-          _id:      p._id,
-          username: p.username || 'Unknown User',
-          email:    p.email || '',
-          avatar:   p.profilePicture || p.avatar || null,
-        };
-      }
+  // ── Filter ──
+  useEffect(() => {
+    let list = conversations;
+    if (activeTab === 'linkme') list = list.filter(c => c.chatType === 'linkme');
+    else if (activeTab === 'system') list = list.filter(c => c.chatType === 'system');
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(conv => {
+        if (conv.chatType === 'system') {
+          return getPreviewText(conv.lastMessage).toLowerCase().includes(q) ||
+                 conv.metadata?.title?.toLowerCase().includes(q);
+        }
+        const other = getOtherUser(conv);
+        return (
+          other?.username?.toLowerCase().includes(q) ||
+          other?.email?.toLowerCase().includes(q) ||
+          getPreviewText(conv.lastMessage).toLowerCase().includes(q)
+        );
+      });
     }
-    return { _id: 'unknown', username: 'Unknown User' };
-  }, [currentUser]);
+    setFilteredConversations(list);
+  }, [searchQuery, conversations, activeTab, getOtherUser]);
 
-  // ── Action sheet (replaces swipe) ──
-  const openActionSheet = (conversation) => {
+  // ── Action sheet ──
+  const openActionSheet = useCallback((conversation) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSelectedConversation(conversation);
     setActionSheetVisible(true);
     Animated.spring(sheetAnim, {
       toValue: 1, useNativeDriver: true, tension: 160, friction: 9,
     }).start();
-  };
+  }, [sheetAnim]);
 
-  const closeActionSheet = () => {
+  const closeActionSheet = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
     Animated.timing(sheetAnim, {
       toValue: 0, duration: 180, useNativeDriver: true,
@@ -394,7 +497,7 @@ const ChatListScreen = ({ navigation }) => {
       setActionSheetVisible(false);
       setSelectedConversation(null);
     });
-  };
+  }, [sheetAnim]);
 
   const confirmDelete = async () => {
     if (!selectedConversation) return;
@@ -410,7 +513,7 @@ const ChatListScreen = ({ navigation }) => {
       });
       if (res.ok) {
         if (dbInitialized) await MessageDbService.deleteConversation(id);
-        setConversations(prev => prev.filter(c => c._id !== id));
+        setConversationsAnimated(prev => prev.filter(c => c._id !== id));
       } else if (res.status === 401) {
         Alert.alert('Session Expired', 'Please log in again.', [{ text: 'OK', onPress: logout }]);
       } else {
@@ -424,36 +527,12 @@ const ChatListScreen = ({ navigation }) => {
     }
   };
 
-  // ── Filter ──
-  useEffect(() => {
-    let list = conversations;
-    if (activeTab === 'linkme') list = list.filter(c => c.chatType === 'linkme');
-    else if (activeTab === 'system') list = list.filter(c => c.chatType === 'system');
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter(conv => {
-        if (conv.chatType === 'system') {
-          return conv.lastMessage?.toLowerCase().includes(q) ||
-                 conv.metadata?.title?.toLowerCase().includes(q);
-        }
-        const other = getOtherUser(conv);
-        return (
-          other?.username?.toLowerCase().includes(q) ||
-          other?.email?.toLowerCase().includes(q) ||
-          conv.lastMessage?.toLowerCase().includes(q)
-        );
-      });
-    }
-    setFilteredConversations(list);
-  }, [searchQuery, conversations, activeTab, getOtherUser]);
-
   // ── Render item ──
   const renderItem = useCallback(({ item }) => {
     const otherUser  = getOtherUser(item);
-    const isOnline   = onlineUsers.has(otherUser?._id);
+    const isOnline   = onlineUsers.has(String(otherUser?._id));
     const typing     = typingUsers[item._id];
-    const typingText = typing && typing.userId !== currentUser._id ? 'typing…' : null;
+    const typingText = typing && typing.userId !== currentUser?._id ? 'typing…' : null;
     const isDeleting = deletingId === item._id;
 
     return (
@@ -467,16 +546,17 @@ const ChatListScreen = ({ navigation }) => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           navigation.navigate('ChatScreen', {
             conversationId: item._id,
-            conversation: item,
+            conversation:   item,
             otherUser,
-            chatType: item.chatType || 'normal',
+            chatType:       item.chatType || 'normal',
           });
         }}
         onLongPress={() => openActionSheet(item)}
       />
     );
-  }, [getOtherUser, onlineUsers, typingUsers, currentUser, deletingId, navigation]);
+  }, [getOtherUser, onlineUsers, typingUsers, currentUser, deletingId, navigation, openActionSheet]);
 
+  // Stable string key — always item._id after normalization
   const keyExtractor = useCallback((item) => item._id, []);
 
   // ── Tabs ──
@@ -493,7 +573,7 @@ const ChatListScreen = ({ navigation }) => {
   }), [conversations]);
 
   // ── Empty ──
-  const renderEmpty = () => {
+  const renderEmpty = useCallback(() => {
     const copy = {
       linkme: { title: 'No LinkMe chats',         sub: 'Your matches will appear here' },
       system: { title: 'No system notifications', sub: 'System announcements will appear here' },
@@ -512,349 +592,290 @@ const ChatListScreen = ({ navigation }) => {
         <Text style={styles.emptySub}>{sub}</Text>
       </View>
     );
-  };
+  }, [activeTab]);
 
   // ── Loading ──
   if (loading && !dbInitialized) {
     return (
-      <View style={styles.root}>
+      <View style={[styles.root, { paddingTop: insets.top }]}>
         <StatusBar backgroundColor={C.headerBg} barStyle="light-content" translucent={false} />
-        <SafeAreaView style={styles.safeArea} edges={['top']}>
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>Messages</Text>
-          </View>
-          <View style={styles.loadingWrap}>
-            <ActivityIndicator size="large" color={C.accent} />
-            <Text style={styles.loadingText}>Loading conversations…</Text>
-          </View>
-        </SafeAreaView>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Messages</Text>
+        </View>
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="large" color={C.accent} />
+          <Text style={styles.loadingText}>Loading conversations…</Text>
+        </View>
       </View>
     );
   }
 
   // ── Main ──
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { paddingTop: insets.top }]}>
       <StatusBar backgroundColor={C.headerBg} barStyle="light-content" translucent={false} />
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
 
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Messages</Text>
-          <View style={[styles.connPill, connectionState === 'connected' && styles.connPillOnline]}>
-            <View style={[styles.connDot, connectionState === 'connected' && styles.connDotOnline]} />
-            <Text style={[styles.connText, connectionState === 'connected' && styles.connTextOnline]}>
-              {connectionState === 'connected' ? 'Online' : 'Offline'}
-            </Text>
-          </View>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Messages</Text>
+        <View style={[styles.connPill, connectionState === 'connected' && styles.connPillOnline]}>
+          <View style={[styles.connDot, connectionState === 'connected' && styles.connDotOnline]} />
+          <Text style={[styles.connText, connectionState === 'connected' && styles.connTextOnline]}>
+            {connectionState === 'connected' ? 'Online' : 'Offline'}
+          </Text>
         </View>
+      </View>
 
-        {/* Search */}
-        <View style={styles.searchBar}>
-          <Icon name="search" size={18} color={C.textMeta} style={{ marginRight: 8 }} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search conversations…"
-            placeholderTextColor={C.textMeta}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Icon name="clear" size={18} color={C.textMeta} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Tabs */}
-        <View style={styles.tabsRow}>
-          <View style={styles.tabsContainer}>
-            {TABS.map(tab => {
-              const active = activeTab === tab.key;
-              const count  = tabCount[tab.key];
-              return (
-                <TouchableOpacity
-                  key={tab.key}
-                  style={[styles.tab, active && styles.tabActive]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setActiveTab(tab.key);
-                  }}
-                >
-                  <View style={styles.tabInner}>
-                    <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
-                      {tab.label}
-                    </Text>
-                    {tab.icon === 'notifications'
-                      ? <Icon name="notifications" size={13} color={active ? C.blue : C.textMeta} style={{ marginLeft: 4 }} />
-                      : tab.icon
-                        ? <Text style={{ fontSize: 13, marginLeft: 4 }}>{tab.icon}</Text>
-                        : null
-                    }
-                    {count > 0 && (
-                      <View style={[styles.tabCount, active && styles.tabCountActive]}>
-                        <Text style={styles.tabCountText}>{count}</Text>
-                      </View>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* List — plain FlatList, no Swipeable children */}
-        <FlatList
-          data={filteredConversations}
-          keyExtractor={keyExtractor}
-          renderItem={renderItem}
-          ListEmptyComponent={renderEmpty}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={C.accent}
-              colors={[C.accent]}
-            />
-          }
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            styles.listContent,
-            filteredConversations.length === 0 && { flexGrow: 1 },
-          ]}
+      {/* Search */}
+      <View style={styles.searchBar}>
+        <Icon name="search" size={18} color={C.textMeta} style={{ marginRight: 8 }} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search conversations…"
+          placeholderTextColor={C.textMeta}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
         />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Icon name="clear" size={18} color={C.textMeta} />
+          </TouchableOpacity>
+        )}
+      </View>
 
-        {/* FAB */}
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            navigation.navigate('NewChatScreen');
-          }}
-          activeOpacity={0.85}
-        >
-          <Icon name="edit" size={22} color={C.white} />
-        </TouchableOpacity>
-
-        {/* Long-press action sheet */}
-        <Modal
-          visible={actionSheetVisible}
-          transparent
-          animationType="none"
-          onRequestClose={closeActionSheet}
-        >
-          <TouchableOpacity
-            style={styles.sheetOverlay}
-            activeOpacity={1}
-            onPress={closeActionSheet}
-          >
-            <Animated.View
-              style={[
-                styles.sheet,
-                {
-                  transform: [{
-                    translateY: sheetAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [300, 0],
-                    }),
-                  }],
-                  opacity: sheetAnim,
-                },
-              ]}
-            >
-              {/* Preview strip */}
-              {selectedConversation && (() => {
-                const other = getOtherUser(selectedConversation);
-                return (
-                  <View style={styles.sheetPreview}>
-                    <View style={[
-                      styles.sheetPreviewAvatar,
-                      { backgroundColor: getAvatarColor(other?.username) },
-                    ]}>
-                      <Text style={styles.sheetPreviewInitial}>
-                        {getInitial(other?.username)}
-                      </Text>
-                    </View>
-                    <View>
-                      <Text style={styles.sheetPreviewName}>{other?.username || 'Unknown'}</Text>
-                      <Text style={styles.sheetPreviewSub} numberOfLines={1}>
-                        {truncate(selectedConversation.lastMessage, 34) || 'No messages yet'}
-                      </Text>
-                    </View>
-                  </View>
-                );
-              })()}
-
-              {/* Open chat */}
+      {/* Tabs */}
+      <View style={styles.tabsRow}>
+        <View style={styles.tabsContainer}>
+          {TABS.map(tab => {
+            const active = activeTab === tab.key;
+            const count  = tabCount[tab.key];
+            return (
               <TouchableOpacity
-                style={styles.sheetItem}
+                key={tab.key}
+                style={[styles.tab, active && styles.tabActive]}
                 onPress={() => {
-                  if (!selectedConversation) return;
-                  const other = getOtherUser(selectedConversation);
-                  closeActionSheet();
-                  setTimeout(() => {
-                    navigation.navigate('ChatScreen', {
-                      conversationId: selectedConversation._id,
-                      conversation: selectedConversation,
-                      otherUser: other,
-                      chatType: selectedConversation.chatType || 'normal',
-                    });
-                  }, 220);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setActiveTab(tab.key);
                 }}
               >
-                <View style={[styles.sheetIconWrap, { backgroundColor: 'rgba(52,201,122,0.14)' }]}>
-                  <Icon name="chat-bubble-outline" size={18} color={C.accent} />
+                <View style={styles.tabInner}>
+                  <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+                    {tab.label}
+                  </Text>
+                  {tab.icon === 'notifications'
+                    ? <Icon name="notifications" size={13} color={active ? C.blue : C.textMeta} style={{ marginLeft: 4 }} />
+                    : tab.icon
+                      ? <Text style={{ fontSize: 13, marginLeft: 4 }}>{tab.icon}</Text>
+                      : null
+                  }
+                  {count > 0 && (
+                    <View style={[styles.tabCount, active && styles.tabCountActive]}>
+                      <Text style={styles.tabCountText}>{count}</Text>
+                    </View>
+                  )}
                 </View>
-                <Text style={styles.sheetItemLabel}>Open chat</Text>
-                <Icon name="chevron-right" size={20} color={C.textMeta} />
               </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
 
-              {/* Delete */}
-              <TouchableOpacity style={styles.sheetItem} onPress={confirmDelete}>
-                <View style={[styles.sheetIconWrap, { backgroundColor: 'rgba(224,82,82,0.14)' }]}>
-                  <Icon name="delete-outline" size={18} color={C.danger} />
+      {/* List */}
+      <FlatList
+        data={filteredConversations}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
+        ListEmptyComponent={renderEmpty}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={C.accent}
+            colors={[C.accent]}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.listContent,
+          filteredConversations.length === 0 && { flexGrow: 1 },
+        ]}
+        removeClippedSubviews={Platform.OS === 'android'}
+        maxToRenderPerBatch={12}
+        windowSize={10}
+        initialNumToRender={12}
+      />
+
+      {/* FAB */}
+      <TouchableOpacity
+        style={[styles.fab, { bottom: insets.bottom + 24 }]}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          navigation.navigate('NewChatScreen');
+        }}
+        activeOpacity={0.85}
+      >
+        <Icon name="edit" size={22} color={C.white} />
+      </TouchableOpacity>
+
+      {/* Action sheet */}
+      <Modal
+        visible={actionSheetVisible}
+        transparent
+        animationType="none"
+        onRequestClose={closeActionSheet}
+      >
+        <TouchableOpacity
+          style={styles.sheetOverlay}
+          activeOpacity={1}
+          onPress={closeActionSheet}
+        >
+          <Animated.View
+            style={[
+              styles.sheet,
+              { paddingBottom: insets.bottom + 20 },
+              {
+                transform: [{
+                  translateY: sheetAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [300, 0],
+                  }),
+                }],
+                opacity: sheetAnim,
+              },
+            ]}
+          >
+            {selectedConversation && (() => {
+              const other = getOtherUser(selectedConversation);
+              return (
+                <View style={styles.sheetPreview}>
+                  <View style={[
+                    styles.sheetPreviewAvatar,
+                    { backgroundColor: getAvatarColor(other?.username) },
+                  ]}>
+                    <Text style={styles.sheetPreviewInitial}>
+                      {getInitial(other?.username)}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.sheetPreviewName}>{other?.username || 'Unknown'}</Text>
+                    <Text style={styles.sheetPreviewSub} numberOfLines={1}>
+                      {getPreviewText(selectedConversation.lastMessage, 36) || 'No messages yet'}
+                    </Text>
+                  </View>
                 </View>
-                <Text style={[styles.sheetItemLabel, { color: C.danger }]}>Delete conversation</Text>
-                <Icon name="chevron-right" size={20} color={C.textMeta} />
-              </TouchableOpacity>
+              );
+            })()}
 
-              {/* Cancel */}
-              <TouchableOpacity style={styles.sheetCancel} onPress={closeActionSheet}>
-                <Text style={styles.sheetCancelText}>Cancel</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          </TouchableOpacity>
-        </Modal>
+            <TouchableOpacity
+              style={styles.sheetItem}
+              onPress={() => {
+                if (!selectedConversation) return;
+                const other = getOtherUser(selectedConversation);
+                closeActionSheet();
+                setTimeout(() => {
+                  navigation.navigate('ChatScreen', {
+                    conversationId: selectedConversation._id,
+                    conversation:   selectedConversation,
+                    otherUser:      other,
+                    chatType:       selectedConversation.chatType || 'normal',
+                  });
+                }, 220);
+              }}
+            >
+              <View style={[styles.sheetIconWrap, { backgroundColor: 'rgba(52,201,122,0.14)' }]}>
+                <Icon name="chat-bubble-outline" size={18} color={C.accent} />
+              </View>
+              <Text style={styles.sheetItemLabel}>Open chat</Text>
+              <Icon name="chevron-right" size={20} color={C.textMeta} />
+            </TouchableOpacity>
 
-      </SafeAreaView>
+            <TouchableOpacity style={styles.sheetItem} onPress={confirmDelete}>
+              <View style={[styles.sheetIconWrap, { backgroundColor: 'rgba(224,82,82,0.14)' }]}>
+                <Icon name="delete-outline" size={18} color={C.danger} />
+              </View>
+              <Text style={[styles.sheetItemLabel, { color: C.danger }]}>Delete conversation</Text>
+              <Icon name="chevron-right" size={20} color={C.textMeta} />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.sheetCancel} onPress={closeActionSheet}>
+              <Text style={styles.sheetCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  root:    { flex: 1, backgroundColor: C.bg },
-  safeArea:{ flex: 1, backgroundColor: 'transparent' },
+  root:     { flex: 1, backgroundColor: C.bg },
 
-  // Header
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 12,
     backgroundColor: C.headerBg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: C.border,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border,
   },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: C.textPrimary,
-    letterSpacing: 0.2,
-  },
+  headerTitle: { fontSize: 22, fontWeight: '700', color: C.textPrimary, letterSpacing: 0.2 },
   connPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
     backgroundColor: 'rgba(224,82,82,0.15)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(224,82,82,0.3)',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(224,82,82,0.3)',
   },
-  connPillOnline: {
-    backgroundColor: 'rgba(52,201,122,0.12)',
-    borderColor: 'rgba(52,201,122,0.3)',
-  },
-  connDot: {
-    width: 6, height: 6, borderRadius: 3,
-    backgroundColor: C.danger, marginRight: 5,
-  },
+  connPillOnline: { backgroundColor: 'rgba(52,201,122,0.12)', borderColor: 'rgba(52,201,122,0.3)' },
+  connDot:        { width: 6, height: 6, borderRadius: 3, backgroundColor: C.danger, marginRight: 5 },
   connDotOnline:  { backgroundColor: C.accent },
   connText:       { fontSize: 11, color: C.danger, fontWeight: '600' },
   connTextOnline: { color: C.accent },
 
-  // Search
   searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: C.surface,
-    marginHorizontal: 14,
-    marginTop: 10,
-    marginBottom: 4,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 7,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: C.border,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: C.surface, marginHorizontal: 14, marginTop: 10, marginBottom: 4,
+    paddingHorizontal: 14, paddingVertical: Platform.OS === 'ios' ? 10 : 7,
+    borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border,
   },
   searchInput: { flex: 1, fontSize: 15, color: C.textPrimary },
 
-  // Tabs
   tabsRow: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: C.border,
-    paddingVertical: 6,
-    backgroundColor: C.bg,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border,
+    paddingVertical: 6, backgroundColor: C.bg,
   },
-  tabsContainer: { flexDirection: 'row', paddingHorizontal: 12 },
-  tab: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginHorizontal: 4,
-    borderRadius: 20,
-  },
+  tabsContainer:  { flexDirection: 'row', paddingHorizontal: 12 },
+  tab:            { paddingHorizontal: 16, paddingVertical: 8, marginHorizontal: 4, borderRadius: 20 },
   tabActive:      { backgroundColor: C.own },
   tabInner:       { flexDirection: 'row', alignItems: 'center' },
   tabLabel:       { fontSize: 13, fontWeight: '500', color: C.textMeta },
   tabLabelActive: { color: C.textPrimary, fontWeight: '700' },
-  tabCount: {
-    marginLeft: 5,
-    backgroundColor: C.border,
-    borderRadius: 8,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-  },
-  tabCountActive: { backgroundColor: 'rgba(52,201,122,0.25)' },
+  tabCount:       { marginLeft: 5, backgroundColor: C.border, borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1 },
+  tabCountActive: { backgroundColor: 'rgb(7, 0, 0)' },
   tabCountText:   { fontSize: 10, color: C.textMeta, fontWeight: '600' },
 
-  // List
   listContent: { paddingTop: 8, paddingBottom: 88 },
 
-  // Row
   rowCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: C.surface,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    marginHorizontal: 12,
-    marginVertical: 3,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: C.border,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: C.surface, borderRadius: 14,
+    paddingHorizontal: 12, paddingVertical: 11,
+    marginHorizontal: 12, marginVertical: 3,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: C.border,
   },
   rowCardLinkMe: {
-    backgroundColor: C.linkmeLight,
-    borderLeftWidth: 3,
-    borderLeftColor: C.linkme,
-    borderColor: 'rgba(192,38,211,0.3)',
+    backgroundColor: C.linkmeLight, borderLeftWidth: 3,
+    borderLeftColor: C.linkme, borderColor: 'rgba(192,38,211,0.3)',
   },
   rowCardSystem: {
-    backgroundColor: C.systemLight,
-    borderLeftWidth: 3,
-    borderLeftColor: C.system,
-    borderColor: 'rgba(37,99,235,0.3)',
+    backgroundColor: C.systemLight, borderLeftWidth: 3,
+    borderLeftColor: C.system, borderColor: 'rgba(37,99,235,0.3)',
   },
   deletingText: { fontSize: 14, color: C.textMeta, fontStyle: 'italic' },
 
-  // Avatar
-  avatarWrap:   { position: 'relative', marginRight: 12 },
-  avatarCircle: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
-  avatarSystem: { borderWidth: 1.5, borderColor: C.system },
-  avatarLinkMe: { borderWidth: 1.5, borderColor: C.linkme },
-  avatarInitial:{ color: C.white, fontSize: 19, fontWeight: '700' },
+  avatarWrap:      { position: 'relative', marginRight: 12 },
+  avatarCircle:    { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
+  avatarSystem:    { borderWidth: 1.5, borderColor: C.system },
+  avatarLinkMe:    { borderWidth: 1.5, borderColor: C.linkme },
+  avatarInitial:   { color: C.white, fontSize: 19, fontWeight: '700' },
   linkMeBadge: {
     position: 'absolute', bottom: -4, right: -4,
     backgroundColor: C.bg, borderRadius: 9,
@@ -867,95 +888,62 @@ const styles = StyleSheet.create({
     backgroundColor: C.accent, borderWidth: 2, borderColor: C.surface,
   },
 
-  // Row info
-  rowInfo:  { flex: 1, justifyContent: 'center' },
-  rowTop:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 },
-  rowName:  { fontSize: 15, fontWeight: '600', color: C.textPrimary, flex: 1, marginRight: 8 },
-  rowTime:  { fontSize: 11, color: C.textMeta },
-  rowBottom:{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  rowInfo:         { flex: 1, justifyContent: 'center' },
+  rowTop:          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 },
+  rowName:         { fontSize: 15, fontWeight: '600', color: C.textPrimary, flex: 1, marginRight: 8 },
+  rowTime:         { fontSize: 11, color: C.textMeta },
+  rowBottom:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   rowPreview:      { fontSize: 13, color: C.textSecondary, flex: 1, marginRight: 8 },
   rowTyping:       { color: C.accent, fontStyle: 'italic' },
   rowPreviewSystem:{ color: '#93C5FD', fontStyle: 'italic' },
   unreadBadge: {
-    backgroundColor: C.accent,
-    borderRadius: 10, minWidth: 20, height: 20,
-    justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5,
+    backgroundColor: C.accent, borderRadius: 10,
+    minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5,
   },
   unreadText: { color: C.white, fontSize: 10, fontWeight: '700' },
 
-  // FAB
   fab: {
-    position: 'absolute', bottom: 24, right: 20,
+    position: 'absolute', right: 20,
     width: 52, height: 52, borderRadius: 26,
-    backgroundColor: C.accent,
-    justifyContent: 'center', alignItems: 'center',
+    backgroundColor: C.accent, justifyContent: 'center', alignItems: 'center',
     elevation: 6,
-    shadowColor: C.accent,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
+    shadowColor: C.accent, shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4, shadowRadius: 6,
   },
 
-  // Loading / Empty
-  loadingWrap:  { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 14 },
-  loadingText:  { fontSize: 14, color: C.textSecondary },
-  emptyWrap:    { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, gap: 12 },
-  emptyTitle:   { fontSize: 18, fontWeight: '600', color: C.textSecondary, marginTop: 8 },
-  emptySub:     { fontSize: 14, color: C.textMeta, textAlign: 'center', lineHeight: 20 },
+  loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 14 },
+  loadingText: { fontSize: 14, color: C.textSecondary },
+  emptyWrap:   { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, gap: 12 },
+  emptyTitle:  { fontSize: 18, fontWeight: '600', color: C.textSecondary, marginTop: 8 },
+  emptySub:    { fontSize: 14, color: C.textMeta, textAlign: 'center', lineHeight: 20 },
 
-  // Action sheet
-  sheetOverlay: {
-    flex: 1,
-    backgroundColor: C.overlay,
-    justifyContent: 'flex-end',
-  },
+  sheetOverlay: { flex: 1, backgroundColor: C.overlay, justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: C.surfaceAlt,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: C.border,
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    borderTopWidth: StyleSheet.hairlineWidth, borderColor: C.border,
     overflow: 'hidden',
   },
   sheetPreview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: C.border,
-    backgroundColor: C.surface,
-    gap: 12,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border,
+    backgroundColor: C.surface, gap: 12,
   },
-  sheetPreviewAvatar: {
-    width: 40, height: 40, borderRadius: 20,
-    justifyContent: 'center', alignItems: 'center',
-  },
+  sheetPreviewAvatar:  { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
   sheetPreviewInitial: { color: C.white, fontSize: 17, fontWeight: '700' },
   sheetPreviewName:    { fontSize: 15, fontWeight: '600', color: C.textPrimary },
   sheetPreviewSub:     { fontSize: 12, color: C.textMeta, marginTop: 1 },
   sheetItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    gap: 14,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 16, gap: 14,
   },
-  sheetIconWrap: {
-    width: 36, height: 36, borderRadius: 18,
-    justifyContent: 'center', alignItems: 'center',
-  },
+  sheetIconWrap:  { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
   sheetItemLabel: { flex: 1, fontSize: 15, color: C.textPrimary, fontWeight: '500' },
   sheetCancel: {
-    marginHorizontal: 20,
-    marginTop: 6,
-    paddingVertical: 14,
-    backgroundColor: C.surface,
-    borderRadius: 14,
-    alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: C.border,
+    marginHorizontal: 20, marginTop: 6, paddingVertical: 14,
+    backgroundColor: C.surface, borderRadius: 14, alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: C.border,
   },
   sheetCancelText: { fontSize: 15, color: C.textSecondary, fontWeight: '600' },
 });

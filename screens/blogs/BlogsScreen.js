@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+// screens/blogs/BlogsScreen.js
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -10,70 +11,270 @@ import {
   RefreshControl,
   Alert,  
   Dimensions,
-  StatusBar
+  StatusBar,
+  LayoutAnimation,
+  UIManager,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import * as Animatable from 'react-native-animatable';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
+import BlogDbService from '../../services/BlogDbService';
+import { useFocusEffect } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// Smooth reorder animation
+const smoothReorder = {
+  duration: 300,
+  create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+  update: { type: LayoutAnimation.Types.easeInEaseOut },
+  delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+};
+
 // Blog-themed color palette
 const BlogColors = {
-  primary: '#187013',      // Vibrant Purple
-  secondary: '#187013',    // Coral
-  accent: '#4ECDC4',       // Turquoise
-  background: '#0A0A0A',   // Dark Background
-  surface: '#1A1A1A',      // Surface Dark
-  card: '#242424',         // Card Background
-  text: '#FFFFFF',         // White
-  textSecondary: '#B0B0B0', // Light Gray
-  textMuted: '#757575',     // Muted Gray
-  border: '#333333',        // Border
-  like: '#da0c0c',         // Like color
-  readTime: '#4ECDC4',     // Read time color
+  primary: '#187013',
+  secondary: '#187013',
+  accent: '#4ECDC4',
+  background: '#0A0A0A',
+  surface: '#1A1A1A',
+  card: '#242424',
+  text: '#FFFFFF',
+  textSecondary: '#B0B0B0',
+  textMuted: '#757575',
+  border: '#333333',
+  like: '#da0c0c',
+  readTime: '#4ECDC4',
 };
+
+// Sort blogs by date (newest first)
+const sortBlogsByDate = (blogs) => {
+  return [...blogs].sort((a, b) => {
+    const dateA = new Date(a.date || a.createdAt || 0);
+    const dateB = new Date(b.date || b.createdAt || 0);
+    return dateB - dateA;
+  });
+};
+
+// Normalize blog data from different sources
+const normalizeBlog = (blog) => ({
+  ...blog,
+  _id: blog._id || blog.id,
+  id: blog._id || blog.id,
+  date: blog.date || blog.createdAt || new Date().toISOString(),
+  likes: blog.likes || [],
+  comments: blog.comments || [],
+  content: typeof blog.content === 'string' ? blog.content : JSON.stringify(blog.content || []),
+  author: blog.author || { username: blog.authorName || 'Unknown' },
+});
 
 const BlogsScreen = ({ navigation }) => {
   const [blogs, setBlogs] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [displayedBlogs, setDisplayedBlogs] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [dbInitialized, setDbInitialized] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const { token } = useAuth();
+  
+  // ── Use ref to track if initial load is done ──
+  const initialLoadDone = useRef(false);
+  const isFetching = useRef(false);
 
-  const fetchBlogs = async (isRefresh = false) => {
-    if (!isRefresh) setLoading(true);
-    setError(null);
-    
+  // ── Initialize DB once ──
+  useEffect(() => {
+    const initDb = async () => {
+      try {
+        await BlogDbService.init();
+        setDbInitialized(true);
+        console.log('✅ Blog DB initialized');
+      } catch (error) {
+        console.error('❌ Blog DB init failed:', error);
+        setDbInitialized(false);
+      }
+    };
+    initDb();
+  }, []);
+
+  // ── Load blogs from DB (offline first) ──
+  const loadFromLocal = useCallback(async () => {
+    if (!dbInitialized) return [];
+
+    try {
+      const localBlogs = await BlogDbService.getBlogs();
+      if (localBlogs && localBlogs.length > 0) {
+        const normalized = localBlogs.map(normalizeBlog);
+        const sorted = sortBlogsByDate(normalized);
+        return sorted;
+      }
+    } catch (error) {
+      console.warn('Failed to load blogs from DB:', error);
+    }
+    return [];
+  }, [dbInitialized]);
+
+  // ── Sync from server ──
+  const syncFromServer = useCallback(async () => {
+    if (!token) return [];
+
     try {
       const res = await axios.get('https://moihub.onrender.com/api/posts/');
-      setBlogs(res.data.posts || []);
+      const serverBlogs = res.data.posts || [];
+
+      if (serverBlogs.length > 0) {
+        const normalized = serverBlogs.map(normalizeBlog);
+        const sorted = sortBlogsByDate(normalized);
+
+        // Save to DB
+        if (dbInitialized) {
+          await BlogDbService.saveBlogs(serverBlogs);
+        }
+
+        return sorted;
+      }
+    } catch (error) {
+      console.warn('Failed to sync from server:', error);
+    }
+    return [];
+  }, [token, dbInitialized]);
+
+  // ── Main fetch function ──
+  const fetchBlogs = useCallback(async (isRefresh = false) => {
+    // Prevent multiple simultaneous fetches
+    if (isFetching.current) return;
+    isFetching.current = true;
+
+    try {
+      if (!isRefresh) setLoading(true);
+      setError(null);
+
+      // STEP 1: Load from DB immediately (offline first)
+      const localBlogs = await loadFromLocal();
+      
+      if (localBlogs.length > 0) {
+        if (isRefresh) {
+          LayoutAnimation.configureNext(smoothReorder);
+        }
+        setBlogs(localBlogs);
+        setDisplayedBlogs(localBlogs);
+      }
+
+      // STEP 2: Try to sync from server (if token exists)
+      if (token) {
+        setIsSyncing(true);
+        const serverBlogs = await syncFromServer();
+        
+        if (serverBlogs.length > 0) {
+          // Compare with local to see if there are changes
+          const localIds = new Set(localBlogs.map(b => b._id));
+          const serverIds = new Set(serverBlogs.map(b => b._id));
+          const hasChanges = serverBlogs.length !== localBlogs.length || 
+            [...serverIds].some(id => !localIds.has(id));
+
+          if (hasChanges) {
+            LayoutAnimation.configureNext(smoothReorder);
+            
+            const merged = serverBlogs.map(serverBlog => {
+              const local = localBlogs.find(b => b._id === serverBlog._id);
+              return local ? { ...local, ...serverBlog } : serverBlog;
+            });
+            
+            const sorted = sortBlogsByDate(merged);
+            setBlogs(sorted);
+            setDisplayedBlogs(sorted);
+          }
+        }
+        setIsSyncing(false);
+      }
     } catch (error) {
       console.error('Failed to load blogs:', error);
-      setError('Failed to load blogs. Please try again.');
-      Alert.alert(
-        'Error',
-        'Failed to load blogs. Please check your internet connection and try again.',
-        [{ text: 'OK' }]
-      );
+      
+      if (blogs.length === 0) {
+        setError('Failed to load blogs. Please try again.');
+        Alert.alert(
+          'Error',
+          'Failed to load blogs. Please check your internet connection and try again.',
+          [{ text: 'OK' }]
+        );
+      }
     } finally {
       setLoading(false);
       if (isRefresh) setRefreshing(false);
+      isFetching.current = false;
+      initialLoadDone.current = true;
     }
-  };
+  }, [dbInitialized, token, loadFromLocal, syncFromServer, blogs.length]);
 
+  // ── Refresh ──
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchBlogs(true);
   };
 
+  // ── Load when DB is ready (ONLY ONCE) ──
   useEffect(() => {
-    fetchBlogs();
-  }, []);
+    if (dbInitialized && !initialLoadDone.current) {
+      fetchBlogs();
+    }
+  }, [dbInitialized, fetchBlogs]);
 
+  // ── Reload when coming back to screen (only if not already fetching) ──
+  useFocusEffect(
+    useCallback(() => {
+      // Only refresh if initial load is done and not currently fetching
+      if (dbInitialized && initialLoadDone.current && !isFetching.current) {
+        // Refresh in background silently
+        const refreshInBackground = async () => {
+          try {
+            const localBlogs = await loadFromLocal();
+            if (localBlogs.length > 0) {
+              setBlogs(localBlogs);
+              setDisplayedBlogs(localBlogs);
+            }
+            
+            // Sync from server if token exists
+            if (token) {
+              const serverBlogs = await syncFromServer();
+              if (serverBlogs.length > 0) {
+                const localIds = new Set(localBlogs.map(b => b._id));
+                const serverIds = new Set(serverBlogs.map(b => b._id));
+                const hasChanges = serverBlogs.length !== localBlogs.length || 
+                  [...serverIds].some(id => !localIds.has(id));
+
+                if (hasChanges) {
+                  LayoutAnimation.configureNext(smoothReorder);
+                  const merged = serverBlogs.map(serverBlog => {
+                    const local = localBlogs.find(b => b._id === serverBlog._id);
+                    return local ? { ...local, ...serverBlog } : serverBlog;
+                  });
+                  const sorted = sortBlogsByDate(merged);
+                  setBlogs(sorted);
+                  setDisplayedBlogs(sorted);
+                }
+              }
+            }
+          } catch (error) {
+            console.warn('Background refresh failed:', error);
+          }
+        };
+        
+        refreshInBackground();
+      }
+    }, [dbInitialized, token, loadFromLocal, syncFromServer])
+  );
+
+  // ── Format date ──
   const formatDate = (dateString) => {
+    if (!dateString) return 'Recent';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { 
       month: 'short', 
@@ -82,6 +283,7 @@ const BlogsScreen = ({ navigation }) => {
     });
   };
 
+  // ── Get category icon ──
   const getCategoryIcon = (category) => {
     const icons = {
       'Technology': 'computer',
@@ -96,11 +298,12 @@ const BlogsScreen = ({ navigation }) => {
     return icons[category] || 'article';
   };
 
+  // ── Render item ──
   const renderItem = ({ item, index }) => (
     <Animatable.View 
       animation="fadeInUp" 
-      delay={index * 100}
-      duration={600}
+      delay={index * 80}
+      duration={500}
     >
       <TouchableOpacity 
         onPress={() => navigation.navigate('BlogDetails', { id: item._id })} 
@@ -113,7 +316,6 @@ const BlogsScreen = ({ navigation }) => {
           end={{ x: 1, y: 1 }}
           style={styles.cardGradient}
         >
-          {/* Decorative Pattern */}
           <View style={styles.cardPattern}>
             <Text style={styles.patternIcon}>📝</Text>
             <Text style={styles.patternIcon}>✍️</Text>
@@ -126,7 +328,6 @@ const BlogsScreen = ({ navigation }) => {
               resizeMode="cover"
             />
             
-            {/* Category Badge */}
             <LinearGradient
               colors={[BlogColors.primary, BlogColors.secondary]}
               start={{ x: 0, y: 0 }}
@@ -134,10 +335,9 @@ const BlogsScreen = ({ navigation }) => {
               style={styles.categoryBadge}
             >
               <Icon name={getCategoryIcon(item.category)} size={12} color="#fff" />
-              <Text style={styles.categoryText}>{item.category}</Text>
+              <Text style={styles.categoryText}>{item.category || 'General'}</Text>
             </LinearGradient>
 
-            {/* Likes Badge */}
             <View style={styles.likesBadge}>
               <Icon name="favorite" size={14} color={BlogColors.like} />
               <Text style={styles.likesText}>{item.likes?.length || 0}</Text>
@@ -152,23 +352,21 @@ const BlogsScreen = ({ navigation }) => {
             </Text>
             
             <View style={styles.metaContainer}>
-              {/* Author */}
               <View style={styles.authorContainer}>
                 <LinearGradient
                   colors={[BlogColors.primary, BlogColors.secondary]}
                   style={styles.authorAvatar}
                 >
                   <Text style={styles.authorInitial}>
-                    {item.author?.username?.charAt(0)?.toUpperCase()}
+                    {item.author?.username?.charAt(0)?.toUpperCase() || 'U'}
                   </Text>
                 </LinearGradient>
                 <View>
-                  <Text style={styles.authorName}>{item.author?.username}</Text>
+                  <Text style={styles.authorName}>{item.author?.username || 'Unknown'}</Text>
                   <Text style={styles.authorRole}>Writer</Text>
                 </View>
               </View>
 
-              {/* Meta Info */}
               <View style={styles.metaInfo}>
                 <View style={styles.metaItem}>
                   <Icon name="access-time" size={14} color={BlogColors.readTime} />
@@ -186,6 +384,7 @@ const BlogsScreen = ({ navigation }) => {
     </Animatable.View>
   );
 
+  // ── Empty state ──
   const renderEmptyState = () => (
     <Animatable.View animation="fadeIn" duration={800} style={styles.emptyState}>
       <View style={styles.emptyIconContainer}>
@@ -197,7 +396,7 @@ const BlogsScreen = ({ navigation }) => {
       </Text>
       <TouchableOpacity 
         style={styles.retryButton} 
-        onPress={() => fetchBlogs()}
+        onPress={onRefresh}
       >
         <LinearGradient
           colors={[BlogColors.primary, BlogColors.secondary]}
@@ -210,6 +409,7 @@ const BlogsScreen = ({ navigation }) => {
     </Animatable.View>
   );
 
+  // ── Header ──
   const renderHeader = () => (
     <Animatable.View animation="fadeInDown" duration={800} style={styles.header}>
       <View>
@@ -220,26 +420,18 @@ const BlogsScreen = ({ navigation }) => {
       </View>
       <View style={styles.headerStats}>
         <View style={styles.statBadge}>
+          {isSyncing && (
+            <ActivityIndicator size="small" color={BlogColors.primary} style={{ marginRight: 6 }} />
+          )}
           <Icon name="article" size={16} color={BlogColors.primary} />
-          <Text style={styles.statText}>{blogs.length} articles</Text>
+          <Text style={styles.statText}>{displayedBlogs.length} articles</Text>
         </View>
       </View>
     </Animatable.View>
   );
 
-  const renderFooter = () => (
-    <View style={styles.footer}>
-      <LinearGradient
-        colors={[BlogColors.primary + '20', 'transparent']}
-        style={styles.footerGradient}
-      >
-        <Icon name="arrow-downward" size={20} color={BlogColors.primary} />
-        <Text style={styles.footerText}>Keep scrolling for more</Text>
-      </LinearGradient>
-    </View>
-  );
-
-  if (loading && blogs.length === 0) {
+  // ── Loading ──
+  if (loading && displayedBlogs.length === 0) {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={BlogColors.background} />
@@ -260,6 +452,7 @@ const BlogsScreen = ({ navigation }) => {
     );
   }
 
+  // ── Main render ──
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={BlogColors.background} />
@@ -269,7 +462,6 @@ const BlogsScreen = ({ navigation }) => {
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Floating Icons */}
       <View style={styles.floatingIcons}>
         <Text style={[styles.floatingIcon, styles.icon1]}>📚</Text>
         <Text style={[styles.floatingIcon, styles.icon2]}>✍️</Text>
@@ -278,13 +470,12 @@ const BlogsScreen = ({ navigation }) => {
       </View>
 
       <FlatList
-        data={blogs}
+        data={displayedBlogs}
         keyExtractor={(item) => item._id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={renderHeader}
-        ListFooterComponent={blogs.length > 0 ? renderFooter : null}
         ListEmptyComponent={renderEmptyState}
         refreshControl={
           <RefreshControl
@@ -300,6 +491,7 @@ const BlogsScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  // ... [keep all your existing styles]
   container: {
     flex: 1,
     backgroundColor: BlogColors.background,
@@ -524,24 +716,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: BlogColors.textMuted,
     marginLeft: 4,
-  },
-  footer: {
-    marginTop: 10,
-    marginBottom: 10,
-    alignItems: 'center',
-  },
-  footerGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 25,
-    gap: 8,
-  },
-  footerText: {
-    color: BlogColors.primary,
-    fontSize: 13,
-    fontWeight: '500',
   },
   emptyState: {
     alignItems: 'center',
