@@ -12,11 +12,13 @@ import {
   Alert,
   Share,
   Dimensions,
-  StatusBar
+  StatusBar,
+  Modal
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import * as Animatable from 'react-native-animatable';
+import * as Haptics from 'expo-haptics';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import BlogDbService from '../../services/BlogDbService';
@@ -34,7 +36,7 @@ const BlogColors = {
   textSecondary: '#B0B0B0',
   textMuted: '#757575',
   border: '#333333',
-  like: '#FF6B6B',
+  like: '#FF0000',
 };
 
 const parseContent = (content) => {
@@ -86,9 +88,15 @@ const BlogDetailsScreen = ({ route, navigation }) => {
   const [likesCount, setLikesCount] = useState(0);
   const [saved, setSaved] = useState(false);
   const [dbInitialized, setDbInitialized] = useState(false);
+  const [editingComment, setEditingComment] = useState(null);
+  const [editText, setEditText] = useState('');
+  const [modalVisible, setModalVisible] = useState(false);
   const { currentUser, token } = useAuth();
   
   const fetchedRef = useRef(false);
+
+  const getUserId = () => currentUser?._id || currentUser?.id || currentUser?.userId;
+  const getUsername = () => currentUser?.username || currentUser?.name || currentUser?.displayName || 'You';
 
   useEffect(() => {
     const initDb = async () => {
@@ -103,14 +111,6 @@ const BlogDetailsScreen = ({ route, navigation }) => {
     initDb();
   }, []);
 
-  const apiClient = axios.create({
-    baseURL: 'https://moihub.onrender.com/api',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    }
-  });
-
   const fetchBlog = useCallback(async () => {
     if (fetchedRef.current) return;
     fetchedRef.current = true;
@@ -118,22 +118,22 @@ const BlogDetailsScreen = ({ route, navigation }) => {
     setLoading(true);
 
     try {
-      // Try DB first
       if (dbInitialized) {
         const localBlog = await BlogDbService.getBlog(id);
         if (localBlog) {
           const normalized = normalizeBlog(localBlog);
           setBlog(normalized);
           setLikesCount(normalized.likes?.length || 0);
-          setLiked(normalized.likes?.includes(currentUser?._id));
+          setLiked(normalized.likes?.includes(getUserId()));
           setSaved(normalized.saved || false);
           setLoading(false);
         }
       }
 
-      // Fetch from API
       if (token) {
-        const res = await apiClient.get(`/posts/${id}`);
+        const res = await axios.get(`api/posts/${id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
         const serverBlog = res.data.post;
 
         if (serverBlog) {
@@ -145,20 +145,19 @@ const BlogDetailsScreen = ({ route, navigation }) => {
 
           setBlog(normalized);
           setLikesCount(normalized.likes?.length || 0);
-          setLiked(normalized.likes?.includes(currentUser?._id));
+          setLiked(normalized.likes?.includes(getUserId()));
           setSaved(normalized.saved || false);
           setLoading(false);
         }
       }
     } catch (error) {
       console.error('Failed to fetch blog:', error);
-      
       if (!blog) {
         Alert.alert('Error', 'Failed to load blog post. Please try again.');
         setLoading(false);
       }
     }
-  }, [id, token, dbInitialized, currentUser, apiClient]);
+  }, [id, token, dbInitialized]);
 
   useEffect(() => {
     if (dbInitialized && !fetchedRef.current) {
@@ -172,13 +171,17 @@ const BlogDetailsScreen = ({ route, navigation }) => {
       return;
     }
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
     const newLikedState = !liked;
     setLiked(newLikedState);
     setLikesCount(prev => newLikedState ? prev + 1 : prev - 1);
 
     try {
-      const response = await apiClient.post(`/posts/${id}/like`, {
+      const response = await axios.post(`api/posts/${id}/like`, {
         liked: newLikedState
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       setLikesCount(response.data.likeCount);
@@ -188,8 +191,8 @@ const BlogDetailsScreen = ({ route, navigation }) => {
         const updatedBlog = {
           ...blog,
           likes: response.data.liked 
-            ? [...(blog.likes || []), currentUser._id]
-            : (blog.likes || []).filter(uid => uid !== currentUser._id)
+            ? [...(blog.likes || []), getUserId()]
+            : (blog.likes || []).filter(uid => uid !== getUserId())
         };
         await BlogDbService.saveBlog(updatedBlog);
       }
@@ -220,17 +223,128 @@ const BlogDetailsScreen = ({ route, navigation }) => {
       return;
     }
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
     const newSavedState = !saved;
     setSaved(newSavedState);
 
     if (dbInitialized && blog) {
-      const result = await BlogDbService.toggleSaved(id, currentUser._id);
+      const result = await BlogDbService.toggleSaved(id, getUserId());
       setSaved(result.saved);
     }
 
     Alert.alert(
       saved ? 'Removed' : 'Saved',
       saved ? 'Article removed from your reading list' : 'Article saved to your reading list'
+    );
+  };
+
+  const canEditComment = (commentCreatedAt) => {
+    const commentDate = new Date(commentCreatedAt);
+    const now = new Date();
+    const diffMinutes = (now - commentDate) / (1000 * 60);
+    return diffMinutes <= 5;
+  };
+
+  const handleEditComment = (comment) => {
+    if (!canEditComment(comment.createdAt)) {
+      Alert.alert('Edit Time Expired', 'You can only edit comments within 5 minutes of posting.');
+      return;
+    }
+    setEditingComment(comment);
+    setEditText(comment.text);
+    setModalVisible(true);
+  };
+
+  const submitEditComment = async () => {
+    if (!editText.trim()) {
+      Alert.alert('Empty Comment', 'Comment cannot be empty.');
+      return;
+    }
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    setBlog(prevBlog => ({
+      ...prevBlog,
+      comments: prevBlog.comments.map(c =>
+        c._id === editingComment._id ? { ...c, text: editText.trim() } : c
+      )
+    }));
+    setModalVisible(false);
+    setEditingComment(null);
+    setEditText('');
+
+    try {
+      await axios.put(`api/posts/${id}/comments/${editingComment._id}`, {
+        text: editText.trim()
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (dbInitialized && blog) {
+        const updatedBlog = {
+          ...blog,
+          comments: blog.comments.map(c =>
+            c._id === editingComment._id ? { ...c, text: editText.trim() } : c
+          )
+        };
+        await BlogDbService.saveBlog(updatedBlog);
+      }
+
+    } catch (error) {
+      console.error('Failed to edit comment:', error);
+      setBlog(prevBlog => ({
+        ...prevBlog,
+        comments: prevBlog.comments.map(c =>
+          c._id === editingComment._id ? { ...c, text: editingComment.text } : c
+        )
+      }));
+      Alert.alert('Error', 'Failed to edit comment. Please try again.');
+    }
+  };
+
+  const handleDeleteComment = (comment) => {
+    Alert.alert(
+      'Delete Comment',
+      'Are you sure you want to delete this comment?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+
+            setBlog(prevBlog => ({
+              ...prevBlog,
+              comments: prevBlog.comments.filter(c => c._id !== comment._id)
+            }));
+
+            try {
+              await axios.delete(`api/posts/${id}/comments/${comment._id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+
+              if (dbInitialized && blog) {
+                const updatedBlog = {
+                  ...blog,
+                  comments: blog.comments.filter(c => c._id !== comment._id)
+                };
+                await BlogDbService.saveBlog(updatedBlog);
+              }
+              
+
+            } catch (error) {
+              console.error('Failed to delete comment:', error);
+              setBlog(prevBlog => ({
+                ...prevBlog,
+                comments: [...prevBlog.comments, comment]
+              }));
+              Alert.alert('Error', 'Failed to delete comment. Please try again.');
+            }
+          }
+        }
+      ]
     );
   };
 
@@ -245,29 +359,69 @@ const BlogDetailsScreen = ({ route, navigation }) => {
       return;
     }
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    const username = getUsername();
+    const userId = getUserId();
+
+    const newComment = {
+      _id: `temp_${Date.now()}`,
+      user: {
+        _id: userId,
+        username: username,
+        avatar: currentUser.avatar || currentUser.profilePicture || '',
+      },
+      text: comment.trim(),
+      createdAt: new Date().toISOString(),
+    };
+
+    setBlog(prevBlog => ({
+      ...prevBlog,
+      comments: [newComment, ...(prevBlog?.comments || [])]
+    }));
+    setComment('');
     setCommentLoading(true);
+
     try {
-      const response = await apiClient.post(`/posts/${id}/comment`, {
-        text: comment.trim()
+      const response = await axios.post(`api/posts/${id}/comment`, {
+        text: newComment.text
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
+
+      const realCommentData = response.data.comments || response.data;
+      const realComments = Array.isArray(realCommentData) ? realCommentData : [realCommentData];
+      const realComment = realComments[0] || realCommentData;
 
       setBlog(prevBlog => ({
         ...prevBlog,
-        comments: response.data
+        comments: prevBlog.comments.map(c => 
+          c._id === newComment._id ? {
+            ...realComment,
+            _id: realComment._id || c._id,
+            user: {
+              _id: realComment.user?._id || realComment.userId || userId,
+              username: realComment.user?.username || realComment.username || username,
+              avatar: realComment.user?.avatar || realComment.avatar || '',
+            }
+          } : c
+        )
       }));
 
       if (dbInitialized && blog) {
         const updatedBlog = {
           ...blog,
-          comments: response.data
+          comments: [realComment, ...(blog.comments || [])]
         };
         await BlogDbService.saveBlog(updatedBlog);
       }
 
-      setComment('');
-      Alert.alert('Success', 'Your comment has been posted!');
     } catch (error) {
       console.error('Failed to comment:', error);
+      setBlog(prevBlog => ({
+        ...prevBlog,
+        comments: prevBlog.comments.filter(c => c._id !== newComment._id)
+      }));
       Alert.alert('Error', 'Failed to post comment. Please try again.');
     } finally {
       setCommentLoading(false);
@@ -414,19 +568,6 @@ const BlogDetailsScreen = ({ route, navigation }) => {
         <Text style={[styles.floatingIcon, styles.icon4]}>📝</Text>
       </View>
 
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Icon name="arrow-back" size={24} color={BlogColors.primary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>Article</Text>
-        <TouchableOpacity style={styles.menuButton}>
-          <Icon name="more-vert" size={24} color={BlogColors.textSecondary} />
-        </TouchableOpacity>
-      </View>
-      
       <ScrollView 
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -482,7 +623,7 @@ const BlogDetailsScreen = ({ route, navigation }) => {
               onPress={handleLike}
             >
               <LinearGradient
-                colors={liked ? [BlogColors.like, BlogColors.secondary] : [BlogColors.card, BlogColors.surface]}
+                colors={liked ? [BlogColors.like, '#CC0000'] : [BlogColors.card, BlogColors.surface]}
                 style={styles.actionGradient}
               >
                 <Icon 
@@ -545,7 +686,7 @@ const BlogDetailsScreen = ({ route, navigation }) => {
                     style={styles.userAvatar}
                   >
                     <Text style={styles.userInitial}>
-                      {currentUser.username?.charAt(0)?.toUpperCase()}
+                      {getUsername().charAt(0)?.toUpperCase()}
                     </Text>
                   </LinearGradient>
                   <TextInput
@@ -604,36 +745,62 @@ const BlogDetailsScreen = ({ route, navigation }) => {
 
             <View style={styles.commentsList}>
               {blog.comments?.length > 0 ? (
-                blog.comments.map((c, index) => (
-                  <Animatable.View 
-                    key={c._id || index} 
-                    animation="fadeInUp" 
-                    delay={600 + (index * 100)}
-                  >
-                    <LinearGradient
-                      colors={[BlogColors.card, BlogColors.surface]}
-                      style={styles.commentItem}
+                blog.comments.map((c, index) => {
+                  const isOwner = c.user?._id === getUserId() || c.userId === getUserId();
+                  const canEdit = isOwner && canEditComment(c.createdAt);
+                  
+                  return (
+                    <Animatable.View 
+                      key={c._id || index} 
+                      animation="fadeInUp" 
+                      delay={600 + (index * 100)}
                     >
-                      <View style={styles.commentHeader}>
-                        <LinearGradient
-                          colors={[BlogColors.primary, BlogColors.secondary]}
-                          style={styles.commentAvatar}
-                        >
-                          <Text style={styles.commentAvatarText}>
-                            {c.user?.username?.charAt(0)?.toUpperCase() || 'U'}
-                          </Text>
-                        </LinearGradient>
-                        <View style={styles.commentMeta}>
-                          <Text style={styles.commentUser}>{c.user?.username || 'Unknown'}</Text>
-                          <Text style={styles.commentDate}>
-                            {formatCommentDate(c.createdAt || c.date)}
-                          </Text>
+                      <LinearGradient
+                        colors={[BlogColors.card, BlogColors.surface]}
+                        style={styles.commentItem}
+                      >
+                        <View style={styles.commentHeader}>
+                          <LinearGradient
+                            colors={[BlogColors.primary, BlogColors.secondary]}
+                            style={styles.commentAvatar}
+                          >
+                            <Text style={styles.commentAvatarText}>
+                              {c.user?.username?.charAt(0)?.toUpperCase() || 'U'}
+                            </Text>
+                          </LinearGradient>
+                          <View style={styles.commentMeta}>
+                            <Text style={styles.commentUser}>{c.user?.username || 'Unknown'}</Text>
+                            <Text style={styles.commentDate}>
+                              {formatCommentDate(c.createdAt || c.date)}
+                              {isOwner && canEdit && (
+                                <Text style={styles.editBadge}> • Editable</Text>
+                              )}
+                            </Text>
+                          </View>
+                          {isOwner && (
+                            <View style={styles.commentActionsRow}>
+                              {canEdit && (
+                                <TouchableOpacity 
+                                  onPress={() => handleEditComment(c)}
+                                  style={styles.commentActionBtn}
+                                >
+                                  <Icon name="edit" size={16} color={BlogColors.accent} />
+                                </TouchableOpacity>
+                              )}
+                              <TouchableOpacity 
+                                onPress={() => handleDeleteComment(c)}
+                                style={styles.commentActionBtn}
+                              >
+                                <Icon name="delete-outline" size={16} color={BlogColors.like} />
+                              </TouchableOpacity>
+                            </View>
+                          )}
                         </View>
-                      </View>
-                      <Text style={styles.commentText}>{c.text}</Text>
-                    </LinearGradient>
-                  </Animatable.View>
-                ))
+                        <Text style={styles.commentText}>{c.text}</Text>
+                      </LinearGradient>
+                    </Animatable.View>
+                  );
+                })
               ) : (
                 <View style={styles.noComments}>
                   <Icon name="chat" size={40} color={BlogColors.textMuted} />
@@ -646,6 +813,53 @@ const BlogDetailsScreen = ({ route, navigation }) => {
           </Animatable.View>
         </View>
       </ScrollView>
+
+      {/* Edit Comment Modal */}
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setModalVisible(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Comment</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editText}
+              onChangeText={setEditText}
+              multiline
+              maxLength={500}
+              placeholder="Edit your comment..."
+              placeholderTextColor={BlogColors.textMuted}
+              autoFocus
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                style={[styles.modalBtn, styles.modalCancelBtn]} 
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalBtn, styles.modalSaveBtn]} 
+                onPress={submitEditComment}
+              >
+                <LinearGradient
+                  colors={[BlogColors.primary, BlogColors.secondary]}
+                  style={styles.modalSaveGradient}
+                >
+                  <Text style={styles.modalSaveText}>Save</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -686,90 +900,6 @@ const styles = StyleSheet.create({
     bottom: '40%',
     left: '8%',
     transform: [{ rotate: '-15deg' }],
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    zIndex: 10,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(124,77,255,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: BlogColors.text,
-  },
-  menuButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingIcon: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: BlogColors.primary + '20',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  loadingText: {
-    marginTop: 15,
-    fontSize: 16,
-    color: BlogColors.textSecondary,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  errorIcon: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: BlogColors.primary + '20',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: BlogColors.text,
-    marginBottom: 8,
-  },
-  errorText: {
-    fontSize: 14,
-    color: BlogColors.textSecondary,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  backButtonGradient: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  backButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
   },
   scrollView: {
     flex: 1,
@@ -1091,6 +1221,18 @@ const styles = StyleSheet.create({
     color: BlogColors.textMuted,
     marginTop: 1,
   },
+  editBadge: {
+    color: BlogColors.accent,
+    fontSize: 11,
+  },
+  commentActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  commentActionBtn: {
+    padding: 4,
+  },
   commentText: {
     fontSize: 14,
     color: BlogColors.textSecondary,
@@ -1106,6 +1248,135 @@ const styles = StyleSheet.create({
     color: BlogColors.textMuted,
     fontStyle: 'italic',
     textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: BlogColors.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  loadingText: {
+    marginTop: 15,
+    fontSize: 16,
+    color: BlogColors.textSecondary,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: BlogColors.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: BlogColors.text,
+    marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 14,
+    color: BlogColors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  backButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  backButtonGradient: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  backButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: BlogColors.surface,
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: BlogColors.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: BlogColors.text,
+    marginBottom: 16,
+  },
+  modalInput: {
+    backgroundColor: BlogColors.card,
+    borderRadius: 12,
+    padding: 12,
+    color: BlogColors.text,
+    fontSize: 14,
+    minHeight: 80,
+    maxHeight: 150,
+    textAlignVertical: 'top',
+    borderWidth: 1,
+    borderColor: BlogColors.border,
+    marginBottom: 16,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  modalBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  modalCancelBtn: {
+    backgroundColor: 'transparent',
+  },
+  modalCancelText: {
+    color: BlogColors.textSecondary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalSaveBtn: {
+    overflow: 'hidden',
+  },
+  modalSaveGradient: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  modalSaveText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 
