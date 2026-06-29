@@ -264,10 +264,13 @@ const BlogDetailsScreen = ({ route, navigation }) => {
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+    const originalComments = [...blog.comments];
+    const updatedText = editText.trim();
+
     setBlog(prevBlog => ({
       ...prevBlog,
       comments: prevBlog.comments.map(c =>
-        c._id === editingComment._id ? { ...c, text: editText.trim() } : c
+        c._id === editingComment._id ? { ...c, text: updatedText } : c
       )
     }));
     setModalVisible(false);
@@ -276,7 +279,7 @@ const BlogDetailsScreen = ({ route, navigation }) => {
 
     try {
       await axios.put(`api/posts/${id}/comments/${editingComment._id}`, {
-        text: editText.trim()
+        text: updatedText
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -285,7 +288,7 @@ const BlogDetailsScreen = ({ route, navigation }) => {
         const updatedBlog = {
           ...blog,
           comments: blog.comments.map(c =>
-            c._id === editingComment._id ? { ...c, text: editText.trim() } : c
+            c._id === editingComment._id ? { ...c, text: updatedText } : c
           )
         };
         await BlogDbService.saveBlog(updatedBlog);
@@ -295,9 +298,7 @@ const BlogDetailsScreen = ({ route, navigation }) => {
       console.error('Failed to edit comment:', error);
       setBlog(prevBlog => ({
         ...prevBlog,
-        comments: prevBlog.comments.map(c =>
-          c._id === editingComment._id ? { ...c, text: editingComment.text } : c
-        )
+        comments: originalComments
       }));
       Alert.alert('Error', 'Failed to edit comment. Please try again.');
     }
@@ -314,6 +315,8 @@ const BlogDetailsScreen = ({ route, navigation }) => {
           style: 'destructive',
           onPress: async () => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+
+            const originalComments = [...blog.comments];
 
             setBlog(prevBlog => ({
               ...prevBlog,
@@ -332,13 +335,12 @@ const BlogDetailsScreen = ({ route, navigation }) => {
                 };
                 await BlogDbService.saveBlog(updatedBlog);
               }
-              
 
             } catch (error) {
               console.error('Failed to delete comment:', error);
               setBlog(prevBlog => ({
                 ...prevBlog,
-                comments: [...prevBlog.comments, comment]
+                comments: originalComments
               }));
               Alert.alert('Error', 'Failed to delete comment. Please try again.');
             }
@@ -361,66 +363,92 @@ const BlogDetailsScreen = ({ route, navigation }) => {
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const username = getUsername();
+    const commentText = comment.trim();
     const userId = getUserId();
-
-    const newComment = {
-      _id: `temp_${Date.now()}`,
+    const username = getUsername();
+    
+    // Generate a unique temp ID
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    
+    // Create temp comment with user's info - INSTANT UI
+    const tempComment = {
+      _id: tempId,
+      text: commentText,
+      createdAt: new Date().toISOString(),
       user: {
         _id: userId,
         username: username,
-        avatar: currentUser.avatar || currentUser.profilePicture || '',
+        avatar: currentUser?.avatar || '',
       },
-      text: comment.trim(),
-      createdAt: new Date().toISOString(),
+      isTemp: true, // Mark as temporary - prevents edit/delete
     };
 
-    setBlog(prevBlog => ({
-      ...prevBlog,
-      comments: [newComment, ...(prevBlog?.comments || [])]
-    }));
+    // Store current comments for rollback
+    const originalComments = [...(blog?.comments || [])];
+    
+    // Clear input and show loading
     setComment('');
     setCommentLoading(true);
+    
+    // Add temp comment to UI - INSTANT VISUAL FEEDBACK
+    setBlog(prevBlog => ({
+      ...prevBlog,
+      comments: [tempComment, ...(prevBlog?.comments || [])]
+    }));
 
     try {
       const response = await axios.post(`api/posts/${id}/comment`, {
-        text: newComment.text
+        text: commentText
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      const realCommentData = response.data.comments || response.data;
-      const realComments = Array.isArray(realCommentData) ? realCommentData : [realCommentData];
-      const realComment = realComments[0] || realCommentData;
+      // Get the real comment from response
+      let realComment = response.data.comment || response.data;
+      if (Array.isArray(realComment)) {
+        realComment = realComment[0];
+      }
 
-      setBlog(prevBlog => ({
-        ...prevBlog,
-        comments: prevBlog.comments.map(c => 
-          c._id === newComment._id ? {
-            ...realComment,
-            _id: realComment._id || c._id,
-            user: {
-              _id: realComment.user?._id || realComment.userId || userId,
-              username: realComment.user?.username || realComment.username || username,
-              avatar: realComment.user?.avatar || realComment.avatar || '',
-            }
-          } : c
-        )
-      }));
+      // Ensure the real comment has proper user data
+      if (realComment && !realComment.user) {
+        realComment.user = {
+          _id: realComment.userId || userId,
+          username: realComment.username || username,
+          avatar: realComment.avatar || currentUser?.avatar || '',
+        };
+      }
 
+      // Remove isTemp flag if it exists
+      if (realComment && realComment.isTemp) {
+        delete realComment.isTemp;
+      }
+
+      // Replace temp comment with real comment - NO DUPLICATES
+      setBlog(prevBlog => {
+        // Filter out ALL comments with the temp ID (safety measure)
+        const filteredComments = prevBlog.comments.filter(c => c._id !== tempId);
+        // Add the real comment at the top
+        return {
+          ...prevBlog,
+          comments: [realComment, ...filteredComments]
+        };
+      });
+
+      // Update DB with the real comment
       if (dbInitialized && blog) {
         const updatedBlog = {
           ...blog,
-          comments: [realComment, ...(blog.comments || [])]
+          comments: [realComment, ...originalComments]
         };
         await BlogDbService.saveBlog(updatedBlog);
       }
 
     } catch (error) {
       console.error('Failed to comment:', error);
+      // Rollback - remove temp comment
       setBlog(prevBlog => ({
         ...prevBlog,
-        comments: prevBlog.comments.filter(c => c._id !== newComment._id)
+        comments: prevBlog.comments.filter(c => c._id !== tempId)
       }));
       Alert.alert('Error', 'Failed to post comment. Please try again.');
     } finally {
@@ -439,6 +467,7 @@ const BlogDetailsScreen = ({ route, navigation }) => {
   };
 
   const formatCommentDate = (dateString) => {
+    if (!dateString) return 'Just now';
     const date = new Date(dateString);
     const now = new Date();
     const diff = now - date;
@@ -459,21 +488,21 @@ const BlogDetailsScreen = ({ route, navigation }) => {
     switch (block.type) {
       case 'header':
         return (
-          <Animatable.View key={block._id || index} animation="fadeInUp" delay={index * 100}>
+          <Animatable.View key={block._id || `header_${index}`} animation="fadeInUp" delay={index * 100}>
             <Text style={styles.headerText}>{block.text}</Text>
           </Animatable.View>
         );
       
       case 'paragraph':
         return (
-          <Animatable.View key={block._id || index} animation="fadeInUp" delay={index * 100}>
+          <Animatable.View key={block._id || `paragraph_${index}`} animation="fadeInUp" delay={index * 100}>
             <Text style={styles.contentText}>{block.text}</Text>
           </Animatable.View>
         );
       
       case 'image':
         return (
-          <Animatable.View key={block._id || index} animation="fadeInUp" delay={index * 100} style={styles.imageBlock}>
+          <Animatable.View key={block._id || `image_${index}`} animation="fadeInUp" delay={index * 100} style={styles.imageBlock}>
             <Image source={{ uri: block.src }} style={styles.contentImage} />
             {block.caption && (
               <Text style={styles.imageCaption}>{block.caption}</Text>
@@ -483,9 +512,9 @@ const BlogDetailsScreen = ({ route, navigation }) => {
       
       case 'list':
         return (
-          <Animatable.View key={block._id || index} animation="fadeInUp" delay={index * 100} style={styles.listBlock}>
+          <Animatable.View key={block._id || `list_${index}`} animation="fadeInUp" delay={index * 100} style={styles.listBlock}>
             {block.items?.map((item, itemIndex) => (
-              <View key={itemIndex} style={styles.listItemContainer}>
+              <View key={`${block._id || index}_item_${itemIndex}`} style={styles.listItemContainer}>
                 <Text style={styles.listBullet}>•</Text>
                 <Text style={styles.listItem}>{item}</Text>
               </View>
@@ -496,7 +525,7 @@ const BlogDetailsScreen = ({ route, navigation }) => {
       default:
         if (block.text) {
           return (
-            <Animatable.View key={block._id || index} animation="fadeInUp" delay={index * 100}>
+            <Animatable.View key={block._id || `default_${index}`} animation="fadeInUp" delay={index * 100}>
               <Text style={styles.contentText}>{block.text}</Text>
             </Animatable.View>
           );
@@ -746,38 +775,57 @@ const BlogDetailsScreen = ({ route, navigation }) => {
             <View style={styles.commentsList}>
               {blog.comments?.length > 0 ? (
                 blog.comments.map((c, index) => {
-                  const isOwner = c.user?._id === getUserId() || c.userId === getUserId();
-                  const canEdit = isOwner && canEditComment(c.createdAt);
+                  const username = c.user?.username || c.username || 'User';
+                  const userId = c.user?._id || c.userId;
+                  const isOwner = userId === getUserId();
+                  const isTemp = c.isTemp === true;
+                  
+                  // CRITICAL: Only real comments can be edited/deleted
+                  const canEdit = isOwner && canEditComment(c.createdAt) && !isTemp;
+                  
+                  const key = c._id ? String(c._id) : `comment_${index}`;
                   
                   return (
                     <Animatable.View 
-                      key={c._id || index} 
+                      key={key}
                       animation="fadeInUp" 
                       delay={600 + (index * 100)}
                     >
                       <LinearGradient
                         colors={[BlogColors.card, BlogColors.surface]}
-                        style={styles.commentItem}
+                        style={[
+                          styles.commentItem,
+                          isTemp && styles.tempComment
+                        ]}
                       >
                         <View style={styles.commentHeader}>
                           <LinearGradient
                             colors={[BlogColors.primary, BlogColors.secondary]}
-                            style={styles.commentAvatar}
+                            style={[
+                              styles.commentAvatar,
+                              isTemp && styles.tempAvatar
+                            ]}
                           >
                             <Text style={styles.commentAvatarText}>
-                              {c.user?.username?.charAt(0)?.toUpperCase() || 'U'}
+                              {username.charAt(0)?.toUpperCase() || 'U'}
                             </Text>
                           </LinearGradient>
                           <View style={styles.commentMeta}>
-                            <Text style={styles.commentUser}>{c.user?.username || 'Unknown'}</Text>
+                            <Text style={styles.commentUser}>
+                              {username}
+                              {isTemp && (
+                                <Text style={styles.postingText}> • Sending...</Text>
+                              )}
+                            </Text>
                             <Text style={styles.commentDate}>
                               {formatCommentDate(c.createdAt || c.date)}
-                              {isOwner && canEdit && (
+                              {isOwner && canEdit && !isTemp && (
                                 <Text style={styles.editBadge}> • Editable</Text>
                               )}
                             </Text>
                           </View>
-                          {isOwner && (
+                          {/* CRITICAL FIX: Only show actions if NOT temp */}
+                          {isOwner && !isTemp && (
                             <View style={styles.commentActionsRow}>
                               {canEdit && (
                                 <TouchableOpacity 
@@ -795,8 +843,19 @@ const BlogDetailsScreen = ({ route, navigation }) => {
                               </TouchableOpacity>
                             </View>
                           )}
+                          {/* Show loading for temp comments instead */}
+                          {isTemp && (
+                            <View style={styles.commentActionsRow}>
+                              <ActivityIndicator size="small" color={BlogColors.accent} />
+                            </View>
+                          )}
                         </View>
-                        <Text style={styles.commentText}>{c.text}</Text>
+                        <Text style={[
+                          styles.commentText,
+                          isTemp && styles.tempText
+                        ]}>
+                          {c.text || ''}
+                        </Text>
                       </LinearGradient>
                     </Animatable.View>
                   );
@@ -1190,6 +1249,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BlogColors.border,
   },
+  tempComment: {
+    opacity: 0.8,
+    borderColor: BlogColors.accent,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
   commentHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1203,6 +1268,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 8,
   },
+  tempAvatar: {
+    opacity: 0.7,
+  },
   commentAvatarText: {
     color: '#fff',
     fontSize: 10,
@@ -1215,6 +1283,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: BlogColors.text,
+  },
+  postingText: {
+    fontSize: 12,
+    color: BlogColors.accent,
+    fontWeight: '400',
+    fontStyle: 'italic',
   },
   commentDate: {
     fontSize: 11,
@@ -1237,6 +1311,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: BlogColors.textSecondary,
     lineHeight: 20,
+  },
+  tempText: {
+    opacity: 0.9,
   },
   noComments: {
     alignItems: 'center',
@@ -1380,4 +1457,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default BlogDetailsScreen;
+export default BlogDetailsScreen; 

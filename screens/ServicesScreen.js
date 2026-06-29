@@ -266,7 +266,7 @@ const ServicesScreen = () => {
         </View>
 
         {/* Category Chips */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipContainer}>
+        {/* <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipContainer}>
           {categories.map(cat => (
             <TouchableOpacity 
               key={cat} 
@@ -278,7 +278,7 @@ const ServicesScreen = () => {
               </Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </ScrollView> */}
 
         {/* Smart Sort Indicator */}
         {showSmartSort && (

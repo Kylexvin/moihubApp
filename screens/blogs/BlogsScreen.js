@@ -134,10 +134,23 @@ const BlogsScreen = ({ navigation }) => {
         const normalized = serverBlogs.map(normalizeBlog);
         const sorted = sortBlogsByDate(normalized);
 
-        // Save to DB
-        if (dbInitialized) {
-          await BlogDbService.saveBlogs(serverBlogs);
+        // Get current local blogs
+        const localBlogs = await loadFromLocal();
+        const localIds = new Set(localBlogs.map(b => b._id));
+        const serverIds = new Set(sorted.map(b => b._id));
+
+        // Find blogs to delete (in local but not in server)
+        const blogsToDelete = [...localIds].filter(id => !serverIds.has(id));
+        
+        // Delete removed blogs from local DB
+        for (const id of blogsToDelete) {
+          await BlogDbService.deleteBlog(id);
+          console.log(`🗑️ Deleted blog ${id} from local DB`);
         }
+
+        // Save all server blogs (updates existing, adds new)
+        await BlogDbService.saveBlogs(serverBlogs);
+        console.log(`✅ Synced ${serverBlogs.length} blogs from server`);
 
         return sorted;
       }
@@ -145,7 +158,7 @@ const BlogsScreen = ({ navigation }) => {
       console.warn('Failed to sync from server:', error);
     }
     return [];
-  }, [token, dbInitialized]);
+  }, [token, dbInitialized, loadFromLocal]);
 
   // ── Main fetch function ──
   const fetchBlogs = useCallback(async (isRefresh = false) => {
@@ -174,23 +187,18 @@ const BlogsScreen = ({ navigation }) => {
         const serverBlogs = await syncFromServer();
         
         if (serverBlogs.length > 0) {
-          // Compare with local to see if there are changes
-          const localIds = new Set(localBlogs.map(b => b._id));
-          const serverIds = new Set(serverBlogs.map(b => b._id));
-          const hasChanges = serverBlogs.length !== localBlogs.length || 
-            [...serverIds].some(id => !localIds.has(id));
-
-          if (hasChanges) {
+          // Reload from DB to get the latest (including deletions)
+          const updatedLocalBlogs = await loadFromLocal();
+          
+          if (updatedLocalBlogs.length > 0) {
             LayoutAnimation.configureNext(smoothReorder);
-            
-            const merged = serverBlogs.map(serverBlog => {
-              const local = localBlogs.find(b => b._id === serverBlog._id);
-              return local ? { ...local, ...serverBlog } : serverBlog;
-            });
-            
-            const sorted = sortBlogsByDate(merged);
-            setBlogs(sorted);
-            setDisplayedBlogs(sorted);
+            setBlogs(updatedLocalBlogs);
+            setDisplayedBlogs(updatedLocalBlogs);
+          } else {
+            // If DB is empty but we have server blogs, use them
+            LayoutAnimation.configureNext(smoothReorder);
+            setBlogs(serverBlogs);
+            setDisplayedBlogs(serverBlogs);
           }
         }
         setIsSyncing(false);
@@ -227,14 +235,13 @@ const BlogsScreen = ({ navigation }) => {
     }
   }, [dbInitialized, fetchBlogs]);
 
-  // ── Reload when coming back to screen (only if not already fetching) ──
+  // ── Reload when coming back to screen ──
   useFocusEffect(
     useCallback(() => {
-      // Only refresh if initial load is done and not currently fetching
       if (dbInitialized && initialLoadDone.current && !isFetching.current) {
-        // Refresh in background silently
         const refreshInBackground = async () => {
           try {
+            // Load from local first
             const localBlogs = await loadFromLocal();
             if (localBlogs.length > 0) {
               setBlogs(localBlogs);
@@ -245,20 +252,17 @@ const BlogsScreen = ({ navigation }) => {
             if (token) {
               const serverBlogs = await syncFromServer();
               if (serverBlogs.length > 0) {
-                const localIds = new Set(localBlogs.map(b => b._id));
-                const serverIds = new Set(serverBlogs.map(b => b._id));
-                const hasChanges = serverBlogs.length !== localBlogs.length || 
-                  [...serverIds].some(id => !localIds.has(id));
-
-                if (hasChanges) {
+                // Reload from DB to get latest
+                const updatedLocalBlogs = await loadFromLocal();
+                
+                if (updatedLocalBlogs.length > 0) {
                   LayoutAnimation.configureNext(smoothReorder);
-                  const merged = serverBlogs.map(serverBlog => {
-                    const local = localBlogs.find(b => b._id === serverBlog._id);
-                    return local ? { ...local, ...serverBlog } : serverBlog;
-                  });
-                  const sorted = sortBlogsByDate(merged);
-                  setBlogs(sorted);
-                  setDisplayedBlogs(sorted);
+                  setBlogs(updatedLocalBlogs);
+                  setDisplayedBlogs(updatedLocalBlogs);
+                } else {
+                  LayoutAnimation.configureNext(smoothReorder);
+                  setBlogs(serverBlogs);
+                  setDisplayedBlogs(serverBlogs);
                 }
               }
             }
@@ -491,7 +495,6 @@ const BlogsScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  // ... [keep all your existing styles]
   container: {
     flex: 1,
     backgroundColor: BlogColors.background,
