@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { StatusBar, View } from 'react-native';
-import { getFocusedRouteNameFromRoute } from '@react-navigation/native'; // Add this import
+import { StatusBar, View, TouchableOpacity, Text, StyleSheet, Dimensions, Animated } from 'react-native';
+import { getFocusedRouteNameFromRoute, useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import HomeScreen from '../screens/HomeScreen';
 import ServicesStackNavigator from './ServicesStackNavigator';
@@ -10,6 +11,90 @@ import MessageStackNavigator from './MessageStackNavigator';
 import ProfileScreen from '../screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
+const { width } = Dimensions.get('window');
+
+// Custom AI Button Component with Pulse Animation
+const AIChatButton = ({ onPress }) => {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.08,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={onPress}
+      style={styles.aiButtonContainer}
+    >
+      <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+        <LinearGradient
+          colors={['#4A90E2', '#2C5F2D']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.aiButtonGradient}
+        >
+          <Ionicons name="sparkles" size={28} color="#FFFFFF" />
+        </LinearGradient>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
+
+// Dummy component for the tab screen
+const DummyScreen = () => {
+  return null;
+};
+
+// Custom Tab Bar Button Component with proper navigation
+const CustomAITabButton = (props) => {
+  const navigation = useNavigation();
+  
+  const handlePress = () => {
+    console.log('AI Chat button pressed');
+    
+    // Try to navigate using the root navigator
+    try {
+      // Get the root navigation
+      let rootNav = navigation;
+      while (rootNav.getParent) {
+        const parent = rootNav.getParent();
+        if (!parent) break;
+        rootNav = parent;
+      }
+      
+      // Navigate using the root navigator
+      if (rootNav && rootNav.navigate) {
+        rootNav.navigate('AIChatNavigator');
+        console.log('Navigated via root nav');
+        return;
+      }
+    } catch (e) {
+      console.log('Navigation error:', e);
+    }
+    
+    // Fallback to props navigation
+    if (props.navigation && props.navigation.navigate) {
+      props.navigation.navigate('AIChatNavigator');
+      console.log('Navigated via props nav');
+    }
+  };
+  
+  return <AIChatButton onPress={handlePress} />;
+};
 
 const MainTabNavigator = () => {
   return (
@@ -27,7 +112,7 @@ const MainTabNavigator = () => {
             } else if (route.name === 'Services') {
               iconName = focused ? 'grid' : 'grid-outline';
             } else if (route.name === 'Messages') {
-              iconName = focused ? 'chatbubble' : 'chatbubble-ellipses-outline';
+              iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
             } else if (route.name === 'Profile') {
               iconName = focused ? 'person' : 'person-outline';
             }
@@ -37,9 +122,24 @@ const MainTabNavigator = () => {
           tabBarActiveTintColor: '#fff',
           tabBarInactiveTintColor: '#bbb',
           tabBarStyle: {
-            paddingVertical: 5,
             height: 60,
+            paddingVertical: 5,
             backgroundColor: '#093028',
+            borderTopWidth: 0,
+            borderTopLeftRadius: 25,
+            borderTopRightRadius: 25,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -4 },
+            shadowOpacity: 0.2,
+            shadowRadius: 8,
+            elevation: 10,
+          },
+          tabBarItemStyle: {
+            marginVertical: 5,
+          },
+          tabBarLabelStyle: {
+            fontSize: 10,
+            fontWeight: '500',
           },
         })}
       >
@@ -56,23 +156,37 @@ const MainTabNavigator = () => {
           })}
         />
 
+        {/* AI Chat - Custom Floating Button with proper component */}
+        <Tab.Screen
+          name="AI Chat"
+          component={DummyScreen}
+          options={{
+            tabBarButton: (props) => <CustomAITabButton {...props} />,
+          }}
+        />
+
         <Tab.Screen 
           name="Messages" 
           component={MessageStackNavigator}
           options={({ route }) => {
-            // Get the current route name from the MessageStackNavigator
             const routeName = getFocusedRouteNameFromRoute(route) ?? 'ChatList';
-            
-            // Hide tab bar for ChatScreen and NewChatScreen, keep it for ChatList
             const hideTabBarRoutes = ['ChatScreen', 'NewChatScreen'];
             
             return {
               tabBarStyle: hideTabBarRoutes.includes(routeName) 
                 ? { display: 'none' } 
                 : {
-                    paddingVertical: 5,
                     height: 60,
+                    paddingVertical: 5,
                     backgroundColor: '#093028',
+                    borderTopWidth: 0,
+                    borderTopLeftRadius: 25,
+                    borderTopRightRadius: 25,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: -4 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 8,
+                    elevation: 10,
                   },
             };
           }}
@@ -83,5 +197,27 @@ const MainTabNavigator = () => {
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  aiButtonContainer: {
+    top: -25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#4A90E2',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  aiButtonGradient: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+});
 
 export default MainTabNavigator;

@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
@@ -17,7 +16,8 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import axios from 'axios';
 
 const { width } = Dimensions.get('window');
@@ -42,6 +42,7 @@ const COLORS = {
 };
 
 const AIChatScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -87,7 +88,7 @@ const AIChatScreen = ({ navigation }) => {
         {
           id: '1',
           role: 'assistant',
-          content: "Hey! 👋 I'm Rada — your Moi University service finder.\n\nTry: \"boda boda near main gate\" or \"cheap kinyozi in hostel\"",
+          content: "Hey! 👋 I'm Rada — your Moi University service finder.\n\nAsk me things like transport, laundry, or food near campus.",
         },
       ]);
       Animated.timing(fadeAnim, {
@@ -99,9 +100,11 @@ const AIChatScreen = ({ navigation }) => {
     return () => clearTimeout(timer);
   }, []);
 
-  // ─── Core send logic (shared by input and suggestions) ──────────────────────
+  // ─── Core send logic ──────────────────────────────────────────────────────
   const sendMessageWithText = async (text) => {
     if (!text.trim()) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const userMessage = {
       id: Date.now().toString(),
@@ -121,11 +124,14 @@ const AIChatScreen = ({ navigation }) => {
         role: 'assistant',
         content: response.data.message || 'I found some services for you.',
         cards: response.data.cards || [],
-        suggestions: response.data.suggestions || [],
       };
       setMessages(prev => [...prev, aiMessage]);
+      if (aiMessage.cards.length > 0) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
     } catch (error) {
       console.error('AI Chat Error:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setMessages(prev => [
         ...prev,
         {
@@ -143,15 +149,31 @@ const AIChatScreen = ({ navigation }) => {
 
   const sendMessage = () => sendMessageWithText(inputText.trim());
 
-  const handleSuggestion = (text) => sendMessageWithText(text);
-
   const handleCall = (phone) => {
     if (!phone) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const clean = phone.replace(/\s+/g, '');
     const formatted = clean.startsWith('+') ? clean : `+${clean}`;
     Linking.openURL(`tel:${formatted}`).catch(() =>
       Alert.alert('Error', 'Could not make phone call')
     );
+  };
+
+  const handleBack = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.goBack();
+  };
+
+  const handleCardPress = (card) => {
+    if (!card.hasDashboard) return;
+    Haptics.selectionAsync();
+    navigation.navigate('ProviderProfile', {
+      providerId: card.providerId,
+      providerName: card.name,
+      providerType: 'dashboard',
+      providerPhone: card.phone,
+      providerAddress: card.quickInfo?.address || card.locations?.[0],
+    });
   };
 
   const getBadgeColor = (score) => {
@@ -169,19 +191,8 @@ const AIChatScreen = ({ navigation }) => {
         key={index}
         style={styles.card}
         activeOpacity={0.75}
-        onPress={() => {
-          if (card.hasDashboard) {
-            navigation.navigate('ProviderProfile', {
-              providerId: card.providerId,
-              providerName: card.name,
-              providerType: 'dashboard',
-              providerPhone: card.phone,
-              providerAddress: card.quickInfo?.address || card.locations?.[0],
-            });
-          }
-        }}
+        onPress={() => handleCardPress(card)}
       >
-        {/* Card header */}
         <View style={styles.cardHeader}>
           <View style={styles.cardNameRow}>
             <Text style={styles.cardName} numberOfLines={1}>{card.name}</Text>
@@ -196,7 +207,6 @@ const AIChatScreen = ({ navigation }) => {
           )}
         </View>
 
-        {/* Card details */}
         <View style={styles.cardDetails}>
           <View style={styles.cardRow}>
             <Ionicons name="location-outline" size={13} color={COLORS.textMuted} />
@@ -218,7 +228,6 @@ const AIChatScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Card actions */}
         <View style={styles.cardActions}>
           <TouchableOpacity
             style={styles.cardBtnPrimary}
@@ -231,15 +240,7 @@ const AIChatScreen = ({ navigation }) => {
           {card.hasDashboard && (
             <TouchableOpacity
               style={styles.cardBtnSecondary}
-              onPress={() =>
-                navigation.navigate('ProviderProfile', {
-                  providerId: card.providerId,
-                  providerName: card.name,
-                  providerType: 'dashboard',
-                  providerPhone: card.phone,
-                  providerAddress: card.quickInfo?.address || card.locations?.[0],
-                })
-              }
+              onPress={() => handleCardPress(card)}
               activeOpacity={0.8}
             >
               <Ionicons name="chevron-forward" size={15} color={COLORS.green} />
@@ -290,34 +291,18 @@ const AIChatScreen = ({ navigation }) => {
               {message.cards.map((card, idx) => renderProviderCard(card, idx))}
             </View>
           )}
-
-          {message.suggestions && message.suggestions.length > 0 && (
-            <View style={styles.suggestionsContainer}>
-              {message.suggestions.map((s, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={styles.suggestionChip}
-                  onPress={() => handleSuggestion(s)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.suggestionText}>{s}</Text>
-                  <Ionicons name="arrow-forward" size={11} color={COLORS.green} />
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
         </View>
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
           <Ionicons name="chevron-back" size={26} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
@@ -334,56 +319,58 @@ const AIChatScreen = ({ navigation }) => {
         <View style={{ width: 44 }} />
       </View>
 
-      {/* Messages */}
-      <Animated.ScrollView
-        ref={scrollViewRef}
-        style={[styles.messagesContainer, { opacity: fadeAnim }]}
-        contentContainerStyle={styles.messagesContent}
-        showsVerticalScrollIndicator={false}
-        onContentSizeChange={scrollToBottom}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
       >
-        {messages.length === 0 && !isLoading && (
-          <View style={styles.emptyState}>
-            <Image
-              source={require('../assets/moihublogo.png')}
-              style={styles.emptyLogo}
-              resizeMode="contain"
-            />
-            <Text style={styles.emptyTitle}>What do you need?</Text>
-            <Text style={styles.emptySubtitle}>
-              Find services around Moi University — transport, laundry, barbers, food and more.
-            </Text>
-          </View>
-        )}
-
-        {messages.map(renderMessage)}
-
-        {isTyping && (
-          <View style={[styles.messageWrapper, styles.assistantMessageWrapper]}>
-            <View style={styles.avatarContainer}>
+        {/* Messages */}
+        <Animated.ScrollView
+          ref={scrollViewRef}
+          style={[styles.messagesContainer, { opacity: fadeAnim }]}
+          contentContainerStyle={styles.messagesContent}
+          showsVerticalScrollIndicator={false}
+          onContentSizeChange={scrollToBottom}
+          keyboardShouldPersistTaps="handled"
+        >
+          {messages.length === 0 && !isLoading && (
+            <View style={styles.emptyState}>
               <Image
                 source={require('../assets/moihublogo.png')}
-                style={styles.avatarImage}
+                style={styles.emptyLogo}
                 resizeMode="contain"
               />
+              <Text style={styles.emptyTitle}>What do you need?</Text>
+              <Text style={styles.emptySubtitle}>
+                Find services around Moi University — transport, laundry, barbers, food and more.
+              </Text>
             </View>
-            <View style={[styles.messageBubble, styles.assistantBubble]}>
-              <View style={styles.typingIndicator}>
-                <Animated.View style={[styles.typingDot, { opacity: dot1 }]} />
-                <Animated.View style={[styles.typingDot, { opacity: dot2 }]} />
-                <Animated.View style={[styles.typingDot, { opacity: dot3 }]} />
+          )}
+
+          {messages.map(renderMessage)}
+
+          {isTyping && (
+            <View style={[styles.messageWrapper, styles.assistantMessageWrapper]}>
+              <View style={styles.avatarContainer}>
+                <Image
+                  source={require('../assets/moihublogo.png')}
+                  style={styles.avatarImage}
+                  resizeMode="contain"
+                />
+              </View>
+              <View style={[styles.messageBubble, styles.assistantBubble]}>
+                <View style={styles.typingIndicator}>
+                  <Animated.View style={[styles.typingDot, { opacity: dot1 }]} />
+                  <Animated.View style={[styles.typingDot, { opacity: dot2 }]} />
+                  <Animated.View style={[styles.typingDot, { opacity: dot3 }]} />
+                </View>
               </View>
             </View>
-          </View>
-        )}
-      </Animated.ScrollView>
+          )}
+        </Animated.ScrollView>
 
-      {/* Input */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        <View style={styles.inputContainer}>
+        {/* Input */}
+        <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={styles.inputWrapper}>
             <TextInput
               ref={inputRef}
@@ -397,6 +384,7 @@ const AIChatScreen = ({ navigation }) => {
               onSubmitEditing={sendMessage}
               returnKeyType="send"
               blurOnSubmit={false}
+              textAlignVertical="top"
             />
             <TouchableOpacity
               onPress={sendMessage}
@@ -676,34 +664,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // ── Suggestions ───────────────────────────────────────────────────────────────
-  suggestionsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 7,
-    marginTop: 12,
-  },
-  suggestionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    backgroundColor: COLORS.greenGlow,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.greenMuted,
-  },
-  suggestionText: {
-    fontSize: 12,
-    color: COLORS.textPrimary,
-    letterSpacing: 0.1,
-  },
-
   // ── Input ─────────────────────────────────────────────────────────────────────
   inputContainer: {
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingTop: 12,
     backgroundColor: COLORS.bg,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,

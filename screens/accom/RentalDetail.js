@@ -1,3 +1,4 @@
+// screens/rentals/RentalDetail.js
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -19,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Animatable from 'react-native-animatable';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
+import RentalDbService from '../../services/RentalDbService';
 
 const API_URL = 'http://192.168.100.10:5000/api';
 const { width: screenWidth } = Dimensions.get('window');
@@ -45,7 +47,7 @@ const RentalColors = {
 
 const RentalDetail = ({ route, navigation }) => {
   const { rentalId } = route.params;
-  const { isAuthenticated, currentUser } = useAuth();
+  const { isAuthenticated, currentUser, token } = useAuth();
   const [rental, setRental] = useState(null);
   const [loading, setLoading] = useState(true);
   const [votingLoading, setVotingLoading] = useState(false);
@@ -53,6 +55,7 @@ const RentalDetail = ({ route, navigation }) => {
   const [imageLoading, setImageLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
   const [activeTab, setActiveTab] = useState('details');
+  const [dbInitialized, setDbInitialized] = useState(false);
   const [inquiryForm, setInquiryForm] = useState({
     userName: '',
     userWhatsApp: '',
@@ -60,28 +63,72 @@ const RentalDetail = ({ route, navigation }) => {
   });
   const [inquiryLoading, setInquiryLoading] = useState(false);
 
+  // ── Initialize Database ──
   useEffect(() => {
-    fetchRentalDetail();
-  }, [rentalId]);
+    const initDB = async () => {
+      try {
+        await RentalDbService.init();
+        setDbInitialized(true);
+        console.log('✅ Rental DB initialized in Detail');
+      } catch (error) {
+        console.error('Failed to initialize rental DB:', error);
+      }
+    };
+    initDB();
+  }, []);
 
+  // ── Fetch Rental Detail (Local First!) ──
   const fetchRentalDetail = async () => {
     try {
       setLoading(true);
+      
+      // 1. Try local DB first (INSTANT!)
+      if (dbInitialized) {
+        try {
+          const localRental = await RentalDbService.getRentalById(rentalId);
+          if (localRental) {
+            setRental(localRental);
+            setLoading(false);
+            console.log('📱 Loaded rental from local DB instantly!');
+          }
+        } catch (localError) {
+          console.log('No local rental found, fetching from server...');
+        }
+      }
+      
+      // 2. Sync with server
       const response = await axios.get(`${API_URL}/rentals/${rentalId}`);
       if (response.data.success) {
-        setRental(response.data.data);
+        const rental = response.data.data;
+        setRental(rental);
         setImageLoading(true);
         setImageError(false);
+        
+        // Save to local DB
+        if (dbInitialized) {
+          await RentalDbService.saveRental(rental);
+          console.log('✅ Rental saved to local DB');
+        }
       }
     } catch (error) {
       console.error('Error fetching rental detail:', error);
-      Alert.alert('Error', 'Failed to load rental details');
-      navigation.goBack();
+      // Only show alert if no local data
+      if (!rental) {
+        Alert.alert('Error', 'Failed to load rental details');
+        navigation.goBack();
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    if (rentalId) {
+      fetchRentalDetail();
+    }
+  }, [rentalId, dbInitialized]);
+
+  // ── Handle Vote ──
   const handleVote = async (hasVacancy) => {
     if (!isAuthenticated) {
       Alert.alert(
@@ -106,6 +153,17 @@ const RentalDetail = ({ route, navigation }) => {
 
     try {
       setVotingLoading(true);
+      
+      // 1. Save vote locally first
+      if (dbInitialized) {
+        await RentalDbService.saveVote({
+          rentalId: rentalId,
+          userId: currentUser?._id,
+          hasVacancy: hasVacancy,
+        });
+      }
+      
+      // 2. Send to server
       const response = await axios.post(`${API_URL}/rentals/${rentalId}/vote`, {
         hasVacancy
       });
@@ -115,6 +173,7 @@ const RentalDetail = ({ route, navigation }) => {
           'Vote Submitted',
           `Thank you for voting that this rental is ${hasVacancy ? 'vacant' : 'occupied'}`
         );
+        // Refresh rental detail
         fetchRentalDetail();
       }
     } catch (error) {
@@ -128,6 +187,7 @@ const RentalDetail = ({ route, navigation }) => {
     }
   };
 
+  // ── Handle Inquiry ──
   const handleInquiry = async () => {
     if (!inquiryForm.userName.trim() || !inquiryForm.userWhatsApp.trim()) {
       Alert.alert('Error', 'Please fill in your name and WhatsApp number');
@@ -136,6 +196,18 @@ const RentalDetail = ({ route, navigation }) => {
 
     try {
       setInquiryLoading(true);
+      
+      // 1. Save inquiry locally first
+      if (dbInitialized) {
+        await RentalDbService.saveInquiry({
+          rentalId: rentalId,
+          userName: inquiryForm.userName.trim(),
+          userWhatsApp: inquiryForm.userWhatsApp.trim(),
+          message: inquiryForm.message.trim() || "I'm interested in this rental. Please provide more details.",
+        });
+      }
+      
+      // 2. Send to server
       const response = await axios.post(`${API_URL}/rentals/${rentalId}/inquire`, {
         userName: inquiryForm.userName.trim(),
         userWhatsApp: inquiryForm.userWhatsApp.trim(),
@@ -161,6 +233,7 @@ const RentalDetail = ({ route, navigation }) => {
     }
   };
 
+  // ── Open Location ──
   const openLocation = () => {
     if (rental.locationUrl) {
       Linking.openURL(rental.locationUrl).catch(() => {
@@ -169,6 +242,7 @@ const RentalDetail = ({ route, navigation }) => {
     }
   };
 
+  // ── Status Helpers ──
   const getVacancyStatusColor = (rental) => {
     if (rental.adminOverride?.isActive) {
       return rental.hasVacant ? RentalColors.success : RentalColors.error;
@@ -222,6 +296,7 @@ const RentalDetail = ({ route, navigation }) => {
     });
   };
 
+  // ── Render Image ──
   const renderImage = () => {
     if (!rental.imageUrl) {
       return (
@@ -258,7 +333,8 @@ const RentalDetail = ({ route, navigation }) => {
     );
   };
 
-  if (loading) {
+  // ── Loading State ──
+  if (loading && !rental) {
     return (
       <View style={styles.container}>
         <LinearGradient
@@ -278,6 +354,7 @@ const RentalDetail = ({ route, navigation }) => {
     );
   }
 
+  // ── Error State ──
   if (!rental) {
     return (
       <View style={styles.container}>
@@ -304,6 +381,7 @@ const RentalDetail = ({ route, navigation }) => {
     );
   }
 
+  // ─── Main Render ───
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={RentalColors.primary} />
@@ -337,7 +415,7 @@ const RentalDetail = ({ route, navigation }) => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Image Section with Gold Accent - Original dimensions preserved */}
+        {/* Image Section with Gold Accent */}
         <View style={styles.imageWrapper}>
           {renderImage()}
           <View style={styles.imageGoldAccent} />
@@ -412,7 +490,8 @@ const RentalDetail = ({ route, navigation }) => {
                   <Text style={styles.infoLabel}>Property Type</Text>
                   <Text style={styles.infoValue}>
                     {rental.type === 'bedsitter' ? 'Bedsitter' : 
-                     rental.type === 'one-bedroom' ? '1 Bedroom' : '2 Bedroom'}
+                     rental.type === '1bedroom' ? '1 Bedroom' : 
+                     rental.type === '2bedroom' ? '2 Bedroom' : rental.type}
                   </Text>
                 </View>
               </View>
@@ -538,10 +617,49 @@ const RentalDetail = ({ route, navigation }) => {
           </Animatable.View>
         )}
 
-        {/* Contact Tab - No direct calling, only inquiry */}
+        {/* Contact Tab */}
         {activeTab === 'contact' && (
           <Animatable.View animation="fadeIn" duration={300}>
+            {/* Contact Info Card */}
+            <LinearGradient
+              colors={[RentalColors.card, RentalColors.surface]}
+              style={styles.contactCard}
+            >
+              <Text style={styles.contactTitle}>Contact Information</Text>
+              
+              <View style={styles.contactInfoRow}>
+                <Ionicons name="location" size={18} color={RentalColors.gold} />
+                <Text style={styles.contactInfoLabel}>Location:</Text>
+                <Text style={styles.contactInfoValue}>{rental.location}</Text>
+              </View>
 
+              <View style={styles.contactInfoRow}>
+                <Ionicons name="home" size={18} color={RentalColors.gold} />
+                <Text style={styles.contactInfoLabel}>Property:</Text>
+                <Text style={styles.contactInfoValue}>{rental.name}</Text>
+              </View>
+
+              <View style={styles.contactInfoRow}>
+                <Ionicons name="cash" size={18} color={RentalColors.gold} />
+                <Text style={styles.contactInfoLabel}>Rent:</Text>
+                <Text style={styles.contactInfoValue}>KSh {rental.amount.toLocaleString()}/month</Text>
+              </View>
+
+              <View style={styles.contactInfoRow}>
+                <Ionicons name="information-circle" size={18} color={RentalColors.gold} />
+                <Text style={styles.contactInfoLabel}>Status:</Text>
+                <Text style={[styles.contactInfoValue, { color: getVacancyStatusColor(rental) }]}>
+                  {getVacancyStatusText(rental)}
+                </Text>
+              </View>
+
+              <View style={styles.inquiryNote}>
+                <Ionicons name="information-circle" size={18} color={RentalColors.gold} />
+                <Text style={styles.inquiryNoteText}>
+                  Send an inquiry below and the caretaker will contact you via WhatsApp.
+                </Text>
+              </View>
+            </LinearGradient>
 
             {/* Inquiry Button */}
             <TouchableOpacity
@@ -660,6 +778,7 @@ const RentalDetail = ({ route, navigation }) => {
   );
 };
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -774,7 +893,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 30,
   },
-  // Original image dimensions preserved
   imageWrapper: {
     position: 'relative',
     marginHorizontal: 16,
@@ -794,7 +912,7 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: '100%',
-    aspectRatio: 3.75, // Your original aspect ratio (750:200)
+    aspectRatio: 3.75,
     backgroundColor: RentalColors.surface,
   },
   rentalImage: {
@@ -822,7 +940,7 @@ const styles = StyleSheet.create({
   },
   placeholderImage: {
     width: '100%',
-    aspectRatio: 3.75, // Match your original aspect ratio
+    aspectRatio: 3.75,
     backgroundColor: RentalColors.surface,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1073,21 +1191,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: RentalColors.textSecondary,
     fontWeight: '500',
-  },
-  contactNumberContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
-    backgroundColor: RentalColors.background,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: RentalColors.gold + '20',
-  },
-  contactNumberText: {
-    fontSize: 14,
-    color: RentalColors.textSecondary,
+    flex: 1,
   },
   inquiryNote: {
     flexDirection: 'row',
@@ -1097,6 +1201,7 @@ const styles = StyleSheet.create({
     gap: 8,
     borderWidth: 1,
     borderColor: RentalColors.gold + '30',
+    marginTop: 8,
   },
   inquiryNoteText: {
     flex: 1,

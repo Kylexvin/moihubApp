@@ -1,3 +1,4 @@
+// screens/rentals/RentalHome.js
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -19,28 +20,28 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Animatable from 'react-native-animatable';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
+import RentalDbService from '../../services/RentalDbService';
 
 const { width } = Dimensions.get('window');
 const API_URL = 'http://192.168.100.10:5000/api';
 
-// Luxury Emerald Green color palette
 const RentalColors = {
-  primary: '#0A4D3C',      // Deep Emerald
-  secondary: '#1E7A5C',     // Medium Emerald
-  accent: '#C6A43F',        // Gold
-  highlight: '#E8C66A',     // Light Gold
-  success: '#2E8B57',       // Sea Green
-  warning: '#D4A017',       // Gold
-  error: '#B22222',         // Ruby Red
-  background: '#0C1F1A',    // Dark Forest
-  surface: '#1A332B',       // Deep Jungle
-  card: '#234D3C',          // Rich Emerald
-  text: '#FFFFFF',          // White
-  textSecondary: '#D4E6D0', // Mint Cream
-  textMuted: '#8BA89B',     // Sage
-  border: '#2C5E4A',        // Forest Border
-  gold: '#D4AF37',          // Pure Gold
-  goldLight: '#F1E6B0',     // Champagne
+  primary: '#0A4D3C',
+  secondary: '#1E7A5C',
+  accent: '#C6A43F',
+  highlight: '#E8C66A',
+  success: '#2E8B57',
+  warning: '#D4A017',
+  error: '#B22222',
+  background: '#0C1F1A',
+  surface: '#1A332B',
+  card: '#234D3C',
+  text: '#FFFFFF',
+  textSecondary: '#D4E6D0',
+  textMuted: '#8BA89B',
+  border: '#2C5E4A',
+  gold: '#D4AF37',
+  goldLight: '#F1E6B0',
 };
 
 const RentalHome = ({ navigation }) => {
@@ -58,8 +59,6 @@ const RentalHome = ({ navigation }) => {
     maxPrice: '',
     vacancyStatus: '',
   });
-  
-  // Filter states - actual applied filters
   const [filters, setFilters] = useState({
     location: '',
     type: '',
@@ -67,14 +66,14 @@ const RentalHome = ({ navigation }) => {
     maxPrice: '',
     vacancyStatus: '',
   });
-  
   const [pagination, setPagination] = useState({
     current: 1,
     pages: 1,
     total: 0
   });
+  const [dbInitialized, setDbInitialized] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
-  // Rental types and locations for filter dropdown - FIXED to match backend
   const rentalTypes = ['bedsitter', '1bedroom', '2bedroom'];
   const vacancyStatuses = [
     { label: 'All', value: '', icon: 'help-circle', color: RentalColors.textMuted },
@@ -83,23 +82,139 @@ const RentalHome = ({ navigation }) => {
     { label: 'Unverified', value: 'unverified', icon: 'help-circle-outline', color: RentalColors.textMuted }
   ];
 
+  // ── Initialize Database ──
   useEffect(() => {
-    fetchRentals();
+    const initDB = async () => {
+      let ready = false;
+      try {
+        await RentalDbService.init();
+        ready = true;
+        setDbInitialized(true);
+        console.log('✅ Rental DB ready');
+      } catch (error) {
+        console.error('DB init error:', error);
+        ready = false;
+        setDbInitialized(false);
+      }
+      // Pass the ready flag directly instead of relying on state,
+      // since setDbInitialized above hasn't re-rendered yet.
+      await loadData(1, ready);
+    };
+    initDB();
   }, []);
 
-  const fetchRentals = async (page = 1) => {
+  // ── Load Data ──
+  const loadData = async (page = 1, dbReady = dbInitialized) => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_URL}/rentals?page=${page}&limit=10`);
-      if (response.data.success) {
-        setRentals(response.data.data);
-        setPagination(response.data.pagination);
+
+      // 1. Try local DB first
+      let hasLocalData = false;
+      if (dbReady) {
+        try {
+          const localResult = await RentalDbService.getRentals(page, 10);
+          if (localResult?.data?.length > 0) {
+            setRentals(localResult.data);
+            setPagination(localResult.pagination);
+            hasLocalData = true;
+            setLoading(false);
+            setHasLoaded(true);
+            console.log('📱 Loaded from local DB');
+          }
+        } catch (e) {
+          console.log('No local data');
+        }
       }
+
+      // 2. Always fetch from server
+      try {
+        const response = await axios.get(`${API_URL}/rentals?page=${page}&limit=10`);
+        if (response.data.success) {
+          setRentals(response.data.data);
+          setPagination(response.data.pagination);
+          setHasLoaded(true);
+          // Save to local DB
+          if (dbReady) {
+            await RentalDbService.saveRentals(response.data.data);
+            console.log('✅ Saved to local DB');
+          }
+        }
+      } catch (serverError) {
+        console.log('Server error, using cached data');
+        if (!hasLocalData) {
+          Alert.alert('Error', 'Failed to load rentals');
+        }
+      }
+
     } catch (error) {
-      console.error('Error fetching rentals:', error);
+      console.error('Load error:', error);
       Alert.alert('Error', 'Failed to load rentals');
     } finally {
       setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // ── Search ──
+  const searchRentals = async (query = '', appliedFilters = {}, page = 1) => {
+    if (!query.trim() && Object.keys(appliedFilters).length === 0) {
+      loadData(page, dbInitialized);
+      return;
+    }
+
+    let hasLocalResults = false;
+
+    try {
+      setIsSearching(true);
+
+      // 1. Try local search
+      if (dbInitialized && query.trim()) {
+        try {
+          const localResult = await RentalDbService.getRentals(1, 1000);
+          if (localResult?.data?.length > 0) {
+            const filtered = localResult.data.filter(r => {
+              const matchLocation = (r.location || '').toLowerCase().includes(query.toLowerCase());
+              const matchName = (r.name || '').toLowerCase().includes(query.toLowerCase());
+              return matchLocation || matchName;
+            });
+            if (filtered.length > 0) {
+              setRentals(filtered);
+              hasLocalResults = true;
+              setIsSearching(false);
+              console.log('📱 Local search results');
+            }
+          }
+        } catch (e) {
+          console.log('Local search failed');
+        }
+      }
+
+      // 2. Search from server
+      const params = { page, limit: 10 };
+      if (query && query.trim()) params.q = query.trim();
+      Object.keys(appliedFilters).forEach(key => {
+        const value = appliedFilters[key];
+        if (value !== undefined && value.toString().trim() !== '') {
+          params[key] = value;
+        }
+      });
+
+      const response = await axios.get(`${API_URL}/rentals/search`, { params });
+      if (response.data.success) {
+        setRentals(response.data.data);
+        setPagination(response.data.pagination);
+        if (dbInitialized) {
+          await RentalDbService.saveRentals(response.data.data);
+        }
+      }
+
+    } catch (error) {
+      console.error('Search error:', error);
+      if (!hasLocalResults) {
+        Alert.alert('Error', error.response?.data?.message || 'Search failed');
+      }
+    } finally {
+      setIsSearching(false);
     }
   };
 
@@ -113,153 +228,59 @@ const RentalHome = ({ navigation }) => {
     return activeFilters;
   };
 
-  const searchRentals = async (query = '', appliedFilters = {}, page = 1) => {
-    // If no search query and no filters, fetch regular rentals
-    if (!query.trim() && Object.keys(appliedFilters).length === 0) {
-      fetchRentals(page);
-      return;
-    }
-
-    try {
-      setIsSearching(true);
-
-      const params = {
-        page,
-        limit: 10,
-      };
-
-      if (query && query.trim()) {
-        params.q = query.trim();
-      }
-
-      // Add filters directly - they should already match backend expectations
-      Object.keys(appliedFilters).forEach(key => {
-        const value = appliedFilters[key];
-        if (value !== undefined && value.toString().trim() !== '') {
-          params[key] = value;
-        }
-      });
-
-      console.log('🔍 Search params:', params);
-
-      const response = await axios.get(`${API_URL}/rentals/search`, { params });
-
-      if (response.data.success) {
-        setRentals(response.data.data);
-        setPagination(response.data.pagination);
-      }
-
-    } catch (error) {
-      console.error('Search error:', error);
-      Alert.alert('Error', error.response?.data?.message || 'Search failed');
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
   const handlePageChange = async (newPage) => {
     if (newPage < 1 || newPage > pagination.pages) return;
-    
-    try {
-      setLoading(true);
-      
-      const activeFilters = getActiveFilters();
-      const hasSearchOrFilters = searchQuery.trim() || Object.keys(activeFilters).length > 0;
-      
-      if (hasSearchOrFilters) {
-        await searchRentals(searchQuery, activeFilters, newPage);
-      } else {
-        await fetchRentals(newPage);
-      }
-    } catch (error) {
-      console.error('Error changing page:', error);
-      Alert.alert('Error', 'Failed to load page');
-    } finally {
-      setLoading(false);
+    const activeFilters = getActiveFilters();
+    const hasSearchOrFilters = searchQuery.trim() || Object.keys(activeFilters).length > 0;
+    if (hasSearchOrFilters) {
+      await searchRentals(searchQuery, activeFilters, newPage);
+    } else {
+      await loadData(newPage, dbInitialized);
     }
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
     setSearchQuery('');
-    setFilters({
-      location: '',
-      type: '',
-      minPrice: '',
-      maxPrice: '',
-      vacancyStatus: '',
-    });
-    setTempFilters({
-      location: '',
-      type: '',
-      minPrice: '',
-      maxPrice: '',
-      vacancyStatus: '',
-    });
-    await fetchRentals();
+    setFilters({ location: '', type: '', minPrice: '', maxPrice: '', vacancyStatus: '' });
+    setTempFilters({ location: '', type: '', minPrice: '', maxPrice: '', vacancyStatus: '' });
+    await loadData(1, dbInitialized);
     setRefreshing(false);
   };
 
-  const handleSearch = (text) => {
-    setSearchQuery(text);
-    // Don't search immediately - user can press search button or we can debounce
-  };
-
+  const handleSearch = (text) => setSearchQuery(text);
   const handleSearchSubmit = () => {
     const activeFilters = getActiveFilters();
     searchRentals(searchQuery, activeFilters);
   };
 
   const openFilterModal = () => {
-    // Initialize temp filters with current filters
     setTempFilters({ ...filters });
     setShowFilterModal(true);
   };
 
   const applyFilters = () => {
-    // Apply the temp filters to actual filters
     setFilters({ ...tempFilters });
     setShowFilterModal(false);
-    
-    // Perform search with new filters
     const activeFilters = {};
     Object.keys(tempFilters).forEach(key => {
       if (tempFilters[key] && tempFilters[key].toString().trim() !== '') {
         activeFilters[key] = tempFilters[key];
       }
     });
-    
     searchRentals(searchQuery, activeFilters);
   };
 
   const resetFilters = () => {
-    setTempFilters({
-      location: '',
-      type: '',
-      minPrice: '',
-      maxPrice: '',
-      vacancyStatus: '',
-    });
+    setTempFilters({ location: '', type: '', minPrice: '', maxPrice: '', vacancyStatus: '' });
   };
 
   const clearAllFilters = () => {
     setSearchQuery('');
-    setFilters({
-      location: '',
-      type: '',
-      minPrice: '',
-      maxPrice: '',
-      vacancyStatus: '',
-    });
-    setTempFilters({
-      location: '',
-      type: '',
-      minPrice: '',
-      maxPrice: '',
-      vacancyStatus: '',
-    });
+    setFilters({ location: '', type: '', minPrice: '', maxPrice: '', vacancyStatus: '' });
+    setTempFilters({ location: '', type: '', minPrice: '', maxPrice: '', vacancyStatus: '' });
     setShowFilterModal(false);
-    fetchRentals();
+    loadData(1, dbInitialized);
   };
 
   const clearSearch = () => {
@@ -268,104 +289,66 @@ const RentalHome = ({ navigation }) => {
     if (Object.keys(activeFilters).length > 0) {
       searchRentals('', activeFilters);
     } else {
-      fetchRentals();
+      loadData(1, dbInitialized);
     }
   };
 
   const handleCreateRental = () => {
     if (!isAuthenticated) {
-      Alert.alert(
-        'Authentication Required',
-        'Please log in to create a rental listing',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Login', onPress: () => navigation.navigate('Login') }
-        ]
-      );
+      Alert.alert('Authentication Required', 'Please log in to create a rental listing', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Login', onPress: () => navigation.navigate('Login') }
+      ]);
       return;
     }
     navigation.navigate('CreateRental');
   };
 
-  // FIXED: Get vacancy status based on backend data
+  // ── Status Helpers ──
   const getVacancyStatusColor = (rental) => {
-    // Check admin override first
     if (rental.adminOverride?.isActive) {
       return rental.hasVacant ? RentalColors.success : RentalColors.error;
     }
-    
-    // Check verified status from backend
-    if (rental.vacancyStatus === 'verified_vacant') {
-      return RentalColors.success;
-    }
-    if (rental.vacancyStatus === 'verified_occupied') {
-      return RentalColors.error;
-    }
-    
-    // Check community votes
+    if (rental.vacancyStatus === 'verified_vacant') return RentalColors.success;
+    if (rental.vacancyStatus === 'verified_occupied') return RentalColors.error;
     if (rental.voteStats?.totalVotes > 0) {
       const vacantRatio = rental.voteStats.vacantVotes / rental.voteStats.totalVotes;
       if (vacantRatio > 0.6) return RentalColors.success;
       if (vacantRatio < 0.4) return RentalColors.error;
       return RentalColors.warning;
     }
-    
-    // Unverified
     return RentalColors.textMuted;
   };
 
-  // FIXED: Get status text based on backend data
   const getVacancyStatusText = (rental) => {
-    // Check admin override first
     if (rental.adminOverride?.isActive) {
       return rental.hasVacant ? 'Available (Admin)' : 'Occupied (Admin)';
     }
-    
-    // Check verified status from backend
-    if (rental.vacancyStatus === 'verified_vacant') {
-      return 'Verified Vacant';
-    }
-    if (rental.vacancyStatus === 'verified_occupied') {
-      return 'Verified Occupied';
-    }
-    
-    // Check community votes
+    if (rental.vacancyStatus === 'verified_vacant') return 'Verified Vacant';
+    if (rental.vacancyStatus === 'verified_occupied') return 'Verified Occupied';
     if (rental.voteStats?.totalVotes > 0) {
       const vacantRatio = rental.voteStats.vacantVotes / rental.voteStats.totalVotes;
       if (vacantRatio > 0.6) return 'Likely Vacant';
       if (vacantRatio < 0.4) return 'Likely Occupied';
       return 'Disputed';
     }
-    
-    // Unverified
     return 'Unverified';
   };
 
   const getStatusIcon = (rental) => {
-    if (rental.adminOverride?.isActive) {
-      return rental.hasVacant ? 'shield-checkmark' : 'shield-checkmark';
-    }
-    
-    if (rental.vacancyStatus === 'verified_vacant') {
-      return 'checkmark-circle';
-    }
-    if (rental.vacancyStatus === 'verified_occupied') {
-      return 'close-circle';
-    }
-    
+    if (rental.adminOverride?.isActive) return 'shield-checkmark';
+    if (rental.vacancyStatus === 'verified_vacant') return 'checkmark-circle';
+    if (rental.vacancyStatus === 'verified_occupied') return 'close-circle';
     if (rental.voteStats?.totalVotes > 0) {
       const vacantRatio = rental.voteStats.vacantVotes / rental.voteStats.totalVotes;
       if (vacantRatio > 0.6) return 'checkmark-circle-outline';
       if (vacantRatio < 0.4) return 'close-circle-outline';
       return 'help-circle-outline';
     }
-    
     return 'help-circle-outline';
   };
 
-  // FIXED: Show appropriate status info based on backend data
   const renderStatusInfo = (rental) => {
-    // Admin override case
     if (rental.adminOverride?.isActive) {
       return (
         <View style={styles.statusInfo}>
@@ -373,19 +356,11 @@ const RentalHome = ({ navigation }) => {
             <Ionicons name="shield-checkmark" size={14} color={RentalColors.gold} />
             <Text style={[styles.statusInfoText, { color: RentalColors.gold }]}>Admin Verified</Text>
           </View>
-          <Text style={styles.statusInfoDetail}>
-            {new Date(rental.adminOverride.timestamp).toLocaleDateString()}
-          </Text>
-          {rental.adminOverride.reason && (
-            <Text style={styles.statusInfoDetail}>
-              {rental.adminOverride.reason}
-            </Text>
-          )}
+          <Text style={styles.statusInfoDetail}>{new Date(rental.adminOverride.timestamp).toLocaleDateString()}</Text>
+          {rental.adminOverride.reason && <Text style={styles.statusInfoDetail}>{rental.adminOverride.reason}</Text>}
         </View>
       );
     }
-    
-    // Backend verified status
     if (rental.vacancyStatus === 'verified_vacant' || rental.vacancyStatus === 'verified_occupied') {
       return (
         <View style={styles.statusInfo}>
@@ -393,14 +368,10 @@ const RentalHome = ({ navigation }) => {
             <Ionicons name="checkmark-done-circle" size={14} color={RentalColors.gold} />
             <Text style={[styles.statusInfoText, { color: RentalColors.gold }]}>System Verified</Text>
           </View>
-          <Text style={styles.statusInfoDetail}>
-            Status has been verified by the system
-          </Text>
+          <Text style={styles.statusInfoDetail}>Status has been verified by the system</Text>
         </View>
       );
     }
-    
-    // Community votes case
     if (rental.voteStats?.totalVotes > 0) {
       const vacantRatio = rental.voteStats.vacantVotes / rental.voteStats.totalVotes;
       return (
@@ -409,113 +380,68 @@ const RentalHome = ({ navigation }) => {
             <Ionicons name="people" size={14} color={RentalColors.accent} />
             <Text style={[styles.statusInfoText, { color: RentalColors.accent }]}>Community Votes</Text>
           </View>
-          <Text style={styles.statusInfoDetail}>
-            {rental.voteStats.vacantVotes} vacant • {rental.voteStats.occupiedVotes} occupied
-          </Text>
-          <Text style={styles.statusInfoDetail}>
-            {Math.round(Math.max(vacantRatio, 1 - vacantRatio) * 100)}% confidence
-          </Text>
-          <TouchableOpacity 
-            style={styles.voteButton}
-            onPress={() => navigation.navigate('RentalDetail', { rentalId: rental._id })}
-          >
+          <Text style={styles.statusInfoDetail}>{rental.voteStats.vacantVotes} vacant • {rental.voteStats.occupiedVotes} occupied</Text>
+          <Text style={styles.statusInfoDetail}>{Math.round(Math.max(vacantRatio, 1 - vacantRatio) * 100)}% confidence</Text>
+          <TouchableOpacity style={styles.voteButton} onPress={() => navigation.navigate('RentalDetail', { rentalId: rental._id })}>
             <Text style={styles.voteButtonText}>Cast Your Vote →</Text>
           </TouchableOpacity>
         </View>
       );
     }
-    
-    // Unverified - show vote prompt
     return (
       <View style={styles.statusInfo}>
         <View style={styles.statusHeader}>
           <Ionicons name="help-circle" size={14} color={RentalColors.textMuted} />
           <Text style={[styles.statusInfoText, { color: RentalColors.textMuted }]}>Unverified</Text>
         </View>
-        <Text style={styles.statusInfoDetail}>
-          No votes yet. Be the first to report vacancy status!
-        </Text>
-        <TouchableOpacity 
-          style={styles.voteButton}
-          onPress={() => navigation.navigate('RentalDetail', { rentalId: rental._id })}
-        >
+        <Text style={styles.statusInfoDetail}>No votes yet. Be the first to report!</Text>
+        <TouchableOpacity style={styles.voteButton} onPress={() => navigation.navigate('RentalDetail', { rentalId: rental._id })}>
           <Text style={styles.voteButtonText}>Vote Now →</Text>
         </TouchableOpacity>
       </View>
     );
   };
 
+  // ─── Render ───
   const renderRentalItem = ({ item, index }) => (
-    <Animatable.View 
-      animation="fadeInUp" 
-      delay={index * 100}
-      duration={600}
-    >
+    <Animatable.View animation="fadeInUp" delay={index * 100} duration={600}>
       <TouchableOpacity
         style={styles.rentalCard}
         onPress={() => navigation.navigate('RentalDetail', { rentalId: item._id })}
         activeOpacity={0.9}
       >
-        <LinearGradient
-          colors={[RentalColors.card, RentalColors.surface]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.cardGradient}
-        >
-          {/* Gold Accent Line */}
+        <LinearGradient colors={[RentalColors.card, RentalColors.surface]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardGradient}>
           <View style={styles.goldAccent} />
-          
-          {/* Decorative Pattern */}
           <View style={styles.cardPattern}>
             <Text style={styles.patternIcon}>👑</Text>
             <Text style={styles.patternIcon}>✨</Text>
           </View>
-
           <View style={styles.cardHeader}>
             <View style={styles.titleContainer}>
               <Ionicons name="home" size={20} color={RentalColors.gold} />
               <Text style={styles.rentalName}>{item.name}</Text>
             </View>
-            <View style={[
-              styles.statusBadge,
-              { backgroundColor: getVacancyStatusColor(item) + '20' }
-            ]}>
-              <Ionicons 
-                name={getStatusIcon(item)} 
-                size={12} 
-                color={getVacancyStatusColor(item)} 
-              />
-              <Text style={[styles.statusText, { color: getVacancyStatusColor(item) }]}>
-                {getVacancyStatusText(item)}
-              </Text>
+            <View style={[styles.statusBadge, { backgroundColor: getVacancyStatusColor(item) + '20' }]}>
+              <Ionicons name={getStatusIcon(item)} size={12} color={getVacancyStatusColor(item)} />
+              <Text style={[styles.statusText, { color: getVacancyStatusColor(item) }]}>{getVacancyStatusText(item)}</Text>
             </View>
           </View>
-
           <View style={styles.cardContent}>
             <View style={styles.infoRow}>
               <Ionicons name="location-outline" size={16} color={RentalColors.gold} />
               <Text style={styles.infoText}>{item.location}</Text>
             </View>
-
             <View style={styles.infoRow}>
               <Ionicons name="home-outline" size={16} color={RentalColors.gold} />
-              <Text style={styles.infoText}>
-                {item.type === 'bedsitter' ? 'Bedsitter' : 
-                 item.type === '1bedroom' ? '1 Bedroom' : 
-                 item.type === '2bedroom' ? '2 Bedroom' : item.type}
-              </Text>
+              <Text style={styles.infoText}>{item.type === 'bedsitter' ? 'Bedsitter' : item.type === '1bedroom' ? '1 Bedroom' : item.type === '2bedroom' ? '2 Bedroom' : item.type}</Text>
             </View>
-
             <View style={styles.priceRow}>
               <Ionicons name="cash-outline" size={20} color={RentalColors.gold} />
               <Text style={styles.priceText}>KSh {item.amount.toLocaleString()}</Text>
               <Text style={styles.perMonthText}>/month</Text>
             </View>
-
             {renderStatusInfo(item)}
           </View>
-
-          {/* Gold Glow Effect */}
           <View style={styles.goldGlow} />
         </LinearGradient>
       </TouchableOpacity>
@@ -524,78 +450,29 @@ const RentalHome = ({ navigation }) => {
 
   const renderPaginationControls = () => {
     if (pagination.total === 0) return null;
-
     const canGoPrev = pagination.current > 1;
     const canGoNext = pagination.current < pagination.pages;
     const startItem = ((pagination.current - 1) * 10) + 1;
     const endItem = Math.min(pagination.current * 10, pagination.total);
-
     return (
       <Animatable.View animation="fadeInUp" duration={500} style={styles.paginationContainer}>
-        <LinearGradient
-          colors={[RentalColors.surface, RentalColors.card]}
-          style={styles.paginationGradient}
-        >
+        <LinearGradient colors={[RentalColors.surface, RentalColors.card]} style={styles.paginationGradient}>
           <View style={styles.paginationInfo}>
-            <Text style={styles.paginationText}>
-              {startItem}-{endItem} of {pagination.total} listings
-            </Text>
-            <Text style={styles.paginationPageText}>
-              Page {pagination.current} of {pagination.pages}
-            </Text>
+            <Text style={styles.paginationText}>{startItem}-{endItem} of {pagination.total} listings</Text>
+            <Text style={styles.paginationPageText}>Page {pagination.current} of {pagination.pages}</Text>
           </View>
-          
           {pagination.pages > 1 && (
             <View style={styles.paginationControls}>
-              <TouchableOpacity
-                style={[
-                  styles.paginationButton,
-                  !canGoPrev && styles.paginationButtonDisabled
-                ]}
-                onPress={() => handlePageChange(pagination.current - 1)}
-                disabled={!canGoPrev || loading}
-              >
-                <LinearGradient
-                  colors={canGoPrev ? [RentalColors.primary, RentalColors.secondary] : [RentalColors.border, RentalColors.surface]}
-                  style={styles.paginationButtonGradient}
-                >
-                  <Ionicons 
-                    name="chevron-back" 
-                    size={16} 
-                    color={canGoPrev ? RentalColors.gold : RentalColors.textMuted} 
-                  />
-                  <Text style={[
-                    styles.paginationButtonText,
-                    !canGoPrev && styles.paginationButtonTextDisabled
-                  ]}>
-                    Prev
-                  </Text>
+              <TouchableOpacity style={[styles.paginationButton, !canGoPrev && styles.paginationButtonDisabled]} onPress={() => handlePageChange(pagination.current - 1)} disabled={!canGoPrev || loading}>
+                <LinearGradient colors={canGoPrev ? [RentalColors.primary, RentalColors.secondary] : [RentalColors.border, RentalColors.surface]} style={styles.paginationButtonGradient}>
+                  <Ionicons name="chevron-back" size={16} color={canGoPrev ? RentalColors.gold : RentalColors.textMuted} />
+                  <Text style={[styles.paginationButtonText, !canGoPrev && styles.paginationButtonTextDisabled]}>Prev</Text>
                 </LinearGradient>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.paginationButton,
-                  !canGoNext && styles.paginationButtonDisabled
-                ]}
-                onPress={() => handlePageChange(pagination.current + 1)}
-                disabled={!canGoNext || loading}
-              >
-                <LinearGradient
-                  colors={canGoNext ? [RentalColors.primary, RentalColors.secondary] : [RentalColors.border, RentalColors.surface]}
-                  style={styles.paginationButtonGradient}
-                >
-                  <Text style={[
-                    styles.paginationButtonText,
-                    !canGoNext && styles.paginationButtonTextDisabled
-                  ]}>
-                    Next
-                  </Text>
-                  <Ionicons 
-                    name="chevron-forward" 
-                    size={16} 
-                    color={canGoNext ? RentalColors.gold : RentalColors.textMuted} 
-                  />
+              <TouchableOpacity style={[styles.paginationButton, !canGoNext && styles.paginationButtonDisabled]} onPress={() => handlePageChange(pagination.current + 1)} disabled={!canGoNext || loading}>
+                <LinearGradient colors={canGoNext ? [RentalColors.primary, RentalColors.secondary] : [RentalColors.border, RentalColors.surface]} style={styles.paginationButtonGradient}>
+                  <Text style={[styles.paginationButtonText, !canGoNext && styles.paginationButtonTextDisabled]}>Next</Text>
+                  <Ionicons name="chevron-forward" size={16} color={canGoNext ? RentalColors.gold : RentalColors.textMuted} />
                 </LinearGradient>
               </TouchableOpacity>
             </View>
@@ -606,140 +483,60 @@ const RentalHome = ({ navigation }) => {
   };
 
   const renderFilterModal = () => (
-    <Modal
-      visible={showFilterModal}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={() => setShowFilterModal(false)}
-    >
+    <Modal visible={showFilterModal} animationType="slide" transparent={true} onRequestClose={() => setShowFilterModal(false)}>
       <View style={styles.modalOverlay}>
         <Animatable.View animation="slideInUp" duration={300} style={styles.modalContent}>
-          <LinearGradient
-            colors={[RentalColors.surface, RentalColors.card]}
-            style={styles.modalGradient}
-          >
-            {/* Header - Fixed at top */}
+          <LinearGradient colors={[RentalColors.surface, RentalColors.card]} style={styles.modalGradient}>
             <View style={styles.modalHeader}>
               <View style={styles.modalTitleContainer}>
                 <Ionicons name="options-outline" size={24} color={RentalColors.gold} />
                 <Text style={styles.modalTitle}>Filter Rentals</Text>
               </View>
-              <TouchableOpacity 
-                style={styles.modalCloseButton}
-                onPress={() => setShowFilterModal(false)}
-              >
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowFilterModal(false)}>
                 <Ionicons name="close" size={24} color={RentalColors.textSecondary} />
               </TouchableOpacity>
             </View>
-
-            {/* Scrollable Content - Takes remaining space */}
-            <ScrollView 
-              style={styles.modalScrollView}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.modalScrollContent}
-            >
-              {/* Location Filter */}
+            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScrollContent}>
               <View style={styles.filterSection}>
                 <Text style={styles.filterLabel}>Location</Text>
                 <View style={styles.filterInputContainer}>
                   <Ionicons name="location-outline" size={18} color={RentalColors.gold} />
-                  <TextInput
-                    style={styles.filterInput}
-                    placeholder="e.g., Stage, Chebarus"
-                    placeholderTextColor={RentalColors.textMuted}
-                    value={tempFilters.location}
-                    onChangeText={(text) => setTempFilters({ ...tempFilters, location: text })}
-                  />
+                  <TextInput style={styles.filterInput} placeholder="e.g., Stage, Chebarus" placeholderTextColor={RentalColors.textMuted} value={tempFilters.location} onChangeText={(text) => setTempFilters({ ...tempFilters, location: text })} />
                 </View>
               </View>
-
-              {/* Type Filter - FIXED to match backend */}
               <View style={styles.filterSection}>
                 <Text style={styles.filterLabel}>Property Type</Text>
                 <View style={styles.typeOptions}>
                   {rentalTypes.map((type) => (
-                    <TouchableOpacity
-                      key={type}
-                      style={[
-                        styles.typeOption,
-                        tempFilters.type === type && styles.selectedTypeOption
-                      ]}
-                      onPress={() => setTempFilters({ ...tempFilters, type: tempFilters.type === type ? '' : type })}
-                    >
-                      <Text style={[
-                        styles.typeOptionText,
-                        tempFilters.type === type && styles.selectedTypeOptionText
-                      ]}>
-                        {type === 'bedsitter' ? 'Bedsitter' : 
-                         type === '1bedroom' ? '1 Bedroom' : 
-                         type === '2bedroom' ? '2 Bedroom' : type}
-                      </Text>
+                    <TouchableOpacity key={type} style={[styles.typeOption, tempFilters.type === type && styles.selectedTypeOption]} onPress={() => setTempFilters({ ...tempFilters, type: tempFilters.type === type ? '' : type })}>
+                      <Text style={[styles.typeOptionText, tempFilters.type === type && styles.selectedTypeOptionText]}>{type === 'bedsitter' ? 'Bedsitter' : type === '1bedroom' ? '1 Bedroom' : type === '2bedroom' ? '2 Bedroom' : type}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
-
-              {/* Price Range Filter */}
               <View style={styles.filterSection}>
                 <Text style={styles.filterLabel}>Price Range (KSh)</Text>
                 <View style={styles.priceRange}>
                   <View style={styles.priceInputContainer}>
-                    <TextInput
-                      style={styles.priceInput}
-                      placeholder="Min"
-                      placeholderTextColor={RentalColors.textMuted}
-                      value={tempFilters.minPrice}
-                      onChangeText={(text) => setTempFilters({ ...tempFilters, minPrice: text })}
-                      keyboardType="numeric"
-                    />
+                    <TextInput style={styles.priceInput} placeholder="Min" placeholderTextColor={RentalColors.textMuted} value={tempFilters.minPrice} onChangeText={(text) => setTempFilters({ ...tempFilters, minPrice: text })} keyboardType="numeric" />
                   </View>
                   <Text style={styles.priceSeparator}>-</Text>
                   <View style={styles.priceInputContainer}>
-                    <TextInput
-                      style={styles.priceInput}
-                      placeholder="Max"
-                      placeholderTextColor={RentalColors.textMuted}
-                      value={tempFilters.maxPrice}
-                      onChangeText={(text) => setTempFilters({ ...tempFilters, maxPrice: text })}
-                      keyboardType="numeric"
-                    />
+                    <TextInput style={styles.priceInput} placeholder="Max" placeholderTextColor={RentalColors.textMuted} value={tempFilters.maxPrice} onChangeText={(text) => setTempFilters({ ...tempFilters, maxPrice: text })} keyboardType="numeric" />
                   </View>
                 </View>
               </View>
-
-              {/* Vacancy Status Filter */}
               <View style={styles.filterSection}>
                 <Text style={styles.filterLabel}>Vacancy Status</Text>
                 <View style={styles.statusOptions}>
                   {vacancyStatuses.map((status) => (
-                    <TouchableOpacity
-                      key={status.value}
-                      style={[
-                        styles.statusOption,
-                        tempFilters.vacancyStatus === status.value && styles.selectedStatusOption
-                      ]}
-                      onPress={() => setTempFilters({ 
-                        ...tempFilters, 
-                        vacancyStatus: tempFilters.vacancyStatus === status.value ? '' : status.value 
-                      })}
-                    >
-                      <Ionicons 
-                        name={status.icon} 
-                        size={16} 
-                        color={status.color} 
-                      />
-                      <Text style={[
-                        styles.statusOptionText,
-                        tempFilters.vacancyStatus === status.value && styles.selectedStatusOptionText
-                      ]}>
-                        {status.label}
-                      </Text>
+                    <TouchableOpacity key={status.value} style={[styles.statusOption, tempFilters.vacancyStatus === status.value && styles.selectedStatusOption]} onPress={() => setTempFilters({ ...tempFilters, vacancyStatus: tempFilters.vacancyStatus === status.value ? '' : status.value })}>
+                      <Ionicons name={status.icon} size={16} color={status.color} />
+                      <Text style={[styles.statusOptionText, tempFilters.vacancyStatus === status.value && styles.selectedStatusOptionText]}>{status.label}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
-
-              {/* Selected Filters Display - FIXED type mapping */}
               {Object.keys(tempFilters).filter(key => tempFilters[key] && tempFilters[key].toString().trim() !== '').length > 0 && (
                 <View style={styles.filterSection}>
                   <Text style={styles.filterLabel}>Selected Filters</Text>
@@ -748,22 +545,8 @@ const RentalHome = ({ navigation }) => {
                       if (!value || value.toString().trim() === '') return null;
                       return (
                         <View key={key} style={styles.activeFilter}>
-                          <Text style={styles.activeFilterText}>
-                            {key === 'type' 
-                              ? (value === 'bedsitter' ? 'Bedsitter' : 
-                                 value === '1bedroom' ? '1 Bedroom' : 
-                                 value === '2bedroom' ? '2 Bedroom' : value)
-                              : key === 'vacancyStatus' 
-                                ? vacancyStatuses.find(s => s.value === value)?.label || value
-                                : key === 'minPrice' || key === 'maxPrice'
-                                  ? `${key === 'minPrice' ? 'Min' : 'Max'}: KSh ${value}`
-                                  : `${key}: ${value}`
-                            }
-                          </Text>
-                          <TouchableOpacity
-                            onPress={() => setTempFilters({ ...tempFilters, [key]: '' })}
-                            style={styles.removeFilter}
-                          >
+                          <Text style={styles.activeFilterText}>{key === 'type' ? (value === 'bedsitter' ? 'Bedsitter' : value === '1bedroom' ? '1 Bedroom' : value === '2bedroom' ? '2 Bedroom' : value) : key === 'vacancyStatus' ? vacancyStatuses.find(s => s.value === value)?.label || value : key === 'minPrice' || key === 'maxPrice' ? `${key === 'minPrice' ? 'Min' : 'Max'}: KSh ${value}` : `${key}: ${value}`}</Text>
+                          <TouchableOpacity onPress={() => setTempFilters({ ...tempFilters, [key]: '' })} style={styles.removeFilter}>
                             <Ionicons name="close-circle" size={16} color={RentalColors.textMuted} />
                           </TouchableOpacity>
                         </View>
@@ -773,23 +556,10 @@ const RentalHome = ({ navigation }) => {
                 </View>
               )}
             </ScrollView>
-
-            {/* Footer with buttons - Fixed at bottom */}
             <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.resetButton}
-                onPress={resetFilters}
-              >
-                <Text style={styles.resetButtonText}>Reset</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.applyButton}
-                onPress={applyFilters}
-              >
-                <LinearGradient
-                  colors={[RentalColors.primary, RentalColors.secondary]}
-                  style={styles.applyButtonGradient}
-                >
+              <TouchableOpacity style={styles.resetButton} onPress={resetFilters}><Text style={styles.resetButtonText}>Reset</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.applyButton} onPress={applyFilters}>
+                <LinearGradient colors={[RentalColors.primary, RentalColors.secondary]} style={styles.applyButtonGradient}>
                   <Ionicons name="checkmark" size={18} color={RentalColors.gold} />
                   <Text style={styles.applyButtonText}>Apply Filters</Text>
                 </LinearGradient>
@@ -801,13 +571,11 @@ const RentalHome = ({ navigation }) => {
     </Modal>
   );
 
-  if (loading && !refreshing) {
+  // ─── Loading ───
+  if (loading && !hasLoaded) {
     return (
       <View style={styles.container}>
-        <LinearGradient
-          colors={[RentalColors.background, RentalColors.surface]}
-          style={StyleSheet.absoluteFill}
-        />
+        <LinearGradient colors={[RentalColors.background, RentalColors.surface]} style={StyleSheet.absoluteFill} />
         <View style={styles.loadingContainer}>
           <Animatable.View animation="pulse" iterationCount="infinite">
             <View style={styles.loadingIcon}>
@@ -821,132 +589,60 @@ const RentalHome = ({ navigation }) => {
     );
   }
 
+  // ─── Main ───
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={RentalColors.primary} />
-      
-      <LinearGradient
-        colors={[RentalColors.background, RentalColors.surface]}
-        style={StyleSheet.absoluteFill}
-      />
-
-      {/* Floating Gold Icons */}
+      <LinearGradient colors={[RentalColors.background, RentalColors.surface]} style={StyleSheet.absoluteFill} />
       <View style={styles.floatingIcons}>
         <Text style={[styles.floatingIcon, styles.icon1]}>👑</Text>
         <Text style={[styles.floatingIcon, styles.icon2]}>✨</Text>
         <Text style={[styles.floatingIcon, styles.icon3]}>🏰</Text>
         <Text style={[styles.floatingIcon, styles.icon4]}>💎</Text>
       </View>
-
-      {/* Search Bar */}
       <View style={styles.searchContainer}>
-        <LinearGradient
-          colors={[RentalColors.card, RentalColors.surface]}
-          style={styles.searchBar}
-        >
+        <LinearGradient colors={[RentalColors.card, RentalColors.surface]} style={styles.searchBar}>
           <Ionicons name="search-outline" size={20} color={RentalColors.gold} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by location or name..."
-            placeholderTextColor={RentalColors.textMuted}
-            value={searchQuery}
-            onChangeText={handleSearch}
-            onSubmitEditing={handleSearchSubmit}
-            returnKeyType="search"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={clearSearch} style={styles.clearButton}>
-              <Ionicons name="close-circle" size={20} color={RentalColors.textMuted} />
-            </TouchableOpacity>
-          )}
-          {isSearching && (
-            <ActivityIndicator size="small" color={RentalColors.gold} />
-          )}
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              Object.keys(getActiveFilters()).length > 0 && styles.filterButtonActive
-            ]}
-            onPress={openFilterModal}
-          >
+          <TextInput style={styles.searchInput} placeholder="Search by location or name..." placeholderTextColor={RentalColors.textMuted} value={searchQuery} onChangeText={handleSearch} onSubmitEditing={handleSearchSubmit} returnKeyType="search" />
+          {searchQuery.length > 0 && <TouchableOpacity onPress={clearSearch} style={styles.clearButton}><Ionicons name="close-circle" size={20} color={RentalColors.textMuted} /></TouchableOpacity>}
+          {isSearching && <ActivityIndicator size="small" color={RentalColors.gold} />}
+          <TouchableOpacity style={[styles.filterButton, Object.keys(getActiveFilters()).length > 0 && styles.filterButtonActive]} onPress={openFilterModal}>
             <Ionicons name="options-outline" size={20} color={RentalColors.gold} />
             {Object.keys(getActiveFilters()).length > 0 && (
               <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>
-                  {Object.keys(getActiveFilters()).length}
-                </Text>
+                <Text style={styles.filterBadgeText}>{Object.keys(getActiveFilters()).length}</Text>
               </View>
             )}
           </TouchableOpacity>
         </LinearGradient>
       </View>
-
-      {/* Search Results Info */}
       {(searchQuery || Object.keys(getActiveFilters()).length > 0) && (
         <Animatable.View animation="fadeIn" duration={300} style={styles.searchInfo}>
-          <Text style={styles.searchInfoText}>
-            {searchQuery && `"${searchQuery}"`}
-            {searchQuery && Object.keys(getActiveFilters()).length > 0 && ' • '}
-            {Object.keys(getActiveFilters()).length > 0 && 
-              `${Object.keys(getActiveFilters()).length} filter(s)`
-            }
-          </Text>
-          <TouchableOpacity
-            onPress={clearAllFilters}
-            style={styles.clearAllButton}
-          >
-            <Text style={styles.clearAllText}>Clear All</Text>
-          </TouchableOpacity>
+          <Text style={styles.searchInfoText}>{searchQuery && `"${searchQuery}"`}{searchQuery && Object.keys(getActiveFilters()).length > 0 && ' • '}{Object.keys(getActiveFilters()).length > 0 && `${Object.keys(getActiveFilters()).length} filter(s)`}</Text>
+          <TouchableOpacity onPress={clearAllFilters} style={styles.clearAllButton}><Text style={styles.clearAllText}>Clear All</Text></TouchableOpacity>
         </Animatable.View>
       )}
-
-      {/* Rentals List */}
       <FlatList
         data={rentals}
         renderItem={renderRentalItem}
-        keyExtractor={(item) => item._id}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[RentalColors.gold]}
-            tintColor={RentalColors.gold}
-          />
-        }
+        keyExtractor={(item) => item._id || item.id}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[RentalColors.gold]} tintColor={RentalColors.gold} />}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContainer}
         ListEmptyComponent={
-          <Animatable.View animation="fadeIn" duration={500} style={styles.emptyContainer}>
-            <View style={styles.emptyIcon}>
-              <Ionicons name="home-outline" size={64} color={RentalColors.gold} />
-            </View>
-            <Text style={styles.emptyText}>No luxury rentals found</Text>
-            <Text style={styles.emptySubText}>
-              {searchQuery || Object.keys(getActiveFilters()).length > 0 
-                ? 'Try adjusting your search or filters' 
-                : 'Pull to refresh'
-              }
-            </Text>
-          </Animatable.View>
+          !loading ? (
+            <Animatable.View animation="fadeIn" duration={500} style={styles.emptyContainer}>
+              <View style={styles.emptyIcon}><Ionicons name="home-outline" size={64} color={RentalColors.gold} /></View>
+              <Text style={styles.emptyText}>No luxury rentals found</Text>
+              <Text style={styles.emptySubText}>{searchQuery || Object.keys(getActiveFilters()).length > 0 ? 'Try adjusting your search or filters' : 'Pull to refresh'}</Text>
+            </Animatable.View>
+          ) : null
         }
       />
-
-      {/* Pagination Controls */}
       {renderPaginationControls()}
-
-      {/* Filter Modal */}
       {renderFilterModal()}
-
-      {/* FAB Button */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={handleCreateRental}
-        activeOpacity={0.8}
-      >
-        <LinearGradient
-          colors={[RentalColors.primary, RentalColors.secondary]}
-          style={styles.fabGradient}
-        >
+      <TouchableOpacity style={styles.fab} onPress={handleCreateRental} activeOpacity={0.8}>
+        <LinearGradient colors={[RentalColors.primary, RentalColors.secondary]} style={styles.fabGradient}>
           <Ionicons name="add" size={24} color={RentalColors.gold} />
         </LinearGradient>
       </TouchableOpacity>
@@ -955,615 +651,106 @@ const RentalHome = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: RentalColors.background,
-  },
-  floatingIcons: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    zIndex: 0,
-  },
-  floatingIcon: {
-    position: 'absolute',
-    fontSize: 24,
-    opacity: 0.1,
-    color: RentalColors.gold,
-  },
-  icon1: {
-    top: '10%',
-    right: '5%',
-    transform: [{ rotate: '15deg' }],
-  },
-  icon2: {
-    top: '30%',
-    left: '5%',
-    transform: [{ rotate: '-10deg' }],
-  },
-  icon3: {
-    bottom: '20%',
-    right: '10%',
-    transform: [{ rotate: '25deg' }],
-  },
-  icon4: {
-    bottom: '40%',
-    left: '8%',
-    transform: [{ rotate: '-15deg' }],
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 4,
-  },
-  headerTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: RentalColors.gold,
-    marginBottom: 2,
-    textShadowColor: 'rgba(212, 175, 55, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: RentalColors.textSecondary,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: RentalColors.primary + '20',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: RentalColors.gold + '40',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: RentalColors.textSecondary,
-  },
-  searchContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 25,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: RentalColors.gold + '40',
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 14,
-    color: RentalColors.text,
-    padding: 4,
-  },
-  clearButton: {
-    padding: 4,
-    marginRight: 4,
-  },
-  filterButton: {
-    marginLeft: 8,
-    padding: 6,
-    position: 'relative',
-    borderRadius: 18,
-  },
-  filterButtonActive: {
-    backgroundColor: RentalColors.primary + '40',
-    borderWidth: 1,
-    borderColor: RentalColors.gold,
-  },
-  filterBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: RentalColors.gold,
-    borderRadius: 8,
-    width: 16,
-    height: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  filterBadgeText: {
-    color: RentalColors.primary,
-    fontSize: 8,
-    fontWeight: 'bold',
-  },
-  searchInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginHorizontal: 16,
-    marginBottom: 6,
-    backgroundColor: RentalColors.primary + '20',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: RentalColors.gold + '40',
-  },
-  searchInfoText: {
-    fontSize: 12,
-    color: RentalColors.gold,
-    flex: 1,
-  },
-  clearAllButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: RentalColors.card,
-    borderWidth: 1,
-    borderColor: RentalColors.gold,
-  },
-  clearAllText: {
-    fontSize: 10,
-    color: RentalColors.gold,
-    fontWeight: '600',
-  },
-  listContainer: {
-    padding: 12,
-    paddingBottom: 80,
-  },
-  rentalCard: {
-    borderRadius: 16,
-    marginBottom: 10,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: RentalColors.gold + '30',
-    shadowColor: RentalColors.gold,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  cardGradient: {
-    padding: 12,
-    position: 'relative',
-  },
-  goldAccent: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 2,
-    backgroundColor: RentalColors.gold,
-  },
-  cardPattern: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    flexDirection: 'row',
-    opacity: 0.1,
-  },
-  patternIcon: {
-    fontSize: 16,
-    marginHorizontal: 1,
-  },
-  goldGlow: {
-    position: 'absolute',
-    bottom: -15,
-    right: -15,
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: RentalColors.gold + '10',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: 6,
-  },
-  rentalName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: RentalColors.text,
-    flex: 1,
-  },
-  statusBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  statusText: {
-    fontSize: 9,
-    fontWeight: '600',
-  },
-  cardContent: {
-    gap: 6,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  infoText: {
-    fontSize: 13,
-    color: RentalColors.textSecondary,
-    flex: 1,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  priceText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: RentalColors.gold,
-  },
-  perMonthText: {
-    fontSize: 11,
-    color: RentalColors.textMuted,
-  },
-  statusInfo: {
-    backgroundColor: RentalColors.background + '80',
-    padding: 8,
-    borderRadius: 10,
-    marginTop: 6,
-    borderWidth: 1,
-    borderColor: RentalColors.gold + '20',
-  },
-  statusHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 2,
-  },
-  statusInfoText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  statusInfoDetail: {
-    fontSize: 10,
-    color: RentalColors.textMuted,
-    marginTop: 1,
-  },
-  voteButton: {
-    marginTop: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    backgroundColor: RentalColors.gold + '20',
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: RentalColors.gold,
-  },
-  voteButtonText: {
-    fontSize: 10,
-    color: RentalColors.gold,
-    fontWeight: '600',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-  },
-  emptyIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: RentalColors.card,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: RentalColors.gold,
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: RentalColors.gold,
-    marginBottom: 4,
-  },
-  emptySubText: {
-    fontSize: 13,
-    color: RentalColors.textMuted,
-    textAlign: 'center',
-  },
-  // COMPRESSED PAGINATION
-  paginationContainer: {
-    marginHorizontal: 12,
-    marginBottom: 12,
-    marginTop: 4,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: RentalColors.gold + '30',
-  },
-  paginationGradient: {
-    padding: 10,
-  },
-  paginationInfo: {
-    marginBottom: 6,
-  },
-  paginationText: {
-    fontSize: 12,
-    color: RentalColors.textSecondary,
-    textAlign: 'center',
-  },
-  paginationPageText: {
-    fontSize: 10,
-    color: RentalColors.textMuted,
-    textAlign: 'center',
-    marginTop: 2,
-  },
-  paginationControls: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 8,
-  },
-  paginationButton: {
-    flex: 1,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  paginationButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 6,
-    gap: 4,
-  },
-  paginationButtonText: {
-    fontSize: 12,
-    color: RentalColors.gold,
-    fontWeight: '600',
-  },
-  paginationButtonTextDisabled: {
-    color: RentalColors.textMuted,
-  },
-  paginationButtonDisabled: {
-    opacity: 0.5,
-  },
-  fab: {
-    position: 'absolute',
-    right: 16,
-    bottom: 50,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    overflow: 'hidden',
-    shadowColor: RentalColors.gold,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-  fabGradient: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  // MODAL STYLES - COMPRESSED
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    overflow: 'hidden',
-    height: '75%',
-    width: '100%',
-  },
-  modalGradient: {
-    flex: 1,
-    flexDirection: 'column',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: RentalColors.gold + '30',
-    backgroundColor: RentalColors.surface,
-  },
-  modalTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: RentalColors.gold,
-  },
-  modalCloseButton: {
-    padding: 4,
-  },
-  modalScrollView: {
-    flex: 1,
-    padding: 16,
-  },
-  modalScrollContent: {
-    paddingBottom: 16,
-  },
-  filterSection: {
-    marginBottom: 16,
-  },
-  filterLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: RentalColors.gold,
-    marginBottom: 6,
-  },
-  filterInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: RentalColors.gold + '30',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    backgroundColor: RentalColors.background,
-  },
-  filterInput: {
-    flex: 1,
-    padding: 10,
-    fontSize: 14,
-    color: RentalColors.text,
-    marginLeft: 6,
-  },
-  typeOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  typeOption: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: RentalColors.gold + '30',
-    backgroundColor: RentalColors.background,
-  },
-  selectedTypeOption: {
-    backgroundColor: RentalColors.primary,
-    borderColor: RentalColors.gold,
-  },
-  typeOptionText: {
-    fontSize: 13,
-    color: RentalColors.textSecondary,
-  },
-  selectedTypeOptionText: {
-    color: RentalColors.gold,
-    fontWeight: '600',
-  },
-  priceRange: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  priceInputContainer: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: RentalColors.gold + '30',
-    borderRadius: 10,
-    backgroundColor: RentalColors.background,
-  },
-  priceInput: {
-    padding: 10,
-    fontSize: 14,
-    color: RentalColors.text,
-  },
-  priceSeparator: {
-    fontSize: 14,
-    color: RentalColors.gold,
-  },
-  statusOptions: {
-    gap: 6,
-  },
-  statusOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: RentalColors.gold + '30',
-    backgroundColor: RentalColors.background,
-    gap: 6,
-  },
-  selectedStatusOption: {
-    backgroundColor: RentalColors.primary + '40',
-    borderColor: RentalColors.gold,
-  },
-  statusOptionText: {
-    fontSize: 13,
-    color: RentalColors.textSecondary,
-  },
-  selectedStatusOptionText: {
-    color: RentalColors.gold,
-    fontWeight: '600',
-  },
-  activeFilters: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  activeFilter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: RentalColors.primary + '40',
-    borderRadius: 14,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: RentalColors.gold + '30',
-  },
-  activeFilterText: {
-    fontSize: 11,
-    color: RentalColors.gold,
-  },
-  removeFilter: {
-    padding: 1,
-  },
-  // MODAL FOOTER - COMPRESSED
-  modalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: RentalColors.gold + '30',
-    backgroundColor: RentalColors.surface,
-    gap: 8,
-  },
-  resetButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: RentalColors.gold,
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-  },
-  resetButtonText: {
-    fontSize: 14,
-    color: RentalColors.gold,
-  },
-  applyButton: {
-    flex: 1,
-    borderRadius: 22,
-    overflow: 'hidden',
-  },
-  applyButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    gap: 6,
-  },
-  applyButtonText: {
-    fontSize: 14,
-    color: RentalColors.gold,
-    fontWeight: 'bold',
-  },
+  container: { flex: 1, backgroundColor: RentalColors.background },
+  floatingIcons: { position: 'absolute', width: '100%', height: '100%', zIndex: 0 },
+  floatingIcon: { position: 'absolute', fontSize: 24, opacity: 0.1, color: RentalColors.gold },
+  icon1: { top: '10%', right: '5%', transform: [{ rotate: '15deg' }] },
+  icon2: { top: '30%', left: '5%', transform: [{ rotate: '-10deg' }] },
+  icon3: { bottom: '20%', right: '10%', transform: [{ rotate: '25deg' }] },
+  icon4: { bottom: '40%', left: '8%', transform: [{ rotate: '-15deg' }] },
+  searchContainer: { paddingHorizontal: 16, paddingVertical: 8, zIndex: 1 },
+  searchBar: { flexDirection: 'row', alignItems: 'center', borderRadius: 25, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: RentalColors.gold + '40' },
+  searchInput: { flex: 1, marginLeft: 8, fontSize: 14, color: RentalColors.text, padding: 4 },
+  clearButton: { padding: 4, marginRight: 4 },
+  filterButton: { marginLeft: 8, padding: 6, position: 'relative', borderRadius: 18 },
+  filterButtonActive: { backgroundColor: RentalColors.primary + '40', borderWidth: 1, borderColor: RentalColors.gold },
+  filterBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: RentalColors.gold, borderRadius: 8, width: 16, height: 16, justifyContent: 'center', alignItems: 'center' },
+  filterBadgeText: { color: RentalColors.primary, fontSize: 8, fontWeight: 'bold' },
+  searchInfo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, marginHorizontal: 16, marginBottom: 6, backgroundColor: RentalColors.primary + '20', borderRadius: 8, borderWidth: 1, borderColor: RentalColors.gold + '40', zIndex: 1 },
+  searchInfoText: { fontSize: 12, color: RentalColors.gold, flex: 1 },
+  clearAllButton: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, backgroundColor: RentalColors.card, borderWidth: 1, borderColor: RentalColors.gold },
+  clearAllText: { fontSize: 10, color: RentalColors.gold, fontWeight: '600' },
+  listContainer: { padding: 12, paddingBottom: 80 },
+  rentalCard: { borderRadius: 16, marginBottom: 10, overflow: 'hidden', borderWidth: 1, borderColor: RentalColors.gold + '30', shadowColor: RentalColors.gold, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 3 },
+  cardGradient: { padding: 12, position: 'relative' },
+  goldAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 2, backgroundColor: RentalColors.gold },
+  cardPattern: { position: 'absolute', top: 6, right: 6, flexDirection: 'row', opacity: 0.1 },
+  patternIcon: { fontSize: 16, marginHorizontal: 1 },
+  goldGlow: { position: 'absolute', bottom: -15, right: -15, width: 80, height: 80, borderRadius: 40, backgroundColor: RentalColors.gold + '10' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  titleContainer: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 6 },
+  rentalName: { fontSize: 16, fontWeight: '700', color: RentalColors.text, flex: 1 },
+  statusBadge: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 3 },
+  statusText: { fontSize: 9, fontWeight: '600' },
+  cardContent: { gap: 6 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  infoText: { fontSize: 13, color: RentalColors.textSecondary, flex: 1 },
+  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  priceText: { fontSize: 18, fontWeight: '800', color: RentalColors.gold },
+  perMonthText: { fontSize: 11, color: RentalColors.textMuted },
+  statusInfo: { backgroundColor: RentalColors.background + '80', padding: 8, borderRadius: 10, marginTop: 6, borderWidth: 1, borderColor: RentalColors.gold + '20' },
+  statusHeader: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
+  statusInfoText: { fontSize: 11, fontWeight: '700' },
+  statusInfoDetail: { fontSize: 10, color: RentalColors.textMuted, marginTop: 1 },
+  voteButton: { marginTop: 6, paddingVertical: 4, paddingHorizontal: 8, backgroundColor: RentalColors.gold + '20', borderRadius: 12, alignSelf: 'flex-start', borderWidth: 1, borderColor: RentalColors.gold },
+  voteButtonText: { fontSize: 10, color: RentalColors.gold, fontWeight: '600' },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
+  emptyIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: RentalColors.card, justifyContent: 'center', alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: RentalColors.gold },
+  emptyText: { fontSize: 16, fontWeight: '700', color: RentalColors.gold, marginBottom: 4 },
+  emptySubText: { fontSize: 13, color: RentalColors.textMuted, textAlign: 'center' },
+  paginationContainer: { marginHorizontal: 12, marginBottom: 12, marginTop: 4, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: RentalColors.gold + '30' },
+  paginationGradient: { padding: 10 },
+  paginationInfo: { marginBottom: 6 },
+  paginationText: { fontSize: 12, color: RentalColors.textSecondary, textAlign: 'center' },
+  paginationPageText: { fontSize: 10, color: RentalColors.textMuted, textAlign: 'center', marginTop: 2 },
+  paginationControls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  paginationButton: { flex: 1, borderRadius: 20, overflow: 'hidden' },
+  paginationButtonGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 6, gap: 4 },
+  paginationButtonText: { fontSize: 12, color: RentalColors.gold, fontWeight: '600' },
+  paginationButtonTextDisabled: { color: RentalColors.textMuted },
+  paginationButtonDisabled: { opacity: 0.5 },
+  fab: { position: 'absolute', right: 16, bottom: 50, width: 48, height: 48, borderRadius: 24, overflow: 'hidden', shadowColor: RentalColors.gold, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6 },
+  fabGradient: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: RentalColors.primary + '20', justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: RentalColors.gold + '40' },
+  loadingText: { marginTop: 12, fontSize: 14, color: RentalColors.textSecondary },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.8)', justifyContent: 'flex-end' },
+  modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', height: '75%', width: '100%' },
+  modalGradient: { flex: 1, flexDirection: 'column' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: RentalColors.gold + '30', backgroundColor: RentalColors.surface },
+  modalTitleContainer: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  modalTitle: { fontSize: 16, fontWeight: '700', color: RentalColors.gold },
+  modalCloseButton: { padding: 4 },
+  modalScrollView: { flex: 1, padding: 16 },
+  modalScrollContent: { paddingBottom: 16 },
+  filterSection: { marginBottom: 16 },
+  filterLabel: { fontSize: 14, fontWeight: '600', color: RentalColors.gold, marginBottom: 6 },
+  filterInputContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: RentalColors.gold + '30', borderRadius: 10, paddingHorizontal: 10, backgroundColor: RentalColors.background },
+  filterInput: { flex: 1, padding: 10, fontSize: 14, color: RentalColors.text, marginLeft: 6 },
+  typeOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  typeOption: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, borderWidth: 1, borderColor: RentalColors.gold + '30', backgroundColor: RentalColors.background },
+  selectedTypeOption: { backgroundColor: RentalColors.primary, borderColor: RentalColors.gold },
+  typeOptionText: { fontSize: 13, color: RentalColors.textSecondary },
+  selectedTypeOptionText: { color: RentalColors.gold, fontWeight: '600' },
+  priceRange: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  priceInputContainer: { flex: 1, borderWidth: 1, borderColor: RentalColors.gold + '30', borderRadius: 10, backgroundColor: RentalColors.background },
+  priceInput: { padding: 10, fontSize: 14, color: RentalColors.text },
+  priceSeparator: { fontSize: 14, color: RentalColors.gold },
+  statusOptions: { gap: 6 },
+  statusOption: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: RentalColors.gold + '30', backgroundColor: RentalColors.background, gap: 6 },
+  selectedStatusOption: { backgroundColor: RentalColors.primary + '40', borderColor: RentalColors.gold },
+  statusOptionText: { fontSize: 13, color: RentalColors.textSecondary },
+  selectedStatusOptionText: { color: RentalColors.gold, fontWeight: '600' },
+  activeFilters: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  activeFilter: { flexDirection: 'row', alignItems: 'center', backgroundColor: RentalColors.primary + '40', borderRadius: 14, paddingHorizontal: 8, paddingVertical: 4, gap: 4, borderWidth: 1, borderColor: RentalColors.gold + '30' },
+  activeFilterText: { fontSize: 11, color: RentalColors.gold },
+  removeFilter: { padding: 1 },
+  modalFooter: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, borderTopWidth: 1, borderTopColor: RentalColors.gold + '30', backgroundColor: RentalColors.surface, gap: 8 },
+  resetButton: { flex: 1, paddingVertical: 12, borderRadius: 22, borderWidth: 1, borderColor: RentalColors.gold, alignItems: 'center', backgroundColor: 'transparent' },
+  resetButtonText: { fontSize: 14, color: RentalColors.gold },
+  applyButton: { flex: 1, borderRadius: 22, overflow: 'hidden' },
+  applyButtonGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, gap: 6 },
+  applyButtonText: { fontSize: 14, color: RentalColors.gold, fontWeight: 'bold' },
 });
 
 export default RentalHome;
