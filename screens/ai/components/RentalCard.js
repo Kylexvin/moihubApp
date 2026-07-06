@@ -1,3 +1,4 @@
+// screens/ai/components/RentalCard.js
 import React from 'react';
 import {
   View,
@@ -5,13 +6,26 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  Linking,
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.75;
+
+const C = {
+  accent: '#059669',
+  textPrimary: '#1a1a1a',
+  textSecondary: '#4a4a4a',
+  textMeta: '#888888',
+  border: '#e0e0e0',
+  surface: '#ffffff',
+  bg: '#f5f5f5',
+  white: '#ffffff',
+  success: '#4CAF50',
+  danger: '#f44336',
+  warning: '#FF9800',
+};
 
 const RentalCard = ({ data, onViewDetails }) => {
   if (!data || !data.rentals || data.rentals.length === 0) {
@@ -21,9 +35,9 @@ const RentalCard = ({ data, onViewDetails }) => {
   const rental = data.rentals[0];
 
   const getStatusColor = () => {
-    if (rental.hasVacant === true) return '#4CAF50';
-    if (rental.hasVacant === false) return '#f44336';
-    return '#FF9800';
+    if (rental.hasVacant === true) return C.success;
+    if (rental.hasVacant === false) return C.danger;
+    return C.warning;
   };
 
   const getStatusText = () => {
@@ -32,34 +46,24 @@ const RentalCard = ({ data, onViewDetails }) => {
     return 'Unknown';
   };
 
-  const handleViewDetails = () => {
-    if (onViewDetails) {
-      onViewDetails(rental);
-    }
-  };
-
-  const handleOpenMap = () => {
-    if (rental.locationUrl) {
-      Linking.openURL(rental.locationUrl);
-    }
-  };
-
   return (
     <View style={styles.container}>
-      {/* Image */}
+      {/* Landscape Image - using aspectRatio like RentalDetail */}
       {rental.imageUrl ? (
-        <Image 
-          source={{ uri: rental.imageUrl }} 
-          style={styles.image}
-          resizeMode="cover"
-        />
+        <View style={styles.imageContainer}>
+          <Image 
+            source={{ uri: rental.imageUrl }} 
+            style={styles.rentalImage}
+            resizeMode="cover"
+          />
+        </View>
       ) : (
-        <View style={styles.imagePlaceholder}>
-          <Ionicons name="home-outline" size={40} color="#ccc" />
+        <View style={styles.placeholderImage}>
+          <Ionicons name="images-outline" size={40} color="#ccc" />
         </View>
       )}
 
-      {/* Status Badge Overlay */}
+      {/* Status Badge */}
       <View style={[styles.statusBadge, { backgroundColor: getStatusColor() }]}>
         <Text style={styles.statusText}>{getStatusText()}</Text>
       </View>
@@ -71,40 +75,27 @@ const RentalCard = ({ data, onViewDetails }) => {
         </Text>
 
         <View style={styles.details}>
-          <View style={styles.detailItem}>
-            <Ionicons name="location-outline" size={14} color="#666" />
+          <View style={styles.detailRow}>
+            <Ionicons name="location-outline" size={14} color={C.textMeta} />
             <Text style={styles.detailText}>{rental.location}</Text>
           </View>
-          <View style={styles.detailItem}>
-            <Ionicons name="bed-outline" size={14} color="#666" />
+          <View style={styles.detailRow}>
+            <Ionicons name="bed-outline" size={14} color={C.textMeta} />
             <Text style={styles.detailText}>{rental.type}</Text>
           </View>
-          <View style={styles.detailItem}>
-            <Ionicons name="cash-outline" size={14} color="#666" />
+          <View style={styles.detailRow}>
+            <Ionicons name="cash-outline" size={14} color={C.textMeta} />
             <Text style={styles.detailText}>KSh {rental.price}</Text>
           </View>
         </View>
 
-        {/* Actions */}
-        <View style={styles.actions}>
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.primaryAction]}
-            onPress={handleViewDetails}
-          >
-            <Ionicons name="eye-outline" size={16} color="#fff" />
-            <Text style={styles.primaryActionText}>View Details</Text>
-          </TouchableOpacity>
-          
-          {rental.locationUrl && (
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.secondaryAction]}
-              onPress={handleOpenMap}
-            >
-              <Ionicons name="map-outline" size={16} color="#2C3E50" />
-              <Text style={styles.secondaryActionText}>Map</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <TouchableOpacity
+          style={styles.viewButton}
+          onPress={() => onViewDetails?.(rental)}
+        >
+          <Ionicons name="eye-outline" size={16} color={C.white} />
+          <Text style={styles.viewButtonText}>View Details</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -113,24 +104,33 @@ const RentalCard = ({ data, onViewDetails }) => {
 const styles = StyleSheet.create({
   container: {
     width: CARD_WIDTH,
-    backgroundColor: '#fff',
+    backgroundColor: C.surface,
     borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    borderColor: C.accent,
+    borderWidth: 2,
     overflow: 'hidden',
   },
-  image: {
+  // ─── Image - Using aspectRatio like RentalDetail ──────────────────────────
+  imageContainer: {
     width: '100%',
-    height: 140,
-    backgroundColor: '#f0f0f0',
+    aspectRatio: 3.75, // 750:200 = 3.75 (landscape)
+    backgroundColor: C.bg,
+
   },
-  imagePlaceholder: {
+  rentalImage: {
     width: '100%',
-    height: 140,
-    backgroundColor: '#f0f0f0',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  placeholderImage: {
+    width: '100%',
+    aspectRatio: 3.75,
+    backgroundColor: C.bg,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#fff',
+    color: C.white,
   },
   content: {
     padding: 12,
@@ -154,57 +154,37 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: C.textPrimary,
     marginBottom: 6,
     textTransform: 'capitalize',
   },
   details: {
     marginBottom: 10,
+    gap: 2,
   },
-  detailItem: {
+  detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 1,
+    gap: 4,
   },
   detailText: {
     fontSize: 13,
-    color: '#666',
-    marginLeft: 4,
+    color: C.textSecondary,
     textTransform: 'capitalize',
   },
-  actions: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  actionButton: {
+  viewButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    flex: 1,
+    backgroundColor: C.accent,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
   },
-  primaryAction: {
-    backgroundColor: '#2C3E50',
-    flex: 1,
-  },
-  primaryActionText: {
-    color: '#fff',
+  viewButtonText: {
+    color: C.white,
     fontWeight: '600',
-    fontSize: 13,
-    marginLeft: 4,
-  },
-  secondaryAction: {
-    backgroundColor: '#f0f0f0',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    flex: 0.6,
-  },
-  secondaryActionText: {
-    color: '#2C3E50',
-    fontSize: 13,
-    marginLeft: 4,
+    fontSize: 14,
   },
 });
 
