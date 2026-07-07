@@ -13,6 +13,7 @@ import {
   SafeAreaView,
   StatusBar,
   Dimensions,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -53,7 +54,7 @@ const AIChatMainScreen = () => {
       {
         id: Date.now(),
         role: 'assistant',
-        text: "👋 Hi! I'm your MoiHub Assistant.\n\nI can help you with:\n🏠 Rentals\n🍔 Food\n✂️ Services\n🛍️ Marketplace\n\nJust tell me what you're looking for!",
+        text: "👋 Hi! I'm your MoiHub Assistant.\n\nI can help you with:\n🏠 Rentals\n🍔 Food\n🔧 Services\n🛍️ Marketplace\n\nJust tell me what you're looking for!",
         module: null,
         data: null,
         timestamp: new Date(),
@@ -126,6 +127,7 @@ const AIChatMainScreen = () => {
     }
   };
 
+  // ─── Navigation Handlers ──────────────────────────────────────────────────
   const handleViewRentalDetails = (rental) => {
     navigation.navigate('AccomStack', {
       screen: 'RentalDetail',
@@ -133,6 +135,63 @@ const AIChatMainScreen = () => {
     });
   };
 
+  const handleViewServiceDetails = (provider) => {
+    if (provider.hasDashboard) {
+      // Navigate to provider dashboard
+      navigation.navigate('ServiceDashboard', {
+        screen: 'ProviderDashboard',
+        params: { providerId: provider.id },
+      });
+    } else {
+      // Navigate to provider details
+      navigation.navigate('ServiceStack', {
+        screen: 'ServiceDetail',
+        params: { providerId: provider.id },
+      });
+    }
+  };
+
+  const handleViewFoodDetails = (vendor) => {
+    navigation.navigate('FoodStack', {
+      screen: 'FoodDetail',
+      params: { vendorId: vendor.id },
+    });
+  };
+
+  const handleCall = (phoneNumber) => {
+    if (phoneNumber) {
+      Linking.openURL(`tel:${phoneNumber}`);
+    }
+  };
+
+  // ─── Unified onViewDetails handler ──────────────────────────────────────
+  const handleViewDetails = (item, type) => {
+    if (type === 'dashboard') {
+      // For service dashboard
+      navigation.navigate('ServiceDashboard', {
+        screen: 'ProviderDashboard',
+        params: { providerId: item.id },
+      });
+      return;
+    }
+
+    // Check what type of item it is
+    if (item.price && item.location && item.type) {
+      // Rental
+      handleViewRentalDetails(item);
+    } else if (item.category || item.providerType) {
+      // Service provider
+      handleViewServiceDetails(item);
+    } else if (item.shopName || item.matchedItems) {
+      // Food vendor
+      handleViewFoodDetails(item);
+    } else {
+      // Fallback
+      navigation.navigate('DetailScreen', { id: item.id });
+    }
+  };
+
+  // ─── Render Message ──────────────────────────────────────────────────────
   const renderMessage = ({ item }) => {
     const isUser = item.role === 'user';
 
@@ -177,9 +236,10 @@ const AIChatMainScreen = () => {
           </View>
         </View>
 
-        {!isUser && item.data && item.data.count > 0 && (
+        {/* ─── Render UI Components ────────────────────────────────────── */}
+        {!isUser && item.data && (
           <View style={styles.componentWrapper}>
-            {renderAIMessage(item, handleViewRentalDetails)}
+            {renderAIMessage(item, handleViewDetails, handleCall)}
           </View>
         )}
       </View>
