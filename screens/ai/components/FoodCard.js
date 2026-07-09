@@ -89,9 +89,9 @@ const FoodCard = ({ data, onViewDetails, onCall }) => {
           <Text style={styles.sectionLabel}>🔍 Matched</Text>
           {matchedItems.map((item, index) => (
             <View key={index} style={styles.matchedItem}>
-              {item.imageURL && (
-                <Image source={{ uri: item.imageURL }} style={styles.itemImage} />
-              )}
+             {item.imageUrl && (
+              <Image source={{ uri: item.imageUrl }} style={styles.itemImage} />
+              )} 
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName}>{item.name}</Text>
                 <Text style={styles.itemPrice}>KSh {item.price}</Text>

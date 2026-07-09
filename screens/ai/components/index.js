@@ -1,48 +1,190 @@
 // screens/ai/components/index.js
+import React from 'react';
+import { View, StyleSheet } from 'react-native';
 import RentalCard from './RentalCard';
 import RentalList from './RentalList';
 import ServiceCard from './ServiceCard';
 import ServiceList from './ServiceList';
 import FoodCard from './FoodCard';
 import FoodList from './FoodList';
+import FoodDetailCard from './FoodDetailCard';  // ← ADD
+import MarketplaceCard from './MarketplaceCard';
+import MarketplaceList from './MarketplaceList';
+import EshopCard from './EshopCard';
+import EshopList from './EshopList';
 
-export const renderAIMessage = (message, onViewDetails) => {
-  const { data, module } = message;
+// ─── TODO: Create these detail cards when needed ──────────────────────────
+// import RentalDetailCard from './RentalDetailCard';
+// import ServiceDetailCard from './ServiceDetailCard';
+// import MarketplaceDetailCard from './MarketplaceDetailCard';
+// import EshopDetailCard from './EshopDetailCard';
+
+export const renderAIMessage = (message, onViewDetails, onCall, onViewMore) => {
+  const { data } = message;
 
   if (!data) return null;
 
-  // Rentals Module
+  // ─── MIXED MODULES ──────────────────────────────────────────────────────
+  if (data.modules && data.modules.length > 1) {
+    return (
+      <View style={styles.mixedContainer}>
+        {/* Rentals */}
+        {data.modules.includes('rentals') && data.rentals?.length > 0 && (
+          <View style={styles.moduleSection}>
+            <RentalList 
+              data={{ rentals: data.rentals }} 
+              onViewDetails={onViewDetails}
+              onViewMore={onViewMore}
+            />
+          </View>
+        )}
+
+        {/* Food */}
+        {data.modules.includes('food') && data.foodVendors?.length > 0 && (
+          <View style={styles.moduleSection}>
+            <FoodList data={{ foodVendors: data.foodVendors }} onViewDetails={onViewDetails} onCall={onCall} />
+          </View>
+        )}
+
+        {/* Services */}
+        {data.modules.includes('services') && data.providers?.length > 0 && (
+          <View style={styles.moduleSection}>
+            <ServiceList data={{ providers: data.providers }} onViewDetails={onViewDetails} onCall={onCall} />
+          </View>
+        )}
+
+        {/* Marketplace */}
+        {data.modules.includes('marketplace') && data.marketplaceItems?.length > 0 && (
+          <View style={styles.moduleSection}>
+            <MarketplaceList 
+              data={{ items: data.marketplaceItems, type: data.marketplaceType }} 
+              onViewDetails={onViewDetails} 
+              onCall={onCall}
+              onViewMore={onViewMore}
+            />
+          </View>
+        )}
+
+        {/* Eshops */}
+        {data.modules.includes('eshops') && data.eshops?.length > 0 && (
+          <View style={styles.moduleSection}>
+            <EshopList 
+              data={{ eshops: data.eshops }} 
+              onViewDetails={onViewDetails} 
+              onCall={onCall}
+              onViewMore={onViewMore}
+            />
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  // ─── SINGLE MODULE ──────────────────────────────────────────────────────
+  const module = data.module;
+
+  // Rentals
   if (module === 'rentals') {
-    if (data.rentals && data.rentals.length > 0) {
+    // TODO: Uncomment when RentalDetailCard is created
+    // if (data.isDetails && data.rental) {
+    //   return <RentalDetailCard data={data.rental} onViewDetails={onViewDetails} />;
+    // }
+    if (data.rentals?.length > 0) {
       if (data.rentals.length > 1) {
-        return <RentalList data={data} onViewDetails={onViewDetails} />;
+        return <RentalList 
+          data={{ rentals: data.rentals }} 
+          onViewDetails={onViewDetails}
+          onViewMore={onViewMore}
+        />;
       }
-      return <RentalCard data={data} onViewDetails={onViewDetails} />;
+      return <RentalCard data={{ rentals: data.rentals }} onViewDetails={onViewDetails} />;
     }
   }
 
-  // Services Module
+  // Services
   if (module === 'services') {
-    if (data.providers && data.providers.length > 0) {
+    // TODO: Uncomment when ServiceDetailCard is created
+    // if (data.isDetails && data.provider) {
+    //   return <ServiceDetailCard data={data.provider} onViewDetails={onViewDetails} onCall={onCall} />;
+    // }
+    if (data.providers?.length > 0) {
       if (data.providers.length > 1) {
-        return <ServiceList data={data} onViewDetails={onViewDetails} />;
+        return <ServiceList data={{ providers: data.providers }} onViewDetails={onViewDetails} onCall={onCall} />;
       }
-      return <ServiceCard data={data} onViewDetails={onViewDetails} />;
+      return <ServiceCard data={{ providers: data.providers }} onViewDetails={onViewDetails} onCall={onCall} />;
     }
   }
 
-  // Food Module
+  // Food
   if (module === 'food') {
-    if (data.foodVendors && data.foodVendors.length > 0) {
+    if (data.isDetails && data.foodVendor) {
+      return <FoodDetailCard data={data.foodVendor} onViewDetails={onViewDetails} onCall={onCall} />;
+    }
+    if (data.foodVendors?.length > 0) {
       if (data.foodVendors.length > 1) {
-        return <FoodList data={data} onViewDetails={onViewDetails} />;
+        return <FoodList data={{ foodVendors: data.foodVendors }} onViewDetails={onViewDetails} onCall={onCall} />;
       }
-      return <FoodCard data={data} onViewDetails={onViewDetails} />;
+      return <FoodCard data={{ foodVendors: data.foodVendors }} onViewDetails={onViewDetails} onCall={onCall} />;
+    }
+  }
+
+  // Marketplace
+  if (module === 'marketplace') {
+    // TODO: Uncomment when MarketplaceDetailCard is created
+    // if (data.isDetails && data.marketplaceItem) {
+    //   return <MarketplaceDetailCard data={data.marketplaceItem} onViewDetails={onViewDetails} onCall={onCall} />;
+    // }
+    if (data.marketplaceItems?.length > 0) {
+      if (data.marketplaceItems.length > 1) {
+        return <MarketplaceList 
+          data={{ items: data.marketplaceItems, type: data.marketplaceType }} 
+          onViewDetails={onViewDetails} 
+          onCall={onCall}
+          onViewMore={onViewMore}
+        />;
+      }
+      return <MarketplaceCard 
+        data={{ items: data.marketplaceItems, type: data.marketplaceType }} 
+        onViewDetails={onViewDetails} 
+        onCall={onCall} 
+      />;
+    }
+  }
+
+  // Eshops
+  if (module === 'eshops') {
+    // TODO: Uncomment when EshopDetailCard is created
+    // if (data.isDetails && data.eshop) {
+    //   return <EshopDetailCard data={data.eshop} onViewDetails={onViewDetails} onCall={onCall} />;
+    // }
+    if (data.eshops?.length > 0) {
+      if (data.eshops.length > 1) {
+        return <EshopList 
+          data={{ eshops: data.eshops }} 
+          onViewDetails={onViewDetails} 
+          onCall={onCall}
+          onViewMore={onViewMore}
+        />;
+      }
+      return <EshopCard 
+        data={{ eshops: data.eshops }} 
+        onViewDetails={onViewDetails} 
+        onCall={onCall} 
+      />;
     }
   }
 
   return null;
 };
+
+const styles = StyleSheet.create({
+  mixedContainer: {
+    marginVertical: 4,
+  },
+  moduleSection: {
+    marginBottom: 8,
+  },
+});
 
 export { 
   RentalCard, 
@@ -50,5 +192,10 @@ export {
   ServiceCard, 
   ServiceList,
   FoodCard,
-  FoodList
+  FoodList,
+  FoodDetailCard,  
+  MarketplaceCard,
+  MarketplaceList,
+  EshopCard,
+  EshopList,
 };

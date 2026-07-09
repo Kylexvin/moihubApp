@@ -21,8 +21,8 @@ const VendorDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       const [dashboardResponse, statsResponse] = await Promise.all([
-        axios.get('https://moihub.onrender.com/api/eshop/vendor/dashboard'),
-        axios.get('https://moihub.onrender.com/api/eshop/vendor/stats')
+        axios.get('/api/eshop/vendor/dashboard'),
+        axios.get('/api/eshop/vendor/stats')
       ]);
 
       if (dashboardResponse.data.success) {

@@ -16,11 +16,14 @@ import {
   TextInput,
   Keyboard,
   Platform,
+  ScrollView
+  
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import * as Animatable from 'react-native-animatable';
 import { useCart } from '../../context/CartContext';
+import axios from 'axios';
 import { useFocusEffect } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
@@ -45,7 +48,7 @@ const ShopColors = {
 };
 
 // -------------------------------------------------------------------
-// ProductCard — extracted outside parent so it never remounts
+// ProductCard
 // -------------------------------------------------------------------
 const ProductCard = React.memo(({ item, onAddToCart, isAdding }) => {
   const { cartItems } = useCart();
@@ -84,7 +87,6 @@ const ProductCard = React.memo(({ item, onAddToCart, isAdding }) => {
         style={styles.cardGradient}
       >
         <View style={styles.cardGoldAccent} />
-
         <View style={styles.cardPattern}>
           <Text style={styles.patternIcon}>👑</Text>
           <Text style={styles.patternIcon}>✨</Text>
@@ -109,6 +111,11 @@ const ProductCard = React.memo(({ item, onAddToCart, isAdding }) => {
           {itemQuantity > 0 && (
             <View style={styles.cartBadge}>
               <Text style={styles.cartBadgeText}>{itemQuantity}</Text>
+            </View>
+          )}
+          {item.category && (
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryBadgeText}>{item.category.name}</Text>
             </View>
           )}
         </View>
@@ -164,7 +171,53 @@ const ProductCard = React.memo(({ item, onAddToCart, isAdding }) => {
 });
 
 // -------------------------------------------------------------------
-// ShopHeader — extracted outside parent to prevent remount on scroll
+// CategoryChips
+// -------------------------------------------------------------------
+const CategoryChips = React.memo(({ categories, selectedCategory, onSelectCategory }) => {
+  return (
+    <View style={styles.categoryChipsContainer}>
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.categoryChipsScroll}
+      >
+        <TouchableOpacity
+          style={[
+            styles.categoryChip,
+            !selectedCategory && styles.categoryChipSelected
+          ]}
+          onPress={() => onSelectCategory(null)}
+        >
+          <Text style={[
+            styles.categoryChipText,
+            !selectedCategory && styles.categoryChipTextSelected
+          ]}>All</Text>
+        </TouchableOpacity>
+        
+        {categories.map((category) => (
+          <TouchableOpacity
+            key={category._id}
+            style={[
+              styles.categoryChip,
+              selectedCategory === category._id && styles.categoryChipSelected
+            ]}
+            onPress={() => onSelectCategory(category._id)}
+          >
+            <Text style={[
+              styles.categoryChipText,
+              selectedCategory === category._id && styles.categoryChipTextSelected
+            ]}>
+              {category.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
+});
+
+// -------------------------------------------------------------------
+// ShopHeader
 // -------------------------------------------------------------------
 const ShopHeader = React.memo(({
   shopInfo,
@@ -178,6 +231,9 @@ const ShopHeader = React.memo(({
   onClearSearch,
   onScrollToTop,
   searchInputRef,
+  categories,
+  selectedCategory,
+  onSelectCategory,
 }) => (
   <>
     <View style={styles.shopHeader}>
@@ -201,23 +257,9 @@ const ShopHeader = React.memo(({
             </TouchableOpacity>
           </View>
 
-          {shopInfo?.contactNumber && (
-            <TouchableOpacity style={styles.shopContact}>
-              <Icon name="phone" size={16} color={ShopColors.gold} />
-              <Text style={styles.contactText}>{shopInfo.contactNumber}</Text>
-            </TouchableOpacity>
-          )}
+         
 
-          <View style={styles.shopStats}>
-            <View style={styles.statItem}>
-              <Icon name="local-shipping" size={16} color={ShopColors.gold} />
-              <Text style={styles.statText}>Free Delivery</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Icon name="star" size={16} color={ShopColors.gold} />
-              <Text style={styles.statText}>4.8 Rating</Text>
-            </View>
-          </View>
+
         </View>
         <View style={styles.headerGlow} />
       </LinearGradient>
@@ -258,6 +300,15 @@ const ShopHeader = React.memo(({
         </View>
       )}
     </View>
+
+    {/* Category Chips */}
+    {categories.length > 0 && (
+      <CategoryChips
+        categories={categories}
+        selectedCategory={selectedCategory}
+        onSelectCategory={onSelectCategory}
+      />
+    )}
   </>
 ));
 
@@ -268,12 +319,20 @@ const ShopProductsScreen = ({ navigation, route }) => {
   const { shopSlug, shopName, shopId } = route.params;
   const [products, setProducts] = useState([]);
   const [shopInfo, setShopInfo] = useState(null);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [addingMap, setAddingMap] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [cartTotal, setCartTotal] = useState(0);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const searchInputRef = useRef(null);
@@ -292,48 +351,111 @@ const ShopProductsScreen = ({ navigation, route }) => {
     }, [cartItems])
   );
 
+  // Fetch categories for this shop
+  useEffect(() => {
+    fetchCategories();
+  }, [shopSlug]);
+
+const fetchCategories = async () => {
+  try {
+    const response = await axios.get(
+      `/api/eshop/vendor/shops/${shopSlug}/categories`
+    );
+    if (response.data.success) {
+      setCategories(response.data.data);
+    }
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+  }
+};
+
+  // Filter products by category and search
   const filteredProducts = useMemo(() => {
     if (!products.length) return [];
-    if (!searchQuery.trim()) return products;
-    const query = searchQuery.toLowerCase();
-    return products.filter(product =>
-      product.name.toLowerCase().includes(query) ||
-      product.description?.toLowerCase().includes(query) ||
-      product.category?.toLowerCase().includes(query)
-    );
-  }, [products, searchQuery]);
+    
+    let filtered = products;
+    
+    // Filter by category
+    if (selectedCategory) {
+      filtered = filtered.filter(product => 
+        product.category?._id === selectedCategory || product.category === selectedCategory
+      );
+    }
+    
+    // Filter by search
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(product =>
+        product.name.toLowerCase().includes(query) ||
+        product.description?.toLowerCase().includes(query)
+      );
+    }
+    
+    return filtered;
+  }, [products, selectedCategory, searchQuery]);
 
+  // Initial fetch
   useEffect(() => {
-    fetchProducts();
+    fetchProducts(1);
     StatusBar.setBarStyle('light-content', true);
   }, []);
 
-  const fetchProducts = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(
-        `https://moihub.onrender.com/api/eshop/vendor/shops/${shopSlug}/products`
-      );
-      const data = await response.json();
-      if (data.success) {
-        setProducts(data.data);
-        setShopInfo(data.shop);
-      } else {
-        Alert.alert('Error', 'Failed to fetch products');
-      }
-    } catch (error) {
-      console.error('Error fetching products:', error);
-      Alert.alert('Error', 'Network error. Please check your connection.');
-    } finally {
-      setLoading(false);
+  // Refetch when category changes
+  useEffect(() => {
+    if (!loading) {
+      fetchProducts(1);
     }
-  };
+  }, [selectedCategory]);
+
+const fetchProducts = async (page = 1, append = false) => {
+  try {
+    if (page === 1) setLoading(true);
+    else setLoadingMore(true);
+    
+    let url = `/api/eshop/vendor/shops/${shopSlug}/products?page=${page}&limit=10`;
+    
+    if (selectedCategory) {
+      url += `&category=${selectedCategory}`;
+    }
+    
+    const response = await axios.get(url);
+    
+    if (response.data.success) {
+      if (append) {
+        setProducts(prev => [...prev, ...response.data.data]);
+      } else {
+        setProducts(response.data.data);
+      }
+      setShopInfo(response.data.shop);
+      setCurrentPage(response.data.currentPage || page);
+      setTotalPages(response.data.totalPages || 1);
+      setHasMore(page < response.data.totalPages);
+    } else {
+      Alert.alert('Error', 'Failed to fetch products');
+    }
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    Alert.alert('Error', 'Network error. Please check your connection.');
+  } finally {
+    setLoading(false);
+    setLoadingMore(false);
+    setRefreshing(false);
+  }
+};
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchProducts();
+    setCurrentPage(1);
+    await fetchProducts(1);
     setRefreshing(false);
   };
+
+  const loadMore = useCallback(() => {
+    if (!loadingMore && hasMore && !loading) {
+      const nextPage = currentPage + 1;
+      fetchProducts(nextPage, true);
+    }
+  }, [loadingMore, hasMore, loading, currentPage]);
 
   const handleAddToCart = useCallback(async (product) => {
     setAddingMap(prev => ({ ...prev, [product._id]: true }));
@@ -364,6 +486,11 @@ const ShopProductsScreen = ({ navigation, route }) => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, []);
 
+  const handleCategorySelect = useCallback((categoryId) => {
+    setSelectedCategory(categoryId);
+    setCurrentPage(1);
+  }, []);
+
   const renderProductItem = useCallback(({ item }) => (
     <ProductCard
       item={item}
@@ -372,7 +499,16 @@ const ShopProductsScreen = ({ navigation, route }) => {
     />
   ), [addingMap, handleAddToCart]);
 
-  // Stable header props to avoid remounting ShopHeader
+  const renderFooter = useCallback(() => {
+    if (!loadingMore) return null;
+    return (
+      <View style={styles.footerLoader}>
+        <ActivityIndicator size="small" color={ShopColors.gold} />
+        <Text style={styles.footerLoaderText}>Loading more...</Text>
+      </View>
+    );
+  }, [loadingMore]);
+
   const headerProps = useMemo(() => ({
     shopInfo,
     shopName,
@@ -385,7 +521,10 @@ const ShopProductsScreen = ({ navigation, route }) => {
     onClearSearch: clearSearch,
     onScrollToTop: scrollToTop,
     searchInputRef,
-  }), [shopInfo, shopName, filteredProducts.length, searchQuery, searchFocused, clearSearch, scrollToTop]);
+    categories,
+    selectedCategory,
+    onSelectCategory: handleCategorySelect,
+  }), [shopInfo, shopName, filteredProducts.length, searchQuery, searchFocused, clearSearch, scrollToTop, categories, selectedCategory, handleCategorySelect]);
 
   const renderHeader = useCallback(() => <ShopHeader {...headerProps} />, [headerProps]);
 
@@ -419,7 +558,7 @@ const ShopProductsScreen = ({ navigation, route }) => {
           <Text style={styles.emptyText}>
             This shop is currently updating their inventory. Check back soon!
           </Text>
-          <TouchableOpacity style={styles.retryButton} onPress={fetchProducts}>
+          <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
             <LinearGradient
               colors={[ShopColors.primary, ShopColors.secondary]}
               style={styles.retryGradient}
@@ -453,7 +592,6 @@ const ShopProductsScreen = ({ navigation, route }) => {
     <LinearGradient colors={[ShopColors.background, ShopColors.surface]} style={styles.container}>
       <StatusBar backgroundColor={ShopColors.primary} barStyle="light-content" />
 
-      {/* Static floating decorations */}
       <View style={styles.floatingIcons} pointerEvents="none">
         <Text style={[styles.floatingIcon, styles.icon1]}>👑</Text>
         <Text style={[styles.floatingIcon, styles.icon2]}>✨</Text>
@@ -469,6 +607,7 @@ const ShopProductsScreen = ({ navigation, route }) => {
           keyExtractor={(item) => item._id}
           numColumns={2}
           ListHeaderComponent={renderHeader}
+          ListFooterComponent={renderFooter}
           contentContainerStyle={styles.productsList}
           columnWrapperStyle={styles.row}
           showsVerticalScrollIndicator={false}
@@ -486,9 +625,10 @@ const ShopProductsScreen = ({ navigation, route }) => {
           maxToRenderPerBatch={6}
           windowSize={7}
           initialNumToRender={6}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.3}
         />
 
-        {/* Cart FAB — badge rendered OUTSIDE overflow:hidden container */}
         <View style={styles.cartButtonContainer} pointerEvents="box-none">
           <TouchableOpacity
             style={styles.cartButton}
@@ -547,6 +687,36 @@ const styles = StyleSheet.create({
   loadingText: { marginTop: 15, fontSize: 16, color: ShopColors.textSecondary },
   productsList: { padding: 16, paddingBottom: 100 },
   row: { justifyContent: 'space-between', marginBottom: 16 },
+  
+  // Category Chips
+  categoryChipsContainer: {
+    marginBottom: 16,
+  },
+  categoryChipsScroll: {
+    paddingHorizontal: 4,
+  },
+  categoryChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: ShopColors.card,
+    borderWidth: 1,
+    borderColor: ShopColors.gold + '30',
+    marginRight: 8,
+  },
+  categoryChipSelected: {
+    backgroundColor: ShopColors.gold,
+    borderColor: ShopColors.gold,
+  },
+  categoryChipText: {
+    fontSize: 13,
+    color: ShopColors.textMuted,
+  },
+  categoryChipTextSelected: {
+    color: ShopColors.background,
+    fontWeight: '600',
+  },
+  
   shopHeader: {
     marginBottom: 16,
     borderRadius: 20,
@@ -703,6 +873,20 @@ const styles = StyleSheet.create({
     borderColor: ShopColors.gold,
   },
   unavailableText: { color: ShopColors.gold, fontSize: 10, fontWeight: 'bold', marginLeft: 4 },
+  categoryBadge: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: ShopColors.gold + '90',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  categoryBadgeText: {
+    color: ShopColors.background,
+    fontSize: 9,
+    fontWeight: '600',
+  },
   cartBadge: {
     position: 'absolute',
     top: 8,
@@ -774,8 +958,17 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   retryText: { color: ShopColors.gold, fontSize: 14, fontWeight: '600', marginLeft: 8 },
-
-  // Cart FAB — no overflow:hidden on outer shells so badge is never clipped
+  footerLoader: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  footerLoaderText: {
+    color: ShopColors.textMuted,
+    fontSize: 12,
+    marginLeft: 8,
+  },
   cartButtonContainer: {
     position: 'absolute',
     bottom: 24,
@@ -798,7 +991,7 @@ const styles = StyleSheet.create({
   cartButtonGradient: {
     flex: 1,
     borderRadius: 28,
-    overflow: 'hidden',          // overflow clipping lives here only
+    overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
   },
