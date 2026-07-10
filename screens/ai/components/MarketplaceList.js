@@ -21,6 +21,8 @@ const C = {
 };
 
 const MarketplaceList = ({ data, onViewDetails, onCall, onViewMore }) => {
+  
+
   if (!data || !data.items || data.items.length === 0) {
     return null;
   }
@@ -38,7 +40,14 @@ const MarketplaceList = ({ data, onViewDetails, onCall, onViewMore }) => {
             return (
               <TouchableOpacity
                 style={styles.viewMoreCard}
-                onPress={onViewMore}
+                onPress={() => {
+                  console.log('🔍 ViewMore pressed, onViewMore:', !!onViewMore);  // ← ADD
+                  if (onViewMore) {
+                    onViewMore('marketplace');
+                  } else {
+                    console.log('❌ onViewMore is undefined!');
+                  }
+                }}
               >
                 <Ionicons name="arrow-forward-circle" size={40} color={C.accent} />
                 <Text style={styles.viewMoreText}>View All</Text>
@@ -109,4 +118,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default MarketplaceList;
+export default React.memo(MarketplaceList);

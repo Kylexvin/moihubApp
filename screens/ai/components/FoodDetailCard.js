@@ -8,7 +8,6 @@ import {
   Image,
   ScrollView,
   Dimensions,
-  FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -34,6 +33,8 @@ const FoodDetailCard = ({ data, onViewDetails, onCall }) => {
   const vendor = data;
   const menuItems = vendor.menu || [];
   const hasMenu = menuItems.length > 0;
+  const displayItems = menuItems.slice(0, 5);
+  const hasMoreItems = menuItems.length > 5;
 
   const getStatusColor = () => {
     if (vendor.isOpen === true) return COLORS.success;
@@ -53,102 +54,95 @@ const FoodDetailCard = ({ data, onViewDetails, onCall }) => {
     }
   };
 
-  const renderMenuItem = ({ item }) => (
-    <View style={styles.menuItem}>
-      {item.imageURL ? (
-        <Image source={{ uri: item.imageURL }} style={styles.menuImage} />
-      ) : item.imageUrl ? (
-        <Image source={{ uri: item.imageUrl }} style={styles.menuImage} />
-      ) : (
-        <View style={styles.menuImagePlaceholder}>
-          <Ionicons name="fast-food-outline" size={24} color={COLORS.textMeta} />
-        </View>
-      )}
-      <View style={styles.menuItemInfo}>
-        <Text style={styles.menuItemName} numberOfLines={1}>{item.name}</Text>
-        {item.description ? (
-          <Text style={styles.menuItemDescription} numberOfLines={1}>
-            {item.description}
-          </Text>
-        ) : null}
-      </View>
-      <Text style={styles.menuItemPrice}>KSh {item.price}</Text>
-    </View>
-  );
+  const handleViewShop = () => {
+    if (onViewDetails) {
+      onViewDetails(vendor, 'food');
+    }
+  };
 
   return (
-    <View style={styles.container}>
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        style={styles.scrollContainer}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* ─── Left: Vendor Info ─────────────────────────────────────────── */}
-        <View style={styles.vendorSection}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.headerTop}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="restaurant" size={28} color={COLORS.white} />
-              </View>
-              <View style={styles.headerInfo}>
-                <Text style={styles.shopName} numberOfLines={1}>{vendor.shopName}</Text>
-                <View style={styles.locationRow}>
-                  <Ionicons name="location-outline" size={14} color={COLORS.textMeta} />
-                  <Text style={styles.locationText}>{vendor.location}</Text>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <View style={styles.iconContainer}>
+            <Ionicons name="restaurant" size={28} color={COLORS.white} />
+          </View>
+          <View style={styles.headerInfo}>
+            <Text style={styles.shopName}>{vendor.shopName}</Text>
+            <View style={styles.locationRow}>
+              <Ionicons name="location-outline" size={14} color={COLORS.textMeta} />
+              <Text style={styles.locationText}>{vendor.location}</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.headerActions}>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor() }]}>
+            <Text style={styles.statusText}>{getStatusText()}</Text>
+          </View>
+          {vendor.phone && (
+            <TouchableOpacity style={styles.callButton} onPress={handleCall}>
+              <Ionicons name="call-outline" size={16} color={COLORS.accent} />
+              <Text style={styles.callButtonText}>Call</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {/* Description */}
+      {vendor.description && (
+        <View style={styles.descriptionSection}>
+          <Text style={styles.descriptionText}>{vendor.description}</Text>
+        </View>
+      )}
+
+      {/* Menu */}
+      <View style={styles.menuSection}>
+        <View style={styles.menuHeader}>
+          <Text style={styles.menuTitle}>📋 Menu</Text>
+          <Text style={styles.menuCount}>{menuItems.length} items</Text>
+        </View>
+
+        {hasMenu ? (
+          <>
+            {displayItems.map((item, index) => (
+              <View key={index} style={styles.menuItem}>
+                {(item.imageURL || item.imageUrl) && (
+                  <Image 
+                    source={{ uri: item.imageURL || item.imageUrl }} 
+                    style={styles.menuImage} 
+                  />
+                )}
+                <View style={styles.menuItemInfo}>
+                  <Text style={styles.menuItemName}>{item.name}</Text>
+                  {item.description ? (
+                    <Text style={styles.menuItemDescription} numberOfLines={1}>
+                      {item.description}
+                    </Text>
+                  ) : null}
                 </View>
+                <Text style={styles.menuItemPrice}>KSh {item.price}</Text>
               </View>
-            </View>
+            ))}
 
-            <View style={styles.headerActions}>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor() }]}>
-                <Text style={styles.statusText}>{getStatusText()}</Text>
-              </View>
-              {vendor.phone && (
-                <TouchableOpacity style={styles.callButton} onPress={handleCall}>
-                  <Ionicons name="call-outline" size={16} color={COLORS.accent} />
-                  <Text style={styles.callButtonText}>Call</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            {/* View Full Menu Button */}
+            {hasMoreItems && (
+              <TouchableOpacity style={styles.viewShopButton} onPress={handleViewShop}>
+                <Ionicons name="eye-outline" size={16} color={COLORS.white} />
+                <Text style={styles.viewShopText}>View Full Menu ({menuItems.length - 5} more)</Text>
+                <Ionicons name="arrow-forward" size={16} color={COLORS.white} />
+              </TouchableOpacity>
+            )}
+          </>
+        ) : (
+          <View style={styles.emptyMenu}>
+            <Ionicons name="fast-food-outline" size={40} color={COLORS.textMeta} />
+            <Text style={styles.emptyMenuText}>No menu items available</Text>
           </View>
-
-          {/* Description */}
-          {vendor.description && (
-            <View style={styles.descriptionSection}>
-              <Text style={styles.descriptionText} numberOfLines={2}>
-                {vendor.description}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* ─── Right: Menu Items (Horizontal Scroll) ────────────────────── */}
-        <View style={styles.menuSection}>
-          <View style={styles.menuHeader}>
-            <Text style={styles.menuTitle}>📋 Menu</Text>
-            <Text style={styles.menuCount}>{menuItems.length} items</Text>
-          </View>
-
-          {hasMenu ? (
-            <FlatList
-              data={menuItems}
-              keyExtractor={(item) => item.id?.toString() || item.name}
-              renderItem={renderMenuItem}
-              scrollEnabled={false}
-              contentContainerStyle={styles.menuList}
-              showsVerticalScrollIndicator={false}
-            />
-          ) : (
-            <View style={styles.emptyMenu}>
-              <Ionicons name="fast-food-outline" size={32} color={COLORS.textMeta} />
-              <Text style={styles.emptyMenuText}>No menu items</Text>
-            </View>
-          )}
-        </View>
-      </ScrollView>
-    </View>
+        )}
+      </View>
+    </ScrollView>
   );
 };
 
@@ -156,51 +150,38 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: COLORS.surface,
     borderRadius: 12,
+    padding: 16,    
     marginVertical: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
-    width: width * 0.85,
-  },
-  scrollContainer: {
-    maxHeight: 360,
-  },
-  scrollContent: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 14,
-    gap: 12,
-  },
-  vendorSection: {
-    width: width * 0.35,
-    flexShrink: 0,
   },
   header: {
-    marginBottom: 8,
+    marginBottom: 12,
   },
   headerTop: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: COLORS.accent,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
+    marginRight: 10,
   },
   headerInfo: {
-    alignItems: 'center',
+    flex: 1,
   },
   shopName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
-    textAlign: 'center',
   },
   locationRow: {
     flexDirection: 'row',
@@ -209,122 +190,125 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   locationText: {
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.textMeta,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
+    gap: 8,
     marginTop: 4,
   },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   statusText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
     color: COLORS.white,
   },
   callButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 6,
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   callButtonText: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '500',
     color: COLORS.accent,
   },
   descriptionSection: {
     backgroundColor: COLORS.bg,
-    borderRadius: 6,
-    padding: 8,
-    marginTop: 4,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
   },
   descriptionText: {
-    fontSize: 11,
+    fontSize: 13,
     color: COLORS.textSecondary,
-    lineHeight: 16,
+    lineHeight: 18,
   },
   menuSection: {
     flex: 1,
-    minWidth: width * 0.42,
   },
   menuHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   menuTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     color: COLORS.textPrimary,
   },
   menuCount: {
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.textMeta,
-  },
-  menuList: {
-    gap: 4,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.bg,
-    borderRadius: 6,
-    padding: 6,
-    gap: 8,
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 4,
+    gap: 10,
   },
   menuImage: {
-    width: 36,
-    height: 36,
-    borderRadius: 4,
+    width: 44,
+    height: 44,
+    borderRadius: 6,
     backgroundColor: COLORS.bg,
-  },
-  menuImagePlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 4,
-    backgroundColor: COLORS.bg,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   menuItemInfo: {
     flex: 1,
   },
   menuItemName: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '500',
     color: COLORS.textPrimary,
   },
   menuItemDescription: {
-    fontSize: 10,
+    fontSize: 11,
     color: COLORS.textMeta,
   },
   menuItemPrice: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: COLORS.accent,
   },
   emptyMenu: {
     alignItems: 'center',
-    paddingVertical: 16,
-    gap: 4,
+    paddingVertical: 20,
+    gap: 8,
   },
   emptyMenuText: {
-    fontSize: 12,
+    fontSize: 14,
     color: COLORS.textMeta,
+  },
+  viewShopButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.accent,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+    marginTop: 8,
+  },
+  viewShopText: {
+    color: COLORS.white,
+    fontWeight: '600',
+    fontSize: 14,
   },
 });
 
-export default FoodDetailCard;
+export default React.memo(FoodDetailCard);

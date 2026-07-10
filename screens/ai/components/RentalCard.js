@@ -188,4 +188,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default RentalCard;
+export default React.memo(RentalCard);

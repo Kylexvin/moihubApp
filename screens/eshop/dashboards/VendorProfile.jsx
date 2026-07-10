@@ -13,7 +13,8 @@ import {
   Dimensions,
   StatusBar,
   Animated,
-  Switch
+  Modal,
+  FlatList
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -94,7 +95,6 @@ const useFormValidation = (profile) => {
     const newErrors = {};
     let isValid = true;
 
-    // Validate required fields
     if (!profile.shopName.trim()) {
       newErrors.shopName = 'Shop name is required';
       isValid = false;
@@ -281,7 +281,6 @@ const ShopStatusToggle = React.memo(({ isActive, onToggle, loading }) => {
       await onToggle(!isEnabled);
       setIsEnabled(!isEnabled);
     } catch (error) {
-      // Revert if failed
       setIsEnabled(isEnabled);
     }
   }, [isEnabled, onToggle]);
@@ -294,9 +293,7 @@ const ShopStatusToggle = React.memo(({ isActive, onToggle, loading }) => {
           size={24} 
           color={isEnabled ? COLORS.success : COLORS.danger} 
         />
-        <Text style={styles.statusToggleTitle}>
-          Shop Status
-        </Text>
+        <Text style={styles.statusToggleTitle}>Shop Status</Text>
       </View>
       
       <View style={styles.statusToggleContent}>
@@ -355,12 +352,19 @@ const VendorProfile = () => {
   const [togglingStatus, setTogglingStatus] = useState(false);
   const [originalProfile, setOriginalProfile] = useState({});
   
+  // Category States
+  const [categories, setCategories] = useState([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [deletingCategory, setDeletingCategory] = useState(null);
+  
   const { errors, validateField, validateForm, setErrors } = useFormValidation(profile);
 
-  // Memoized handlers to prevent unnecessary re-renders
+  // Memoized handlers
   const handleFieldChange = useCallback((field) => (text) => {
     setProfile(prev => ({ ...prev, [field]: text }));
-    // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
@@ -373,7 +377,7 @@ const VendorProfile = () => {
   const fetchProfile = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await axios.get('https://moihub.onrender.com/api/eshop/vendor/dashboard');
+      const response = await axios.get('/api/eshop/vendor/dashboard');
       
       if (response.data.success && response.data.data.shop) {
         const shop = response.data.data.shop;
@@ -400,18 +404,28 @@ const VendorProfile = () => {
     }
   }, []);
 
+  const fetchCategories = useCallback(async () => {
+    try {
+      setLoadingCategories(true);
+      const response = await axios.get('/api/eshop/vendor/my-categories');
+      if (response.data.success) {
+        setCategories(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    } finally {
+      setLoadingCategories(false);
+    }
+  }, []);
+
   const handleToggleShopStatus = useCallback(async (newStatus) => {
     try {
       setTogglingStatus(true);
-      const response = await axios.patch('https://moihub.onrender.com/api/eshop/vendor/toggle-shop-status');
+      const response = await axios.patch('/api/eshop/vendor/toggle-shop-status');
       
       if (response.data.success) {
         setProfile(prev => ({ ...prev, isActive: response.data.data.isActive }));
-        Alert.alert(
-          'Success',
-          response.data.message,
-          [{ text: 'OK', style: 'default' }]
-        );
+        Alert.alert('Success', response.data.message);
       } else {
         Alert.alert('Error', response.data.message || 'Failed to update shop status.');
         throw new Error(response.data.message);
@@ -420,8 +434,7 @@ const VendorProfile = () => {
       console.error('Error toggling shop status:', error);
       Alert.alert(
         'Error',
-        error.response?.data?.message || 'Failed to update shop status. Please try again.',
-        [{ text: 'OK' }]
+        error.response?.data?.message || 'Failed to update shop status. Please try again.'
       );
       throw error;
     } finally {
@@ -429,9 +442,66 @@ const VendorProfile = () => {
     }
   }, []);
 
+  const handleAddCategory = useCallback(async () => {
+    if (!newCategoryName.trim()) {
+      Alert.alert('Error', 'Please enter a category name');
+      return;
+    }
+
+    try {
+      setAddingCategory(true);
+      const response = await axios.post(
+        '/api/eshop/vendor/my-categories',
+        { name: newCategoryName.trim() }
+      );
+
+      if (response.data.success) {
+        setCategories(prev => [...prev, response.data.data]);
+        setNewCategoryName('');
+        setShowCategoryModal(false);
+        Alert.alert('Success', 'Category added successfully!');
+      }
+    } catch (error) {
+      console.error('Error adding category:', error);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to add category');
+    } finally {
+      setAddingCategory(false);
+    }
+  }, [newCategoryName]);
+
+  const handleDeleteCategory = useCallback(async (categoryId, categoryName) => {
+    Alert.alert(
+      'Delete Category',
+      `Are you sure you want to delete "${categoryName}"? This will remove it from all products.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setDeletingCategory(categoryId);
+              await axios.delete(
+                `/api/eshop/vendor/my-categories/${categoryId}`
+              );
+              setCategories(prev => prev.filter(c => c._id !== categoryId));
+              Alert.alert('Success', 'Category deleted successfully');
+            } catch (error) {
+              console.error('Error deleting category:', error);
+              Alert.alert('Error', error.response?.data?.message || 'Failed to delete category');
+            } finally {
+              setDeletingCategory(null);
+            }
+          }
+        }
+      ]
+    );
+  }, []);
+
   useEffect(() => {
     fetchProfile();
-  }, [fetchProfile]);
+    fetchCategories();
+  }, [fetchProfile, fetchCategories]);
 
   const handleUpdateProfile = useCallback(async () => {
     if (!validateForm()) {
@@ -441,7 +511,7 @@ const VendorProfile = () => {
 
     setSaving(true);
     try {
-      const response = await axios.put('https://moihub.onrender.com/api/eshop/vendor/profile', {
+      const response = await axios.put('/api/eshop/vendor/profile', {
         shopName: profile.shopName.trim(),
         description: profile.description.trim(),
         address: profile.address.trim(),
@@ -451,11 +521,7 @@ const VendorProfile = () => {
       if (response.data.success) {
         setOriginalProfile(profile);
         setErrors({});
-        Alert.alert(
-          'Success',
-          'Profile updated successfully!',
-          [{ text: 'OK', style: 'default' }]
-        );
+        Alert.alert('Success', 'Profile updated successfully!');
       } else {
         Alert.alert('Error', response.data.message || 'Failed to update profile.');
       }
@@ -613,6 +679,59 @@ const VendorProfile = () => {
             </View>
           </View>
 
+          {/* Category Management Card */}
+          <View style={styles.cardContainer}>
+            <View style={styles.card}>
+              <View style={styles.categoryManagementHeader}>
+                <Text style={styles.cardTitle}>Category Management</Text>
+                <TouchableOpacity 
+                  style={styles.addCategoryButton}
+                  onPress={() => setShowCategoryModal(true)}
+                >
+                  <Ionicons name="add-circle" size={24} color={COLORS.primary} />
+                  <Text style={styles.addCategoryText}>Add New</Text>
+                </TouchableOpacity>
+              </View>
+
+              {loadingCategories ? (
+                <ActivityIndicator size="small" color={COLORS.primary} />
+              ) : categories.length === 0 ? (
+                <View style={styles.emptyCategories}>
+                  <Ionicons name="pricetag-outline" size={40} color={COLORS.gray} />
+                  <Text style={styles.emptyCategoriesText}>No categories yet</Text>
+                  <Text style={styles.emptyCategoriesSubtext}>
+                    Create categories to organize your products
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.categoriesList}>
+                  {categories.map((category) => (
+                    <View key={category._id} style={styles.categoryItem}>
+                      <View style={styles.categoryItemContent}>
+                        <Ionicons name="pricetag" size={20} color={COLORS.secondary} />
+                        <Text style={styles.categoryItemName}>{category.name}</Text>
+                        <Text style={styles.categoryItemCount}>
+                          {category.productCount || 0} products
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.deleteCategoryButton}
+                        onPress={() => handleDeleteCategory(category._id, category.name)}
+                        disabled={deletingCategory === category._id}
+                      >
+                        {deletingCategory === category._id ? (
+                          <ActivityIndicator size="small" color={COLORS.danger} />
+                        ) : (
+                          <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+
           {/* Action Buttons */}
           <View style={styles.actionContainer}>
             <View style={styles.buttonRow}>
@@ -675,6 +794,60 @@ const VendorProfile = () => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Add Category Modal */}
+      <Modal
+        visible={showCategoryModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCategoryModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add New Category</Text>
+              <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
+                <Ionicons name="close" size={24} color={COLORS.dark} />
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Enter category name (e.g., Hair, Wigs, Nails)"
+              placeholderTextColor={COLORS.gray}
+              value={newCategoryName}
+              onChangeText={setNewCategoryName}
+              autoFocus
+              maxLength={30}
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => {
+                  setNewCategoryName('');
+                  setShowCategoryModal(false);
+                }}
+                disabled={addingCategory}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalAddButton]}
+                onPress={handleAddCategory}
+                disabled={addingCategory || !newCategoryName.trim()}
+              >
+                {addingCategory ? (
+                  <ActivityIndicator color={COLORS.white} size="small" />
+                ) : (
+                  <Text style={styles.modalAddButtonText}>Add Category</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -741,7 +914,42 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: SPACING.sm,
   },
-    toggleButton: {
+  
+  // Toggle Styles
+  statusToggleContainer: {
+    padding: SPACING.md,
+  },
+  statusToggleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  statusToggleTitle: {
+    fontSize: TYPOGRAPHY.h4,
+    fontWeight: 'bold',
+    color: COLORS.dark,
+    marginLeft: SPACING.sm,
+  },
+  statusToggleContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  statusTextContainer: {
+    flex: 1,
+    marginRight: SPACING.md,
+  },
+  statusLabel: {
+    fontSize: TYPOGRAPHY.body,
+    fontWeight: '600',
+    color: COLORS.dark,
+  },
+  statusDescription: {
+    fontSize: TYPOGRAPHY.small,
+    color: COLORS.gray,
+    marginTop: SPACING.xs,
+  },
+  toggleButton: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: 20,
@@ -771,6 +979,7 @@ const styles = StyleSheet.create({
   toggleButtonTextInactive: {
     color: COLORS.danger,
   },
+  
   // Card Styles
   cardContainer: {
     padding: SPACING.lg,
@@ -885,6 +1094,72 @@ const styles = StyleSheet.create({
     padding: SPACING.xs,
   },
   
+  // Category Management Styles
+  categoryManagementHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  addCategoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(74, 144, 226, 0.1)',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 20,
+  },
+  addCategoryText: {
+    color: COLORS.primary,
+    fontWeight: '600',
+    marginLeft: SPACING.xs,
+  },
+  emptyCategories: {
+    alignItems: 'center',
+    paddingVertical: SPACING.xl,
+  },
+  emptyCategoriesText: {
+    fontSize: TYPOGRAPHY.body,
+    fontWeight: '600',
+    color: COLORS.dark,
+    marginTop: SPACING.md,
+  },
+  emptyCategoriesSubtext: {
+    fontSize: TYPOGRAPHY.caption,
+    color: COLORS.gray,
+    marginTop: SPACING.xs,
+  },
+  categoriesList: {
+    marginTop: SPACING.sm,
+  },
+  categoryItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.lightGray,
+  },
+  categoryItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  categoryItemName: {
+    fontSize: TYPOGRAPHY.body,
+    color: COLORS.dark,
+    marginLeft: SPACING.sm,
+    flex: 1,
+  },
+  categoryItemCount: {
+    fontSize: TYPOGRAPHY.small,
+    color: COLORS.gray,
+    marginLeft: SPACING.md,
+  },
+  deleteCategoryButton: {
+    padding: SPACING.sm,
+  },
+  
   // Button Styles
   actionContainer: {
     paddingHorizontal: SPACING.lg,
@@ -980,6 +1255,65 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.sm,
     flex: 1,
     lineHeight: 20,
+  },
+  
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: SPACING.lg,
+    width: '85%',
+    maxWidth: 400,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  modalTitle: {
+    fontSize: TYPOGRAPHY.h4,
+    fontWeight: 'bold',
+    color: COLORS.dark,
+  },
+  modalInput: {
+    borderWidth: 2,
+    borderColor: COLORS.lightGray,
+    borderRadius: 12,
+    padding: SPACING.md,
+    fontSize: TYPOGRAPHY.body,
+    marginBottom: SPACING.md,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: SPACING.md,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: SPACING.md,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalCancelButton: {
+    backgroundColor: COLORS.lightGray,
+  },
+  modalCancelButtonText: {
+    color: COLORS.gray,
+    fontWeight: '600',
+  },
+  modalAddButton: {
+    backgroundColor: COLORS.primary,
+  },
+  modalAddButtonText: {
+    color: COLORS.white,
+    fontWeight: '600',
   },
 });
 

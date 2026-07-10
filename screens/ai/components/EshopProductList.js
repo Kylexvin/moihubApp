@@ -1,4 +1,4 @@
-// screens/ai/components/FoodList.js
+// screens/ai/components/EshopProductList.js
 import React from 'react';
 import {
   View,
@@ -9,7 +9,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import FoodCard from './FoodCard';
+import EshopProductCard from './EshopProductCard';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.75;
@@ -20,40 +20,39 @@ const C = {
   surface: '#ffffff',
 };
 
-const FoodList = ({ data, onViewDetails, onCall, onViewMore }) => {
-  if (!data || !data.foodVendors || data.foodVendors.length === 0) {
+const EshopProductList = ({ data, onViewDetails, onCall, onViewMore }) => {
+  if (!data || !data.eshopProducts || data.eshopProducts.length === 0) {
     return null;
   }
 
-  const itemsWithMore = [...data.foodVendors, { isViewMore: true }];
+  const itemsWithMore = [...data.eshopProducts, { isViewMore: true }];
 
   return (
     <View style={styles.container}>
       <FlatList
         data={itemsWithMore}
-        keyExtractor={(item, index) => item.isViewMore ? 'view-more-food' : (item.id?.toString() || index.toString())}
+        keyExtractor={(item, index) => item.isViewMore ? 'view-more-eshop-product' : (item.id?.toString() || index.toString())}
         renderItem={({ item }) => {
           if (item.isViewMore) {
             return (
               <TouchableOpacity 
                 style={styles.viewMoreCard} 
                 onPress={() => {
-                  console.log('🔍 FoodList - View All pressed, onViewMore:', !!onViewMore);
                   if (onViewMore) {
-                    onViewMore('food');
+                    onViewMore('eshops');
                   }
                 }}
               >
                 <Ionicons name="arrow-forward-circle" size={40} color={C.accent} />
                 <Text style={styles.viewMoreText}>View All</Text>
-                <Text style={styles.viewMoreSubtext}>See all {data.foodVendors.length} vendors</Text>
+                <Text style={styles.viewMoreSubtext}>See all {data.eshopProducts.length} products</Text>
               </TouchableOpacity>
             );
           }
           return (
             <View style={styles.cardWrapper}>
-              <FoodCard
-                data={{ count: 1, foodVendors: [item] }}
+              <EshopProductCard
+                data={{ eshopProducts: [item] }}
                 onViewDetails={onViewDetails}
                 onCall={onCall}
               />
@@ -113,4 +112,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default React.memo(FoodList);
+export default React.memo(EshopProductList);

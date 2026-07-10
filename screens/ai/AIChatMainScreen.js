@@ -14,7 +14,7 @@ import {
   StatusBar,
   Dimensions,
   Linking,
-  ScrollView,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -25,22 +25,24 @@ const { width } = Dimensions.get('window');
 
 // ─── Theme Colors ────────────────────────────────────────────────────────────
 const COLORS = {
-  bg: '#f5f5f5',
-  surface: '#ffffff',
-  surfaceAlt: '#f8f9fa',
-  headerBg: '#2C3E50',
-  inputBg: '#f0f0f0',
-  green: '#059669',
-  greenLight: '#E8F5E9',
-  textPrimary: '#1a1a1a',
-  textSecondary: '#4a4a4a',
-  textMeta: '#888888',
-  border: '#e0e0e0',
-  borderLight: '#e8e8e8',
-  userBubble: '#E3F2FD',
-  userBubbleBorder: '#BBDEFB',
+  bg: '#0f1412',
+  surface: '#1a221e',
+  surfaceAlt: '#161c19',
+  headerBg: '#0f1412',
+  inputBg: '#1a221e',
+  green: '#10B981',
+  greenLight: '#14332a',
+  textPrimary: '#f0f0f0',
+  textSecondary: '#c4c9c6',
+  textMeta: '#6b7570',
+  border: '#26302b',
+  borderLight: '#2c3630',
+  userBubble: '#14332a',
+  userBubbleBorder: '#1d4a3b',
   white: '#ffffff',
   shadow: '#000000',
+  error: '#EF4444',
+  warning: '#F59E0B',
 };
 
 const AIChatMainScreen = () => {
@@ -51,21 +53,12 @@ const AIChatMainScreen = () => {
   const [sessionId, setSessionId] = useState(null);
   const flatListRef = useRef(null);
 
-  // ─── Quick Chips ──────────────────────────────────────────────────────────
-  const quickChips = [
-    { label: '🏠 Rentals', value: 'rentals' },
-    { label: '🍔 Food', value: 'food' },
-    { label: '🔧 Services', value: 'services' },
-    { label: '🛍️ Marketplace', value: 'marketplace' },
-    { label: '🛒 Eshop', value: 'eshops' },
-  ];
-
   useEffect(() => {
     setMessages([
       {
         id: Date.now(),
         role: 'assistant',
-        text: "👋 Hi! I'm your MoiHub Assistant.\n\nI can help you with:\n🏠 Rentals\n🍔 Food\n🔧 Services\n🛍️ Marketplace\n\nJust tell me what you're looking for!",
+        text: "Hi! I'm your MoiHub Assistant.\n\nI can help you with:\nRentals\nFood\nServices\nMarketplace\n\nJust tell me what you're looking for!",
         module: null,
         data: null,
         timestamp: new Date(),
@@ -116,12 +109,24 @@ const AIChatMainScreen = () => {
       setMessages((prev) => [...prev, aiMessage]);
     } catch (error) {
       console.error('Chat error:', error);
-      
+
       let errorText = '😅 Sorry, something went wrong. Please try again.';
-      if (error.response?.status === 404) {
-        errorText = 'Sorry, that feature is not available yet. Try asking about rentals! 🏠';
+      
+      // ─── Token/Quota Errors ──────────────────────────────────────────────
+      if (error.response?.status === 429) {
+        errorText = '⏳ Too many requests. Please wait a moment and try again.';
+      } else if (error.response?.status === 503) {
+        errorText = '🔧 The AI service is currently busy. Please try again in a few seconds.';
+      } else if (error.response?.status === 404) {
+        errorText = 'Sorry, that feature is not available yet. Try asking about rentals.';
       } else if (error.response?.status === 400) {
-        errorText = 'Please enter a valid message. What would you like to find? 🤔';
+        errorText = 'Please enter a valid message. What would you like to find?';
+      } else if (error.response?.status === 500) {
+        errorText = '⚠️ Server error. Please try again later.';
+      } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        errorText = '⏱️ Request timed out. Please check your connection and try again.';
+      } else if (error.message?.includes('Network Error')) {
+        errorText = '📡 Network error. Please check your internet connection.';
       }
 
       const errorMessage = {
@@ -147,15 +152,15 @@ const AIChatMainScreen = () => {
     });
   };
 
-  const handleViewServiceDetails = (provider) => {
-    if (provider.hasDashboard) {
-      navigation.navigate('ServiceDashboard', {
-        screen: 'ProviderDashboard',
+  const handleViewServiceDetails = (provider, type) => {
+    if (type === 'dashboard' || provider.hasDashboard) {
+      navigation.navigate('ServicesStack', {
+        screen: 'ServiceProviderDashboard',
         params: { providerId: provider.id },
       });
     } else {
-      navigation.navigate('ServiceStack', {
-        screen: 'ServiceDetail',
+      navigation.navigate('ServicesStack', {
+        screen: 'ProviderProfile',
         params: { providerId: provider.id },
       });
     }
@@ -163,47 +168,8 @@ const AIChatMainScreen = () => {
 
   const handleViewFoodDetails = (vendor) => {
     navigation.navigate('FoodStack', {
-      screen: 'FoodDetail',
+      screen: 'FoodVendor',  
       params: { vendorId: vendor.id },
-    });
-  };
-
-  const handleViewMarketplace = () => {
-    navigation.navigate('SecondHandStack', { screen: 'SecondHandHome' });
-  };
-
-  // ─── Combined View More Handler ──────────────────────────────────────────
-  const handleViewMore = (type) => {
-    switch(type) {
-      case 'rentals':
-        navigation.navigate('AccomStack', { screen: 'AccomHome' });
-        break;
-      case 'marketplace':
-        navigation.navigate('SecondHandStack', { screen: 'SecondHandHome' });
-        break;
-      case 'eshops':
-        navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
-        break;
-      case 'food':
-        navigation.navigate('FoodStack', { screen: 'FoodHome' });
-        break;
-      case 'services':
-        navigation.navigate('ServiceStack', { screen: 'ServiceHome' });
-        break;
-      default:
-        break;
-    }
-  };
-
-  // ─── Eshop Handlers ──────────────────────────────────────────────────────
-  const handleViewShopProducts = (shop) => {
-    navigation.navigate('EshopNavigator', {
-      screen: 'ShopProducts',
-      params: {
-        shopSlug: shop.slug,
-        shopName: shop.shopName,
-        shopId: shop.id,
-      },
     });
   };
 
@@ -223,8 +189,16 @@ const AIChatMainScreen = () => {
     }
 
     if (type === 'dashboard') {
-      navigation.navigate('ServiceDashboard', {
-        screen: 'ProviderDashboard',
+      navigation.navigate('ServicesStack', {
+        screen: 'ProviderProfile',
+        params: { providerId: item.id },
+      });
+      return;
+    }
+
+    if (type === 'service') {
+      navigation.navigate('ServicesStack', {
+        screen: 'ProviderProfile',
         params: { providerId: item.id },
       });
       return;
@@ -234,11 +208,46 @@ const AIChatMainScreen = () => {
     if (item.price && item.location && item.type) {
       handleViewRentalDetails(item);
     } else if (item.category || item.providerType) {
-      handleViewServiceDetails(item);
+      handleViewServiceDetails(item, item.hasDashboard ? 'dashboard' : 'service');
     } else if (item.shopName || item.matchedItems) {
       handleViewFoodDetails(item);
     } else {
       navigation.navigate('DetailScreen', { id: item.id });
+    }
+  };
+
+  // ─── Eshop Handlers ──────────────────────────────────────────────────────
+  const handleViewShopProducts = (shop) => {
+    navigation.navigate('EshopNavigator', {
+      screen: 'ShopProducts',
+      params: {
+        shopSlug: shop.slug,
+        shopName: shop.shopName,
+        shopId: shop.id,
+      },
+    });
+  };
+
+  // ─── Combined View More Handler ──────────────────────────────────────────
+  const handleViewMore = (type) => {
+    switch(type) {
+      case 'rentals':
+        navigation.navigate('AccomStack', { screen: 'AccomHome' });
+        break;
+      case 'marketplace':
+        navigation.navigate('SecondHandStack', { screen: 'SecondHandHome' });
+        break;
+      case 'eshops':
+        navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
+        break;
+      case 'food':
+        navigation.navigate('FoodStack', { screen: 'FoodHome' });
+        break;
+      case 'services':
+        navigation.navigate('ServicesStack', { screen: 'ServicesList' });
+        break;
+      default:
+        break;
     }
   };
 
@@ -248,28 +257,49 @@ const AIChatMainScreen = () => {
     }
   };
 
-  // ─── Render Message ──────────────────────────────────────────────────────
+  // ─── Render Message with Animation ──────────────────────────────────────
   const renderMessage = ({ item }) => {
     const isUser = item.role === 'user';
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }, []);
 
     return (
-      <View style={[styles.messageWrapper, isUser ? styles.userMessageWrapper : styles.assistantMessageWrapper]}>
-        {!isUser && (
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatarImage}>
-              <Text style={{ fontSize: 16 }}>🤖</Text>
+      <Animated.View 
+        style={{
+          opacity: fadeAnim,
+          transform: [{
+            translateY: fadeAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [20, 0],
+            })
+          }]
+        }}
+      >
+        <View style={[styles.messageWrapper, isUser ? styles.userMessageWrapper : styles.assistantMessageWrapper]}>
+          {!isUser && (
+            <View style={styles.avatarContainer}>
+              <View style={styles.avatarImage}>
+                <Ionicons name="hardware-chip-outline" size={16} color={COLORS.green} />
+              </View>
             </View>
+          )}
+          <View style={[styles.messageBubble, isUser ? styles.userBubble : styles.assistantBubble]}>
+            <Text style={[styles.messageText, isUser ? styles.userText : styles.assistantText]}>
+              {item.text}
+            </Text>
+            <Text style={{ fontSize: 10, color: COLORS.textMeta, marginTop: 4, alignSelf: 'flex-end' }}>
+              {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
           </View>
-        )}
-        <View style={[styles.messageBubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-          <Text style={[styles.messageText, isUser ? styles.userText : styles.assistantText]}>
-            {item.text}
-          </Text>
-          <Text style={{ fontSize: 10, color: COLORS.textMeta, marginTop: 4, alignSelf: 'flex-end' }}>
-            {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
         </View>
-      </View>
+      </Animated.View>
     );
   };
 
@@ -280,14 +310,14 @@ const AIChatMainScreen = () => {
       <View style={[styles.messageWrapper, styles.assistantMessageWrapper]}>
         <View style={styles.avatarContainer}>
           <View style={styles.avatarImage}>
-            <Text style={{ fontSize: 16 }}>🤖</Text>
+            <Ionicons name="hardware-chip-outline" size={16} color={COLORS.green} />
           </View>
         </View>
         <View style={[styles.messageBubble, styles.assistantBubble]}>
           <View style={styles.typingIndicator}>
-            <View style={[styles.typingDot, { animationDelay: '0s' }]} />
-            <View style={[styles.typingDot, { animationDelay: '0.2s' }]} />
-            <View style={[styles.typingDot, { animationDelay: '0.4s' }]} />
+            <View style={styles.typingDot} />
+            <View style={styles.typingDot} />
+            <View style={styles.typingDot} />
           </View>
         </View>
       </View>
@@ -295,15 +325,15 @@ const AIChatMainScreen = () => {
   };
 
   // ─── Render AI Components ─────────────────────────────────────────────────
-const renderAIComponents = ({ item }) => {
-  if (item.role === 'user' || !item.data) return null;
+  const renderAIComponents = ({ item }) => {
+    if (item.role === 'user' || !item.data) return null;
 
-  return (
-    <View style={{ marginTop: 4, marginLeft: 42 }}>
-      {renderAIMessage(item, handleViewDetails, handleCall, handleViewMore)}
-    </View>
-  );
-};
+    return (
+      <View style={{ marginTop: 4, marginLeft: 42 }}>
+        {renderAIMessage(item, handleViewDetails, handleCall, handleViewMore)}
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -316,7 +346,7 @@ const renderAIComponents = ({ item }) => {
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <View style={styles.headerLogo}>
-            <Text style={{ fontSize: 20 }}>🤖</Text>
+            <Ionicons name="hardware-chip-outline" size={20} color={COLORS.white} />
           </View>
           <View>
             <Text style={styles.headerTitle}>MoiHub Assistant</Text>
@@ -345,26 +375,6 @@ const renderAIComponents = ({ item }) => {
         onLayout={() => flatListRef.current?.scrollToEnd()}
         showsVerticalScrollIndicator={false}
       />
-
-      {/* ─── Quick Chips ───────────────────────────────────────────────────── */}
-      {messages.length <= 2 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.chipsContainer}
-          contentContainerStyle={styles.chipsContent}
-        >
-          {quickChips.map((chip) => (
-            <TouchableOpacity
-              key={chip.value}
-              style={styles.chip}
-              onPress={() => sendMessage(chip.label)}
-            >
-              <Text style={styles.chipText}>{chip.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      )}
 
       {/* ─── Input ────────────────────────────────────────────────────────── */}
       <KeyboardAvoidingView
@@ -408,7 +418,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg,
   },
 
-  // ── Header ──────────────────────────────────────────────────────────────────
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -452,7 +461,6 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 
-  // ── Messages ─────────────────────────────────────────────────────────────────
   messagesContent: {
     paddingHorizontal: 16,
     paddingTop: 20,
@@ -460,7 +468,6 @@ const styles = StyleSheet.create({
     gap: 4,
   },
 
-  // ── Message rows ──────────────────────────────────────────────────────────────
   messageWrapper: {
     flexDirection: 'row',
     marginBottom: 8,
@@ -486,7 +493,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  // ── Bubbles ───────────────────────────────────────────────────────────────────
   messageBubble: {
     maxWidth: width * 0.78,
     paddingHorizontal: 14,
@@ -519,7 +525,6 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
 
-  // ── Typing dots ───────────────────────────────────────────────────────────────
   typingIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -534,31 +539,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.green,
   },
 
-  // ── Quick Chips ──────────────────────────────────────────────────────────────
-  chipsContainer: {
-    maxHeight: 52,
-    marginBottom: 4,
-  },
-  chipsContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    gap: 8,
-  },
-  chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: COLORS.greenLight,
-    borderWidth: 1,
-    borderColor: COLORS.green,
-  },
-  chipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.green,
-  },
-
-  // ── Input ─────────────────────────────────────────────────────────────────────
   inputContainer: {
     paddingHorizontal: 14,
     paddingTop: 8,

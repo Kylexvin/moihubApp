@@ -105,4 +105,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default EshopList;
+export default React.memo(EshopList);

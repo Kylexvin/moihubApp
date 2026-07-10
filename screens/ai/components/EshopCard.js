@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Image,
   Dimensions,
-  FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -31,15 +30,14 @@ const EshopCard = ({ data, onViewDetails, onCall }) => {
   }
 
   const shop = data.eshops[0];
-  const products = shop.products || [];
-  const displayProducts = products.slice(0, 5);
-  const hasMoreProducts = products.length > 5;
-  const hasProducts = products.length > 0;
 
 const handleShopPress = () => {
-  onViewDetails?.(shop, 'eshop');
+  const shopData = {
+    ...shop,
+    slug: shop.slug || shop.shopName?.toLowerCase().replace(/\s+/g, '-')
+  };
+  onViewDetails?.(shopData, 'eshop');
 };
-
 
   const handleWhatsApp = () => {
     if (onCall && shop.phoneNumber) {
@@ -78,45 +76,6 @@ const handleShopPress = () => {
           </View>
         </View>
       </View>
-
-      {/* Products Preview */}
-      {hasProducts ? (
-        <View style={styles.productsSection}>
-          <Text style={styles.productsLabel}>🛍️ Products</Text>
-          <FlatList
-            data={displayProducts}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(item) => item.id?.toString() || item.name}
-            renderItem={({ item }) => (
-              <TouchableOpacity style={styles.productItem} onPress={() => onViewDetails?.(item, 'product')}>
-                {item.image && item.image !== 'default-product.png' ? (
-                  <Image source={{ uri: item.image }} style={styles.productImage} />
-                ) : (
-                  <View style={styles.productImagePlaceholder}>
-                    <Ionicons name="cube-outline" size={20} color="#ccc" />
-                  </View>
-                )}
-                <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
-                <Text style={styles.productPrice}>KSh {item.price}</Text>
-              </TouchableOpacity>
-            )}
-            ListFooterComponent={
-              hasMoreProducts ? (
-                <TouchableOpacity style={styles.viewMoreProducts} onPress={handleShopPress}>
-                  <Text style={styles.viewMoreText}>+{products.length - 5} more</Text>
-                  <Ionicons name="arrow-forward" size={14} color={C.accent} />
-                </TouchableOpacity>
-              ) : null
-            }
-          />
-        </View>
-      ) : (
-        <View style={styles.noProductsContainer}>
-          <Ionicons name="cube-outline" size={24} color="#ccc" />
-          <Text style={styles.noProductsText}>No products yet</Text>
-        </View>
-      )}
 
       {/* Description */}
       {shop.description && (
@@ -167,7 +126,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   logo: {
     width: 50,
@@ -236,73 +195,6 @@ const styles = StyleSheet.create({
     color: C.accent,
     fontWeight: '500',
   },
-  productsSection: {
-    marginBottom: 8,
-  },
-  productsLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: C.textMeta,
-    marginBottom: 6,
-  },
-  productItem: {
-    width: 80,
-    marginRight: 8,
-    alignItems: 'center',
-    backgroundColor: C.bg,
-    borderRadius: 8,
-    padding: 6,
-  },
-  productImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 6,
-    backgroundColor: C.bg,
-  },
-  productImagePlaceholder: {
-    width: 60,
-    height: 60,
-    borderRadius: 6,
-    backgroundColor: C.bg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  productName: {
-    fontSize: 11,
-    color: C.textSecondary,
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  productPrice: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: C.accent,
-  },
-  viewMoreProducts: {
-    width: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  viewMoreText: {
-    fontSize: 11,
-    color: C.accent,
-    fontWeight: '500',
-  },
-  noProductsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    backgroundColor: C.bg,
-    borderRadius: 8,
-    marginBottom: 8,
-    gap: 8,
-  },
-  noProductsText: {
-    fontSize: 13,
-    color: C.textMeta,
-  },
   description: {
     fontSize: 13,
     color: C.textSecondary,
@@ -359,4 +251,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default EshopCard;
+export default React.memo(EshopCard);

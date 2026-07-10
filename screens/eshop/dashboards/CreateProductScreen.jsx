@@ -168,7 +168,7 @@ const CreateProductScreen = ({ navigation }) => {
         name: image.fileName || `product-${Date.now()}.jpg`
       });
 
-      const response = await axios.post('/api/eshop/product/create', formDataToSend, {
+      const response = await axios.post('/api/eshop/vendor/product/create', formDataToSend, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }

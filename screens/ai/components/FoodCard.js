@@ -323,4 +323,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default FoodCard;
+export default React.memo(FoodCard);

@@ -257,4 +257,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default MarketplaceCard;
+export default React.memo(MarketplaceCard);

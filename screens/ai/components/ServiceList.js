@@ -55,4 +55,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ServiceList;
+export default React.memo(ServiceList);

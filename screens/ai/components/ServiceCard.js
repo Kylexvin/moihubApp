@@ -59,6 +59,11 @@ const ServiceCard = ({ data, onViewDetails, onCall }) => {
     }
   };
 
+  const handleView = () => {
+    // Pass provider and type for navigation
+    onViewDetails?.(provider, provider.hasDashboard ? 'dashboard' : 'service');
+  };
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -97,31 +102,35 @@ const ServiceCard = ({ data, onViewDetails, onCall }) => {
         </View>
       </View>
 
-      {/* Actions */}
+      {/* ─── Conditional Actions ────────────────────────────────────────── */}
       <View style={styles.actions}>
-        <TouchableOpacity
-          style={styles.viewButton}
-          onPress={() => onViewDetails?.(provider)}
-        >
-          <Ionicons name="eye-outline" size={16} color={C.white} />
-          <Text style={styles.viewButtonText}>View</Text>
-        </TouchableOpacity>
+        {provider.hasDashboard ? (
+          // ─── Dashboard Provider: View + Call ──────────────────────────
+          <>
+            <TouchableOpacity
+              style={styles.viewButton}
+              onPress={handleView}
+            >
+              <Ionicons name="eye-outline" size={16} color={C.white} />
+              <Text style={styles.viewButtonText}>View</Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.callButton}
-          onPress={handleCall}
-        >
-          <Ionicons name="call-outline" size={16} color={C.accent} />
-          <Text style={styles.callButtonText}>Call</Text>
-        </TouchableOpacity>
-
-        {provider.hasDashboard && (
+            <TouchableOpacity
+              style={styles.callButton}
+              onPress={handleCall}
+            >
+              <Ionicons name="logo-whatsapp" size={16} color="#25D366" />
+              <Text style={styles.callButtonText}>Call</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          // ─── Directory Provider: Call only (full width) ──────────────
           <TouchableOpacity
-            style={styles.dashboardButton}
-            onPress={() => onViewDetails?.(provider, 'dashboard')}
+            style={styles.callButtonFull}
+            onPress={handleCall}
           >
-            <Ionicons name="business-outline" size={16} color={C.white} />
-            <Text style={styles.dashboardButtonText}>Dashboard</Text>
+            <Ionicons name="logo-whatsapp" size={16} color="#25D366" />
+            <Text style={styles.callButtonText}>Call {provider.name}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -227,36 +236,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: C.bg,
+    backgroundColor: '#E8F5E9',
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
     gap: 4,
     flex: 1,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: '#C8E6C9',
+  },
+  callButtonFull: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    gap: 4,
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
   },
   callButtonText: {
     color: C.textPrimary,
     fontWeight: '600',
     fontSize: 13,
   },
-  dashboardButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: C.accent,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    gap: 4,
-    flex: 1,
-  },
-  dashboardButtonText: {
-    color: C.white,
-    fontWeight: '600',
-    fontSize: 13,
-  },
 });
 
-export default ServiceCard;
+export default React.memo(ServiceCard);

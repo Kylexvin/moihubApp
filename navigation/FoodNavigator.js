@@ -17,7 +17,7 @@ const FoodNavigator = () => {
     <Stack.Navigator
       initialRouteName="FoodHome"
       screenOptions={{
-        headerShown: false, // Hide all headers by default
+        headerShown: false, 
         gestureEnabled: true
         
       }}
@@ -30,7 +30,7 @@ const FoodNavigator = () => {
         name="FoodVendor" 
         component={FoodVendorScreen}
         options={{
-          headerShown: false, // Show header for vendor screen
+          headerShown: false, 
           headerStyle: {
             backgroundColor: 'ivory',
           },
@@ -55,7 +55,7 @@ const FoodNavigator = () => {
         name="Order" 
         component={OrderScreen}
         options={{
-          headerShown: false, // Show header for order screen
+          headerShown: false, 
           headerStyle: {
             backgroundColor: '#005f4b',
           },
@@ -80,7 +80,7 @@ const FoodNavigator = () => {
         name="MyOrders" 
         component={MyOrdersScreen}
         options={{
-          headerShown: false, // Show header for orders history
+          headerShown: false, 
           headerStyle: {
             backgroundColor: '#005f4b',
           },
