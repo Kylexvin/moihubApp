@@ -413,81 +413,92 @@ const HomeScreen = () => {
     });
   };
 
-  const handleHighlightPress = () => {
-    if (!homescreenData?.highlight) return;
+const handleHighlightPress = () => {
+  if (!homescreenData?.highlight) return;
 
-    const highlight = homescreenData.highlight;
+  const highlight = homescreenData.highlight;
 
-    trackUserBehavior('highlight_click', 'Highlight', {
-      title: highlight.title,
-      type: highlight.type
+  trackUserBehavior('highlight_click', 'Highlight', {
+    title: highlight.title,
+    type: highlight.type
+  });
+
+  if (highlight.targetScreen && highlight.targetId) {
+    navigation.navigate(highlight.targetScreen, {
+      id: highlight.targetId,
+      ...(highlight.metadata || {})
     });
+    return;
+  }
 
-    if (highlight.targetScreen && highlight.targetId) {
-      navigation.navigate(highlight.targetScreen, {
-        id: highlight.targetId,
-        ...(highlight.metadata || {})
-      });
-      return;
-    }
+  const highlightType = highlight.type?.toUpperCase();
 
-    const highlightType = highlight.type?.toUpperCase();
+  // ─── BLOG / ANNOUNCEMENT - Navigate to pinned blog ──────────────────
+  if (highlightType === 'BLOG' || highlightType === 'ARTICLE' || highlightType === 'NEWS' || 
+      highlightType === 'ANNOUNCEMENT' || highlightType === 'UPDATE') {
+    navigation.navigate('BlogsNavigator', { 
+      screen: 'BlogDetails',
+      params: { pinned: true }
+    });
+    return;
+  }
 
-    if (highlightType === 'BLOG' || highlightType === 'ARTICLE' || highlightType === 'NEWS') {
-      navigation.navigate('BlogsNavigator', { screen: 'Blogs' });
-      return;
-    }
+  if (highlightType === 'FOOD' || highlightType === 'RESTAURANT') {
+    navigation.navigate('FoodStack', { screen: 'FoodHome' });
+    return;
+  }
 
-    if (highlightType === 'FOOD' || highlightType === 'RESTAURANT') {
-      navigation.navigate('FoodStack', { screen: 'FoodHome' });
-      return;
-    }
+  if (highlightType === 'SHOP' || highlightType === 'MARKETPLACE' || highlightType === 'STORE') {
+    navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
+    return;
+  }
 
-    if (highlightType === 'SHOP' || highlightType === 'MARKETPLACE' || highlightType === 'STORE') {
-      navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
-      return;
-    }
+  if (highlightType === 'DATING' || highlightType === 'MATCH' || highlightType === 'LINKME') {
+    navigation.navigate('LinkMe', { screen: 'LinkMeEntry' });
+    return;
+  }
 
-    if (highlightType === 'DATING' || highlightType === 'MATCH' || highlightType === 'LINKME') {
-      navigation.navigate('LinkMe', { screen: 'LinkMeEntry' });
-      return;
-    }
+  if (highlightType === 'ROOMMATE' || highlightType === 'ACCOMMODATION' || highlightType === 'RENTAL') {
+    navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' });
+    return;
+  }
 
-    if (highlightType === 'ROOMMATE' || highlightType === 'ACCOMMODATION' || highlightType === 'RENTAL') {
-      navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' });
-      return;
-    }
+  if (highlightType === 'SECONDHAND' || highlightType === 'MARKET' || highlightType === 'SELL') {
+    navigation.navigate('SecondHandStack');
+    return;
+  }
 
-    if (highlightType === 'SECONDHAND' || highlightType === 'MARKET' || highlightType === 'SELL') {
-      navigation.navigate('SecondHandStack');
-      return;
-    }
+  const searchText = `${highlight.title} ${highlight.content || ''}`.toLowerCase();
 
-    const searchText = `${highlight.title} ${highlight.content || ''}`.toLowerCase();
-
-    if (searchText.includes('blog') || searchText.includes('article') ||
-        searchText.includes('news') || searchText.includes('campus') ||
-        searchText.includes('event') || searchText.includes('update')) {
-      navigation.navigate('BlogsNavigator', { screen: 'Blogs' });
-    } else if (searchText.includes('food') || searchText.includes('restaurant') ||
-               searchText.includes('delivery') || searchText.includes('meal')) {
-      navigation.navigate('FoodStack', { screen: 'FoodHome' });
-    } else if (searchText.includes('shop') || searchText.includes('buy') ||
-               searchText.includes('store') || searchText.includes('product')) {
-      navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
-    } else if (searchText.includes('date') || searchText.includes('linkme') ||
-               searchText.includes('meet') || searchText.includes('match')) {
-      navigation.navigate('LinkMe', { screen: 'LinkMeEntry' });
-    } else if (searchText.includes('room') || searchText.includes('rent') ||
-               searchText.includes('accommodation') || searchText.includes('roommate')) {
-      navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' });
-    } else if (searchText.includes('second') || searchText.includes('sell') ||
-               searchText.includes('market') || searchText.includes('used')) {
-      navigation.navigate('SecondHandStack');
-    } else {
-      navigation.navigate('BlogsNavigator', { screen: 'Blogs' });
-    }
-  };
+  if (searchText.includes('blog') || searchText.includes('article') ||
+      searchText.includes('news') || searchText.includes('campus') ||
+      searchText.includes('event') || searchText.includes('update')) {
+    navigation.navigate('BlogsNavigator', { 
+      screen: 'BlogDetails',
+      params: { pinned: true }
+    });
+  } else if (searchText.includes('food') || searchText.includes('restaurant') ||
+             searchText.includes('delivery') || searchText.includes('meal')) {
+    navigation.navigate('FoodStack', { screen: 'FoodHome' });
+  } else if (searchText.includes('shop') || searchText.includes('buy') ||
+             searchText.includes('store') || searchText.includes('product')) {
+    navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
+  } else if (searchText.includes('date') || searchText.includes('linkme') ||
+             searchText.includes('meet') || searchText.includes('match')) {
+    navigation.navigate('LinkMe', { screen: 'LinkMeEntry' });
+  } else if (searchText.includes('room') || searchText.includes('rent') ||
+             searchText.includes('accommodation') || searchText.includes('roommate')) {
+    navigation.navigate('RoommateStack', { screen: 'RoommateBrowse' });
+  } else if (searchText.includes('second') || searchText.includes('sell') ||
+             searchText.includes('market') || searchText.includes('used')) {
+    navigation.navigate('SecondHandStack');
+  } else {
+    navigation.navigate('BlogsNavigator', { 
+      screen: 'BlogDetails',
+      params: { pinned: true }
+    });
+  }
+};
 
   const handleVendorCTAPress = () => {
     trackUserBehavior('vendor_cta_click', 'OnboardingNavigator', {

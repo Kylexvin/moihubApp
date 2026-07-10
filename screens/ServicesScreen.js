@@ -219,15 +219,7 @@ const ServicesScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Info Banner */}
-        {showSmartSort && (
-          <View style={styles.infoBanner}>
-            <Ionicons name="sparkles" size={14} color="#50c878" />
-            <Text style={styles.infoText}>
-              Services sorted by your usage patterns
-            </Text>
-          </View>
-        )}
+
 
         {/* Featured Section */}
         <View style={styles.featuredStaticGrid}>
@@ -242,10 +234,10 @@ const ServicesScreen = () => {
             <Text style={styles.featSubText}>Tap for help</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.featuredCard} 
-            onPress={() => navigation.navigate('LocalServices')}
-          >
+<TouchableOpacity 
+  style={styles.featuredCard} 
+  onPress={() => navigation.navigate('ServicesStack', { screen: 'LocalServices' })}
+>
             <View style={[styles.featIconCircle, { backgroundColor: '#9370db20' }]}>
               <Ionicons name="location" size={28} color="#9370db" />
             </View>

@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
+import { useRoute } from '@react-navigation/native';
 import * as Animatable from 'react-native-animatable';
 import * as Haptics from 'expo-haptics';
 import axios from 'axios';
@@ -24,6 +25,9 @@ import { useAuth } from '../../context/AuthContext';
 import BlogDbService from '../../services/BlogDbService';
 
 const { width } = Dimensions.get('window');
+
+
+
 
 const BlogColors = {
   primary: '#187013',
@@ -78,7 +82,8 @@ const normalizeBlog = (blog) => {
 };
 
 const BlogDetailsScreen = ({ route, navigation }) => {
-  const { id } = route.params;
+  const { id, pinned } = route.params || {};
+
   
   const [blog, setBlog] = useState(null);
   const [comment, setComment] = useState('');
@@ -111,13 +116,42 @@ const BlogDetailsScreen = ({ route, navigation }) => {
     initDb();
   }, []);
 
-  const fetchBlog = useCallback(async () => {
-    if (fetchedRef.current) return;
-    fetchedRef.current = true;
-    
-    setLoading(true);
+const fetchBlog = useCallback(async () => {
+  if (fetchedRef.current) return;
+  fetchedRef.current = true;
+  
+  setLoading(true);
 
-    try {
+  try {
+// ─── If pinned, fetch pinned post then get full details ────────────────
+if (pinned) {
+  const pinnedRes = await axios.get('api/posts/pinned');
+  if (pinnedRes.data.success && pinnedRes.data.posts.length > 0) {
+    const pinnedPost = pinnedRes.data.posts[0];
+    const postId = pinnedPost._id;
+    
+    // ─── Fetch full post by ID ──────────────────────────────────────────
+    const fullRes = await axios.get(`api/posts/${postId}`);
+    if (fullRes.data.success) {
+      const fullPost = fullRes.data.post;
+      const normalized = normalizeBlog(fullPost);
+      setBlog(normalized);
+      setLikesCount(normalized.likes?.length || 0);
+      setLiked(normalized.likes?.includes(getUserId()));
+      setSaved(normalized.saved || false);
+      setLoading(false);
+      
+      // Save to local DB
+      if (dbInitialized) {
+        await BlogDbService.saveBlog(fullPost);
+      }
+      return;
+    }
+  }
+}
+
+    // ─── Normal: fetch by ID ────────────────────────────────────────────
+    if (id) {
       if (dbInitialized) {
         const localBlog = await BlogDbService.getBlog(id);
         if (localBlog) {
@@ -150,20 +184,21 @@ const BlogDetailsScreen = ({ route, navigation }) => {
           setLoading(false);
         }
       }
-    } catch (error) {
-      console.error('Failed to fetch blog:', error);
-      if (!blog) {
-        Alert.alert('Error', 'Failed to load blog post. Please try again.');
-        setLoading(false);
-      }
     }
-  }, [id, token, dbInitialized]);
+  } catch (error) {
+    console.error('Failed to fetch blog:', error);
+    if (!blog) {
+      Alert.alert('Error', 'Failed to load blog post. Please try again.');
+      setLoading(false);
+    }
+  }
+}, [id, pinned, token, dbInitialized]);
 
-  useEffect(() => {
-    if (dbInitialized && !fetchedRef.current) {
-      fetchBlog();
-    }
-  }, [dbInitialized, fetchBlog]);
+useEffect(() => {
+  if (dbInitialized && !fetchedRef.current) {
+    fetchBlog();
+  }
+}, [dbInitialized, fetchBlog]);
 
   const handleLike = async () => {
     if (!currentUser) {
