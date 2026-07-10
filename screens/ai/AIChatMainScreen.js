@@ -14,7 +14,6 @@ import {
   StatusBar,
   Dimensions,
   Linking,
-  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -41,8 +40,6 @@ const COLORS = {
   userBubbleBorder: '#1d4a3b',
   white: '#ffffff',
   shadow: '#000000',
-  error: '#EF4444',
-  warning: '#F59E0B',
 };
 
 const AIChatMainScreen = () => {
@@ -110,23 +107,11 @@ const AIChatMainScreen = () => {
     } catch (error) {
       console.error('Chat error:', error);
 
-      let errorText = '😅 Sorry, something went wrong. Please try again.';
-      
-      // ─── Token/Quota Errors ──────────────────────────────────────────────
-      if (error.response?.status === 429) {
-        errorText = '⏳ Too many requests. Please wait a moment and try again.';
-      } else if (error.response?.status === 503) {
-        errorText = '🔧 The AI service is currently busy. Please try again in a few seconds.';
-      } else if (error.response?.status === 404) {
+      let errorText = 'Sorry, something went wrong. Please try again.';
+      if (error.response?.status === 404) {
         errorText = 'Sorry, that feature is not available yet. Try asking about rentals.';
       } else if (error.response?.status === 400) {
         errorText = 'Please enter a valid message. What would you like to find?';
-      } else if (error.response?.status === 500) {
-        errorText = '⚠️ Server error. Please try again later.';
-      } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-        errorText = '⏱️ Request timed out. Please check your connection and try again.';
-      } else if (error.message?.includes('Network Error')) {
-        errorText = '📡 Network error. Please check your internet connection.';
       }
 
       const errorMessage = {
@@ -144,77 +129,81 @@ const AIChatMainScreen = () => {
     }
   };
 
-  // ─── Navigation Handlers ──────────────────────────────────────────────────
-  const handleViewRentalDetails = (rental) => {
-    navigation.navigate('AccomStack', {
-      screen: 'RentalDetail',
-      params: { rentalId: rental.id },
+// ─── Navigation Handlers ──────────────────────────────────────────────────
+const handleViewRentalDetails = (rental) => {
+  navigation.navigate('AccomStack', {
+    screen: 'RentalDetail',
+    params: { rentalId: rental.id },
+  });
+};
+
+const handleViewServiceDetails = (provider, type) => {
+  // Dashboard provider → ServiceProviderDashboard
+  if (type === 'dashboard' || provider.hasDashboard) {
+    navigation.navigate('ServicesStack', {
+      screen: 'ServiceProviderDashboard',
+      params: { providerId: provider.id },
     });
-  };
-
-  const handleViewServiceDetails = (provider, type) => {
-    if (type === 'dashboard' || provider.hasDashboard) {
-      navigation.navigate('ServicesStack', {
-        screen: 'ServiceProviderDashboard',
-        params: { providerId: provider.id },
-      });
-    } else {
-      navigation.navigate('ServicesStack', {
-        screen: 'ProviderProfile',
-        params: { providerId: provider.id },
-      });
-    }
-  };
-
-  const handleViewFoodDetails = (vendor) => {
-    navigation.navigate('FoodStack', {
-      screen: 'FoodVendor',  
-      params: { vendorId: vendor.id },
+  } else {
+    // Directory provider → ProviderProfile
+    navigation.navigate('ServicesStack', {
+      screen: 'ProviderProfile',
+      params: { providerId: provider.id },
     });
-  };
+  }
+};
 
-  // ─── Unified onViewDetails handler ──────────────────────────────────────
-  const handleViewDetails = (item, type) => {
-    if (type === 'eshop') {
-      handleViewShopProducts(item);
-      return;
-    }
+const handleViewFoodDetails = (vendor) => {
+  navigation.navigate('FoodStack', {
+    screen: 'FoodVendor',  
+    params: { vendorId: vendor.id },
+  });
+};
 
-    if (type === 'product') {
-      navigation.navigate('EshopNavigator', {
-        screen: 'ProductDetail',
-        params: { productId: item.id, shopId: item.shopId },
-      });
-      return;
-    }
+// ─── Unified onViewDetails handler ──────────────────────────────────────
+const handleViewDetails = (item, type) => {
+  if (type === 'eshop') {
+    handleViewShopProducts(item);
+    return;
+  }
 
-    if (type === 'dashboard') {
-      navigation.navigate('ServicesStack', {
-        screen: 'ProviderProfile',
-        params: { providerId: item.id },
-      });
-      return;
-    }
+  if (type === 'product') {
+    navigation.navigate('EshopNavigator', {
+      screen: 'ProductDetail',
+      params: { productId: item.id, shopId: item.shopId },
+    });
+    return;
+  }
 
-    if (type === 'service') {
-      navigation.navigate('ServicesStack', {
-        screen: 'ProviderProfile',
-        params: { providerId: item.id },
-      });
-      return;
-    }
+// Service - Dashboard (public view)
+if (type === 'dashboard') {
+  navigation.navigate('ServicesStack', {
+    screen: 'ProviderProfile',  // ← Change to ProviderProfile
+    params: { providerId: item.id },
+  });
+  return;
+}
 
-    // Auto-detect by item properties
-    if (item.price && item.location && item.type) {
-      handleViewRentalDetails(item);
-    } else if (item.category || item.providerType) {
-      handleViewServiceDetails(item, item.hasDashboard ? 'dashboard' : 'service');
-    } else if (item.shopName || item.matchedItems) {
-      handleViewFoodDetails(item);
-    } else {
-      navigation.navigate('DetailScreen', { id: item.id });
-    }
-  };
+// Service - Directory
+if (type === 'service') {
+  navigation.navigate('ServicesStack', {
+    screen: 'ProviderProfile',
+    params: { providerId: item.id },
+  });
+  return;
+}
+
+  // Auto-detect by item properties
+  if (item.price && item.location && item.type) {
+    handleViewRentalDetails(item);
+  } else if (item.category || item.providerType) {
+    handleViewServiceDetails(item, item.hasDashboard ? 'dashboard' : 'service');
+  } else if (item.shopName || item.matchedItems) {
+    handleViewFoodDetails(item);
+  } else {
+    navigation.navigate('DetailScreen', { id: item.id });
+  }
+};
 
   // ─── Eshop Handlers ──────────────────────────────────────────────────────
   const handleViewShopProducts = (shop) => {
@@ -228,28 +217,28 @@ const AIChatMainScreen = () => {
     });
   };
 
-  // ─── Combined View More Handler ──────────────────────────────────────────
-  const handleViewMore = (type) => {
-    switch(type) {
-      case 'rentals':
-        navigation.navigate('AccomStack', { screen: 'AccomHome' });
-        break;
-      case 'marketplace':
-        navigation.navigate('SecondHandStack', { screen: 'SecondHandHome' });
-        break;
-      case 'eshops':
-        navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
-        break;
-      case 'food':
-        navigation.navigate('FoodStack', { screen: 'FoodHome' });
-        break;
-      case 'services':
-        navigation.navigate('ServicesStack', { screen: 'ServicesList' });
-        break;
-      default:
-        break;
-    }
-  };
+// ─── Combined View More Handler ──────────────────────────────────────────
+const handleViewMore = (type) => {
+  switch(type) {
+    case 'rentals':
+      navigation.navigate('AccomStack', { screen: 'AccomHome' });
+      break;
+    case 'marketplace':
+      navigation.navigate('SecondHandStack', { screen: 'SecondHandHome' });
+      break;
+    case 'eshops':
+      navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
+      break;
+    case 'food':
+      navigation.navigate('FoodStack', { screen: 'FoodHome' });
+      break;
+    case 'services':
+      navigation.navigate('ServicesStack', { screen: 'ServicesList' });
+      break;
+    default:
+      break;
+  }
+};
 
   const handleCall = (phoneNumber) => {
     if (phoneNumber) {
@@ -257,49 +246,28 @@ const AIChatMainScreen = () => {
     }
   };
 
-  // ─── Render Message with Animation ──────────────────────────────────────
+  // ─── Render Message ──────────────────────────────────────────────────────
   const renderMessage = ({ item }) => {
     const isUser = item.role === 'user';
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-
-    useEffect(() => {
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    }, []);
 
     return (
-      <Animated.View 
-        style={{
-          opacity: fadeAnim,
-          transform: [{
-            translateY: fadeAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [20, 0],
-            })
-          }]
-        }}
-      >
-        <View style={[styles.messageWrapper, isUser ? styles.userMessageWrapper : styles.assistantMessageWrapper]}>
-          {!isUser && (
-            <View style={styles.avatarContainer}>
-              <View style={styles.avatarImage}>
-                <Ionicons name="hardware-chip-outline" size={16} color={COLORS.green} />
-              </View>
+      <View style={[styles.messageWrapper, isUser ? styles.userMessageWrapper : styles.assistantMessageWrapper]}>
+        {!isUser && (
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatarImage}>
+              <Ionicons name="hardware-chip-outline" size={16} color={COLORS.green} />
             </View>
-          )}
-          <View style={[styles.messageBubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-            <Text style={[styles.messageText, isUser ? styles.userText : styles.assistantText]}>
-              {item.text}
-            </Text>
-            <Text style={{ fontSize: 10, color: COLORS.textMeta, marginTop: 4, alignSelf: 'flex-end' }}>
-              {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
           </View>
+        )}
+        <View style={[styles.messageBubble, isUser ? styles.userBubble : styles.assistantBubble]}>
+          <Text style={[styles.messageText, isUser ? styles.userText : styles.assistantText]}>
+            {item.text}
+          </Text>
+          <Text style={{ fontSize: 10, color: COLORS.textMeta, marginTop: 4, alignSelf: 'flex-end' }}>
+            {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
         </View>
-      </Animated.View>
+      </View>
     );
   };
 
