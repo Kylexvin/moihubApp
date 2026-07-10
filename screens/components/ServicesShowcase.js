@@ -11,18 +11,41 @@ import ShowcaseCarousel from './ShowcaseCarousel';
 import { Ionicons } from '@expo/vector-icons';
 
 const ServicesShowcase = ({ items, loading, navigation }) => {
+  const handleCallPress = (item) => {
+    if (item.phone) {
+      Linking.openURL(`tel:${item.phone}`);
+    }
+  };
+
+  const getCategoryColor = (category) => {
+    const colors = {
+      'Matatu services': '#FF9800',
+      'Motorbike Services': '#2196F3',
+      'Best Kinyozi': '#9C27B0',
+      'Saloonist': '#E91E63',
+      'Mama Fua': '#4CAF50',
+      'Laundry Services': '#00BCD4',
+      'Electronic Repairs': '#795548',
+      'Gas Deliveries Services': '#F44336',
+      'default': '#607D8B'
+    };
+    return colors[category] || colors.default;
+  };
+
+  const formatPhone = (phone) => {
+    if (!phone) return 'No phone';
+    return phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3');
+  };
+
   const renderItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => handleItemPress(item)}
-    >
+    <View style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={[
           styles.categoryBadge,
           { backgroundColor: getCategoryColor(item.category) }
         ]}>
           <Text style={styles.categoryText}>
-            {getCategoryIcon(item.category)} {item.category}
+            {item.category}
           </Text>
         </View>
         
@@ -55,71 +78,14 @@ const ServicesShowcase = ({ items, loading, navigation }) => {
       </View>
       
       <TouchableOpacity
-        style={[
-          styles.ctaButton,
-          item.providerType === 'dashboard' 
-            ? styles.dashboardButton 
-            : styles.callButton
-        ]}
-        onPress={() => handleCTAPress(item)}
+        style={styles.callButton}
+        onPress={() => handleCallPress(item)}
       >
-        <Text style={styles.ctaButtonText}>
-          {item.cta} {item.providerType === 'dashboard' ? '→' : '📞'}
-        </Text>
+        <Ionicons name="call-outline" size={16} color="#FFFFFF" />
+        <Text style={styles.callButtonText}>Call Now</Text>
       </TouchableOpacity>
-    </TouchableOpacity>
+    </View>
   );
-
-  const handleItemPress = (item) => {
-    if (item.providerType === 'dashboard') {
-      navigation.navigate('ServiceDashboard', { providerId: item._id });
-    } else {
-      Linking.openURL(`tel:${item.phone}`);
-    }
-  };
-
-  const handleCTAPress = (item) => {
-    if (item.providerType === 'dashboard') {
-      navigation.navigate('ServiceDashboard', { providerId: item._id });
-    } else {
-      Linking.openURL(`tel:${item.phone}`);
-    }
-  };
-
-  const getCategoryIcon = (category) => {
-    const icons = {
-      'Matatu services': '🚗',
-      'Motorbike Services': '🏍️',
-      'Best Kinyozi': '💈',
-      'Saloonist': '💇',
-      'Mama Fua': '👚',
-      'Laundry Services': '🧺',
-      'Electronic Repairs': '🔧',
-      'Gas Deliveries Services': '🔥',
-      'default': '🛠️'
-    };
-    return icons[category] || icons.default;
-  };
-
-  const getCategoryColor = (category) => {
-    const colors = {
-      'Matatu services': '#FF9800',
-      'Motorbike Services': '#2196F3',
-      'Best Kinyozi': '#9C27B0',
-      'Saloonist': '#E91E63',
-      'Mama Fua': '#4CAF50',
-      'Laundry Services': '#00BCD4',
-      'Electronic Repairs': '#795548',
-      'Gas Deliveries Services': '#F44336',
-      'default': '#607D8B'
-    };
-    return colors[category] || colors.default;
-  };
-
-  const formatPhone = (phone) => {
-    if (!phone) return 'No phone';
-    return phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3');
-  };
 
   return (
     <ShowcaseCarousel
@@ -206,19 +172,17 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     flex: 1,
   },
-  ctaButton: {
+  callButton: {
+    backgroundColor: '#25D366',
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
-  dashboardButton: {
-    backgroundColor: '#01604c',
-  },
-  callButton: {
-    backgroundColor: '#25D366',
-  },
-  ctaButtonText: {
+  callButtonText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: 'bold',

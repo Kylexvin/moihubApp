@@ -16,10 +16,12 @@ import {
   AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { useFocusEffect } from '@react-navigation/native';
-import { useSocket } from '../../../context/SocketContext'; 
+import { useSocket } from '../../../context/SocketContext';
+import Theme from '../../theme/Theme';
 
 const { width, height } = Dimensions.get('window');
 
@@ -38,8 +40,8 @@ const OrdersScreen = ({ navigation }) => {
   const statusColors = {
     pending: '#FF9500',
     processing: '#007AFF',
-    completed: '#34C759',
-    cancelled: '#FF3B30',
+    completed: Theme.Colors.success,
+    cancelled: Theme.Colors.danger,
   };
 
   const statusIcons = {
@@ -99,7 +101,7 @@ const OrdersScreen = ({ navigation }) => {
               if (response.data.success) {
                 Alert.alert('Success', `Order status updated to ${newStatus}`);
                 setSelectedOrder(response.data.data);
-                fetchOrders(); // Refresh the orders list
+                fetchOrders();
               }
             } catch (error) {
               console.error('Error updating order status:', error);
@@ -124,12 +126,10 @@ const OrdersScreen = ({ navigation }) => {
   useEffect(() => {
     if (!socket) return;
 
-    // Listen for new orders
     const handleNewOrder = (orderData) => {
       console.log('New order received:', orderData);
       setNewOrderCount(prev => prev + 1);
       
-      // Show alert for new order
       Alert.alert(
         'New Order! 🎉',
         `New order from ${orderData.user?.email || 'customer'} for ${formatCurrency(orderData.totalAmount)}`,
@@ -149,11 +149,9 @@ const OrdersScreen = ({ navigation }) => {
         ]
       );
       
-      // Auto-refresh orders
       fetchOrders();
     };
 
-    // Listen for order status updates
     const handleOrderUpdate = (updatedOrder) => {
       console.log('Order updated:', updatedOrder);
       setOrders(prevOrders => 
@@ -162,13 +160,11 @@ const OrdersScreen = ({ navigation }) => {
         )
       );
       
-      // Update selected order if it's currently being viewed
       if (selectedOrder && selectedOrder._id === updatedOrder._id) {
         setSelectedOrder(updatedOrder);
       }
     };
 
-    // Listen for order cancellations
     const handleOrderCancellation = (cancelledOrder) => {
       console.log('Order cancelled:', cancelledOrder);
       Alert.alert(
@@ -179,12 +175,10 @@ const OrdersScreen = ({ navigation }) => {
       fetchOrders();
     };
 
-    // Register socket event listeners
     socket.on('new_order', handleNewOrder);
     socket.on('order_updated', handleOrderUpdate);
     socket.on('order_cancelled', handleOrderCancellation);
 
-    // Cleanup listeners on unmount
     return () => {
       socket.off('new_order', handleNewOrder);
       socket.off('order_updated', handleOrderUpdate);
@@ -192,11 +186,10 @@ const OrdersScreen = ({ navigation }) => {
     };
   }, [socket, selectedOrder]);
 
-  // Handle app state changes (foreground/background)
+  // Handle app state changes
   useEffect(() => {
     const handleAppStateChange = (nextAppState) => {
       if (nextAppState === 'active') {
-        // App came to foreground, refresh orders
         fetchOrders();
         setNewOrderCount(0);
       }
@@ -206,7 +199,7 @@ const OrdersScreen = ({ navigation }) => {
     return () => subscription?.remove();
   }, []);
 
-  // Focus effect to refresh data when screen comes into focus
+  // Focus effect to refresh data
   useFocusEffect(
     useCallback(() => {
       fetchOrders();
@@ -241,7 +234,7 @@ const OrdersScreen = ({ navigation }) => {
         <View style={styles.orderIdContainer}>
           <Text style={styles.orderId}>#{item._id.slice(-8)}</Text>
           <View style={[styles.statusBadge, { backgroundColor: statusColors[item.status] }]}>
-            <Ionicons name={statusIcons[item.status]} size={12} color="white" />
+            <Ionicons name={statusIcons[item.status]} size={12} color={Theme.Colors.white} />
             <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
           </View>
         </View>
@@ -257,7 +250,7 @@ const OrdersScreen = ({ navigation }) => {
 
       <View style={styles.orderFooter}>
         <Text style={styles.totalAmount}>{formatCurrency(item.totalAmount)}</Text>
-        <Ionicons name="chevron-forward" size={16} color="#666" />
+        <Ionicons name="chevron-forward" size={16} color={Theme.Colors.textTertiary} />
       </View>
     </TouchableOpacity>
   );
@@ -292,143 +285,154 @@ const OrdersScreen = ({ navigation }) => {
       animationType="slide"
       presentationStyle="pageSheet"
     >
-      <SafeAreaView style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={() => setModalVisible(false)}>
-            <Ionicons name="close" size={24} color="#333" />
-          </TouchableOpacity>
-          <Text style={styles.modalTitle}>Order Details</Text>
-          <View style={{ width: 24 }} />
-        </View>
-
-        {selectedOrder && (
-          <View style={styles.modalContent}>
-            <View style={styles.orderInfoCard}>
-              <Text style={styles.orderInfoTitle}>Order #{selectedOrder._id.slice(-8)}</Text>
-              <View style={styles.orderInfoRow}>
-                <Text style={styles.orderInfoLabel}>Status:</Text>
-                <View style={[styles.statusBadge, { backgroundColor: statusColors[selectedOrder.status] }]}>
-                  <Ionicons name={statusIcons[selectedOrder.status]} size={12} color="white" />
-                  <Text style={styles.statusText}>{selectedOrder.status.toUpperCase()}</Text>
-                </View>
-              </View>
-              <View style={styles.orderInfoRow}>
-                <Text style={styles.orderInfoLabel}>Date:</Text>
-                <Text style={styles.orderInfoValue}>{formatDate(selectedOrder.createdAt)}</Text>
-              </View>
-              <View style={styles.orderInfoRow}>
-                <Text style={styles.orderInfoLabel}>Customer:</Text>
-                <Text style={styles.orderInfoValue}>{selectedOrder.user.email}</Text>
-              </View>
-              <View style={styles.orderInfoRow}>
-                <Text style={styles.orderInfoLabel}>Contact:</Text>
-                <Text style={styles.orderInfoValue}>{selectedOrder.contactNumber}</Text>
-              </View>
-              <View style={styles.orderInfoRow}>
-                <Text style={styles.orderInfoLabel}>Message info</Text>
-                <Text style={styles.orderInfoValue}>{selectedOrder.shippingAddress}</Text>
-              </View>
-            </View>
-
-            <View style={styles.itemsCard}>
-              <Text style={styles.itemsTitle}>Items ({selectedOrder.items.length})</Text>
-              {selectedOrder.items.map((item, index) => (
-                <View key={index} style={styles.itemRow}>
-                  <View style={styles.itemInfo}>
-                    <Text style={styles.itemName}>
-                      {item.product ? item.product.name : 'Product not found'}
-                    </Text>
-                    <Text style={styles.itemQuantity}>Qty: {item.quantity}</Text>
-                  </View>
-                  <Text style={styles.itemPrice}>{formatCurrency(item.price)}</Text>
-                </View>
-              ))}
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Total:</Text>
-                <Text style={styles.totalValue}>{formatCurrency(selectedOrder.totalAmount)}</Text>
-              </View>
-            </View>
-
-            {/* Status update buttons */}
-            {selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && (
-              <View style={styles.statusUpdateCard}>
-                <Text style={styles.statusUpdateTitle}>Update Status</Text>
-                <View style={styles.statusButtonsContainer}>
-                  {selectedOrder.status === 'pending' && (
-                    <TouchableOpacity
-                      style={[styles.statusButton, { backgroundColor: statusColors.processing }]}
-                      onPress={() => updateOrderStatus(selectedOrder._id, 'processing')}
-                      disabled={updatingStatus}
-                    >
-                      {updatingStatus ? (
-                        <ActivityIndicator size="small" color="white" />
-                      ) : (
-                        <>
-                          <Ionicons name="sync-outline" size={16} color="white" />
-                          <Text style={styles.statusButtonText}>Mark Processing</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  )}
-                  
-                  {(selectedOrder.status === 'pending' || selectedOrder.status === 'processing') && (
-                    <>
-                      <TouchableOpacity
-                        style={[styles.statusButton, { backgroundColor: statusColors.completed }]}
-                        onPress={() => updateOrderStatus(selectedOrder._id, 'completed')}
-                        disabled={updatingStatus}
-                      >
-                        {updatingStatus ? (
-                          <ActivityIndicator size="small" color="white" />
-                        ) : (
-                          <>
-                            <Ionicons name="checkmark-circle-outline" size={16} color="white" />
-                            <Text style={styles.statusButtonText}>Mark Completed</Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity
-                        style={[styles.statusButton, { backgroundColor: statusColors.cancelled }]}
-                        onPress={() => updateOrderStatus(selectedOrder._id, 'cancelled')}
-                        disabled={updatingStatus}
-                      >
-                        {updatingStatus ? (
-                          <ActivityIndicator size="small" color="white" />
-                        ) : (
-                          <>
-                            <Ionicons name="close-circle-outline" size={16} color="white" />
-                            <Text style={styles.statusButtonText}>Cancel Order</Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                    </>
-                  )}
-                </View>
-              </View>
-            )}
+      <LinearGradient colors={Theme.Gradients.dark} style={styles.modalContainer}>
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <Ionicons name="close" size={24} color={Theme.Colors.text} />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Order Details</Text>
+            <View style={{ width: 24 }} />
           </View>
-        )}
-      </SafeAreaView>
+
+          {selectedOrder && (
+            <View style={styles.modalContent}>
+              <LinearGradient
+                colors={['rgba(0, 100, 80, 0.2)', 'rgba(0, 60, 50, 0.3)']}
+                style={styles.orderInfoCard}
+              >
+                <Text style={styles.orderInfoTitle}>Order #{selectedOrder._id.slice(-8)}</Text>
+                <View style={styles.orderInfoRow}>
+                  <Text style={styles.orderInfoLabel}>Status:</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: statusColors[selectedOrder.status] }]}>
+                    <Ionicons name={statusIcons[selectedOrder.status]} size={12} color={Theme.Colors.white} />
+                    <Text style={styles.statusText}>{selectedOrder.status.toUpperCase()}</Text>
+                  </View>
+                </View>
+                <View style={styles.orderInfoRow}>
+                  <Text style={styles.orderInfoLabel}>Date:</Text>
+                  <Text style={styles.orderInfoValue}>{formatDate(selectedOrder.createdAt)}</Text>
+                </View>
+                <View style={styles.orderInfoRow}>
+                  <Text style={styles.orderInfoLabel}>Customer:</Text>
+                  <Text style={styles.orderInfoValue}>{selectedOrder.user.email}</Text>
+                </View>
+                <View style={styles.orderInfoRow}>
+                  <Text style={styles.orderInfoLabel}>Contact:</Text>
+                  <Text style={styles.orderInfoValue}>{selectedOrder.contactNumber}</Text>
+                </View>
+                <View style={styles.orderInfoRow}>
+                  <Text style={styles.orderInfoLabel}>Address:</Text>
+                  <Text style={styles.orderInfoValue}>{selectedOrder.shippingAddress}</Text>
+                </View>
+              </LinearGradient>
+
+              <LinearGradient
+                colors={['rgba(0, 100, 80, 0.2)', 'rgba(0, 60, 50, 0.3)']}
+                style={styles.itemsCard}
+              >
+                <Text style={styles.itemsTitle}>Items ({selectedOrder.items.length})</Text>
+                {selectedOrder.items.map((item, index) => (
+                  <View key={index} style={styles.itemRow}>
+                    <View style={styles.itemInfo}>
+                      <Text style={styles.itemName}>
+                        {item.product ? item.product.name : 'Product not found'}
+                      </Text>
+                      <Text style={styles.itemQuantity}>Qty: {item.quantity}</Text>
+                    </View>
+                    <Text style={styles.itemPrice}>{formatCurrency(item.price)}</Text>
+                  </View>
+                ))}
+                <View style={styles.totalRow}>
+                  <Text style={styles.totalLabel}>Total:</Text>
+                  <Text style={styles.totalValue}>{formatCurrency(selectedOrder.totalAmount)}</Text>
+                </View>
+              </LinearGradient>
+
+              {/* Status update buttons */}
+              {selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && (
+                <LinearGradient
+                  colors={['rgba(0, 100, 80, 0.2)', 'rgba(0, 60, 50, 0.3)']}
+                  style={styles.statusUpdateCard}
+                >
+                  <Text style={styles.statusUpdateTitle}>Update Status</Text>
+                  <View style={styles.statusButtonsContainer}>
+                    {selectedOrder.status === 'pending' && (
+                      <TouchableOpacity
+                        style={[styles.statusButton, { backgroundColor: statusColors.processing }]}
+                        onPress={() => updateOrderStatus(selectedOrder._id, 'processing')}
+                        disabled={updatingStatus}
+                      >
+                        {updatingStatus ? (
+                          <ActivityIndicator size="small" color={Theme.Colors.white} />
+                        ) : (
+                          <>
+                            <Ionicons name="sync-outline" size={16} color={Theme.Colors.white} />
+                            <Text style={styles.statusButtonText}>Mark Processing</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                    
+                    {(selectedOrder.status === 'pending' || selectedOrder.status === 'processing') && (
+                      <>
+                        <TouchableOpacity
+                          style={[styles.statusButton, { backgroundColor: statusColors.completed }]}
+                          onPress={() => updateOrderStatus(selectedOrder._id, 'completed')}
+                          disabled={updatingStatus}
+                        >
+                          {updatingStatus ? (
+                            <ActivityIndicator size="small" color={Theme.Colors.white} />
+                          ) : (
+                            <>
+                              <Ionicons name="checkmark-circle-outline" size={16} color={Theme.Colors.white} />
+                              <Text style={styles.statusButtonText}>Mark Completed</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity
+                          style={[styles.statusButton, { backgroundColor: statusColors.cancelled }]}
+                          onPress={() => updateOrderStatus(selectedOrder._id, 'cancelled')}
+                          disabled={updatingStatus}
+                        >
+                          {updatingStatus ? (
+                            <ActivityIndicator size="small" color={Theme.Colors.white} />
+                          ) : (
+                            <>
+                              <Ionicons name="close-circle-outline" size={16} color={Theme.Colors.white} />
+                              <Text style={styles.statusButtonText}>Cancel Order</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
+                </LinearGradient>
+              )}
+            </View>
+          )}
+        </SafeAreaView>
+      </LinearGradient>
     </Modal>
   );
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+      <LinearGradient colors={Theme.Gradients.dark} style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Theme.Colors.primary} />
         <Text style={styles.loadingText}>Loading orders...</Text>
-      </SafeAreaView>
+      </LinearGradient>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="white" />
+    <LinearGradient colors={Theme.Gradients.dark} style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={Theme.Colors.background} />
       
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color={Theme.Colors.text} />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>Orders</Text>
@@ -439,7 +443,7 @@ const OrdersScreen = ({ navigation }) => {
           )}
         </View>
         <TouchableOpacity onPress={fetchOrders} style={styles.refreshButton}>
-          <Ionicons name="refresh" size={24} color="#333" />
+          <Ionicons name="refresh" size={24} color={Theme.Colors.text} />
         </TouchableOpacity>
       </View>
 
@@ -454,12 +458,13 @@ const OrdersScreen = ({ navigation }) => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#007AFF']}
+            tintColor={Theme.Colors.primary}
+            colors={[Theme.Colors.primary]}
           />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="receipt-outline" size={64} color="#ccc" />
+            <Ionicons name="receipt-outline" size={64} color={Theme.Colors.textTertiary} />
             <Text style={styles.emptyText}>No orders found</Text>
             <Text style={styles.emptySubtext}>
               {filter === 'all' ? 'You have no orders yet' : `No ${filter} orders found`}
@@ -469,25 +474,23 @@ const OrdersScreen = ({ navigation }) => {
       />
 
       {renderOrderModal()}
-    </SafeAreaView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: Theme.Colors.textSecondary,
   },
   header: {
     flexDirection: 'row',
@@ -495,9 +498,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(0, 60, 50, 0.3)',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: 'rgba(0, 100, 80, 0.2)',
   },
   headerTitleContainer: {
     flexDirection: 'row',
@@ -506,10 +509,10 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: Theme.Colors.text,
   },
   notificationBadge: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: Theme.Colors.danger,
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -518,7 +521,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   notificationText: {
-    color: 'white',
+    color: Theme.Colors.white,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -529,41 +532,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(0, 60, 50, 0.2)',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: 'rgba(0, 100, 80, 0.2)',
   },
   filterButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     marginRight: 8,
     borderRadius: 16,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: 'rgba(0, 60, 50, 0.3)',
   },
   activeFilterButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: Theme.Colors.primary,
   },
   filterButtonText: {
     fontSize: 12,
-    color: '#666',
+    color: Theme.Colors.textSecondary,
     fontWeight: '500',
   },
   activeFilterButtonText: {
-    color: 'white',
+    color: Theme.Colors.black,
+    fontWeight: '600',
   },
   listContainer: {
     padding: 16,
   },
   orderCard: {
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(0, 60, 50, 0.3)',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 100, 80, 0.2)',
   },
   orderHeader: {
     flexDirection: 'row',
@@ -578,7 +579,7 @@ const styles = StyleSheet.create({
   orderId: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: Theme.Colors.text,
     marginRight: 8,
   },
   statusBadge: {
@@ -590,25 +591,25 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 10,
-    color: 'white',
+    color: Theme.Colors.white,
     fontWeight: '600',
     marginLeft: 4,
   },
   orderDate: {
     fontSize: 12,
-    color: '#666',
+    color: Theme.Colors.textSecondary,
   },
   orderDetails: {
     marginBottom: 12,
   },
   customerEmail: {
     fontSize: 14,
-    color: '#333',
+    color: Theme.Colors.text,
     marginBottom: 4,
   },
   itemCount: {
     fontSize: 12,
-    color: '#666',
+    color: Theme.Colors.textSecondary,
   },
   orderFooter: {
     flexDirection: 'row',
@@ -618,7 +619,7 @@ const styles = StyleSheet.create({
   totalAmount: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#007AFF',
+    color: Theme.Colors.primary,
   },
   emptyContainer: {
     flex: 1,
@@ -629,17 +630,16 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#666',
+    color: Theme.Colors.text,
     marginTop: 16,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#999',
+    color: Theme.Colors.textSecondary,
     marginTop: 8,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -647,29 +647,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(0, 60, 50, 0.3)',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: 'rgba(0, 100, 80, 0.2)',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: Theme.Colors.text,
   },
   modalContent: {
     flex: 1,
     padding: 16,
   },
   orderInfoCard: {
-    backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 100, 80, 0.2)',
   },
   orderInfoTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: Theme.Colors.text,
     marginBottom: 16,
   },
   orderInfoRow: {
@@ -680,25 +681,26 @@ const styles = StyleSheet.create({
   },
   orderInfoLabel: {
     fontSize: 14,
-    color: '#666',
+    color: Theme.Colors.textSecondary,
     fontWeight: '500',
   },
   orderInfoValue: {
     fontSize: 14,
-    color: '#333',
+    color: Theme.Colors.text,
     flex: 1,
     textAlign: 'right',
   },
   itemsCard: {
-    backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 100, 80, 0.2)',
   },
   itemsTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: Theme.Colors.text,
     marginBottom: 12,
   },
   itemRow: {
@@ -707,24 +709,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: 'rgba(0, 100, 80, 0.1)',
   },
   itemInfo: {
     flex: 1,
   },
   itemName: {
     fontSize: 14,
-    color: '#333',
+    color: Theme.Colors.text,
     fontWeight: '500',
   },
   itemQuantity: {
     fontSize: 12,
-    color: '#666',
+    color: Theme.Colors.textSecondary,
     marginTop: 2,
   },
   itemPrice: {
     fontSize: 14,
-    color: '#007AFF',
+    color: Theme.Colors.primary,
     fontWeight: '600',
   },
   totalRow: {
@@ -734,27 +736,28 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 2,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: 'rgba(0, 100, 80, 0.2)',
   },
   totalLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: Theme.Colors.text,
   },
   totalValue: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#007AFF',
+    color: Theme.Colors.primary,
   },
   statusUpdateCard: {
-    backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 100, 80, 0.2)',
   },
   statusUpdateTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: Theme.Colors.text,
     marginBottom: 12,
   },
   statusButtonsContainer: {
@@ -769,7 +772,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   statusButtonText: {
-    color: 'white',
+    color: Theme.Colors.white,
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 8,

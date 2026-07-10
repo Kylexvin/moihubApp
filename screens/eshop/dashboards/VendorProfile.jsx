@@ -16,26 +16,27 @@ import {
   Modal,
   FlatList
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
+import Theme from '../../theme/Theme';
 
 const { width, height } = Dimensions.get('window');
 
-// Constants
+// Constants using Theme
 const COLORS = {
-  primary: '#4A90E2',
-  primaryDark: '#357ABD',
-  secondary: '#F39C12',
-  success: '#27AE60',
-  danger: '#E74C3C',
-  warning: '#F39C12',
-  light: '#F8F9FA',
-  dark: '#2C3E50',
-  gray: '#6C7B7F',
-  lightGray: '#E8E8E8',
-  white: '#FFFFFF',
-  shadow: 'rgba(0, 0, 0, 0.1)',
-  gradient: ['#4A90E2', '#357ABD'],
+  primary: Theme.Colors.primary,
+  primaryDark: Theme.Colors.primaryDark,
+  secondary: Theme.Colors.warning,
+  success: Theme.Colors.success,
+  danger: Theme.Colors.danger,
+  warning: Theme.Colors.warning,
+  light: 'rgba(0, 60, 50, 0.1)',
+  dark: Theme.Colors.background,
+  gray: Theme.Colors.textTertiary,
+  lightGray: 'rgba(0, 100, 80, 0.2)',
+  white: Theme.Colors.white,
+  shadow: 'rgba(0, 0, 0, 0.3)',
 };
 
 const SPACING = {
@@ -250,14 +251,14 @@ const Button = React.memo(({
       onPressOut={() => setPressed(false)}
     >
       {loading ? (
-        <ActivityIndicator size="small" color={COLORS.white} />
+        <ActivityIndicator size="small" color={Theme.Colors.black} />
       ) : (
         <>
           {icon && (
             <Ionicons 
               name={icon} 
               size={20} 
-              color={variant === 'primary' ? COLORS.white : COLORS.gray} 
+              color={variant === 'primary' ? Theme.Colors.black : COLORS.gray} 
               style={styles.buttonIcon}
             />
           )}
@@ -286,7 +287,10 @@ const ShopStatusToggle = React.memo(({ isActive, onToggle, loading }) => {
   }, [isEnabled, onToggle]);
 
   return (
-    <View style={styles.statusToggleContainer}>
+    <LinearGradient
+      colors={['rgba(0, 100, 80, 0.15)', 'rgba(0, 60, 50, 0.2)']}
+      style={styles.statusToggleContainer}
+    >
       <View style={styles.statusToggleHeader}>
         <Ionicons 
           name={isEnabled ? "checkmark-circle" : "close-circle"} 
@@ -333,7 +337,7 @@ const ShopStatusToggle = React.memo(({ isActive, onToggle, loading }) => {
           )}
         </TouchableOpacity>
       </View>
-    </View>
+    </LinearGradient>
   );
 });
 
@@ -567,16 +571,16 @@ const VendorProfile = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <LinearGradient colors={Theme.Gradients.dark} style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.loadingText}>Loading your profile...</Text>
-      </View>
+      </LinearGradient>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primaryDark} />
+    <LinearGradient colors={Theme.Gradients.dark} style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={Theme.Colors.background} />
       
       <KeyboardAvoidingView
         style={styles.keyboardContainer}
@@ -589,32 +593,41 @@ const VendorProfile = () => {
           keyboardShouldPersistTaps="handled"
         >
           {/* Header */}
-          <View style={styles.header}>
+          <LinearGradient
+            colors={['rgba(0, 200, 150, 0.2)', 'rgba(0, 100, 80, 0.1)']}
+            style={styles.header}
+          >
             <View style={styles.headerContent}>
               <View style={styles.headerIcon}>
-                <Ionicons name="storefront" size={32} color={COLORS.white} />
+                <Ionicons name="storefront" size={32} color={COLORS.primary} />
               </View>
               <Text style={styles.headerTitle}>Shop Profile</Text>
               <Text style={styles.headerSubtitle}>
                 Manage your shop information and settings
               </Text>
             </View>
-          </View>
+          </LinearGradient>
 
           {/* Shop Status Toggle Card */}
           <View style={styles.cardContainer}>
-            <View style={styles.card}>
+            <LinearGradient
+              colors={['rgba(0, 100, 80, 0.2)', 'rgba(0, 60, 50, 0.3)']}
+              style={styles.card}
+            >
               <ShopStatusToggle 
                 isActive={profile.isActive}
                 onToggle={handleToggleShopStatus}
                 loading={togglingStatus}
               />
-            </View>
+            </LinearGradient>
           </View>
 
           {/* Form Card */}
           <View style={styles.cardContainer}>
-            <View style={styles.card}>
+            <LinearGradient
+              colors={['rgba(0, 100, 80, 0.2)', 'rgba(0, 60, 50, 0.3)']}
+              style={styles.card}
+            >
               <Text style={styles.cardTitle}>Shop Information</Text>
               
               <InputField
@@ -676,12 +689,15 @@ const VendorProfile = () => {
                   </TouchableOpacity>
                 </View>
               </View>
-            </View>
+            </LinearGradient>
           </View>
 
           {/* Category Management Card */}
           <View style={styles.cardContainer}>
-            <View style={styles.card}>
+            <LinearGradient
+              colors={['rgba(0, 100, 80, 0.2)', 'rgba(0, 60, 50, 0.3)']}
+              style={styles.card}
+            >
               <View style={styles.categoryManagementHeader}>
                 <Text style={styles.cardTitle}>Category Management</Text>
                 <TouchableOpacity 
@@ -729,7 +745,7 @@ const VendorProfile = () => {
                   ))}
                 </View>
               )}
-            </View>
+            </LinearGradient>
           </View>
 
           {/* Action Buttons */}
@@ -760,7 +776,10 @@ const VendorProfile = () => {
 
           {/* Info Section */}
           <View style={styles.infoSection}>
-            <View style={styles.infoCard}>
+            <LinearGradient
+              colors={['rgba(0, 100, 80, 0.15)', 'rgba(0, 60, 50, 0.2)']}
+              style={styles.infoCard}
+            >
               <Text style={styles.infoTitle}>Important Information</Text>
               
               <View style={styles.infoItem}>
@@ -790,7 +809,7 @@ const VendorProfile = () => {
                   Your information is secure and encrypted
                 </Text>
               </View>
-            </View>
+            </LinearGradient>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -803,11 +822,14 @@ const VendorProfile = () => {
         onRequestClose={() => setShowCategoryModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <LinearGradient
+            colors={['rgba(0, 60, 50, 0.95)', 'rgba(13, 31, 26, 0.98)']}
+            style={styles.modalContent}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add New Category</Text>
               <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
-                <Ionicons name="close" size={24} color={COLORS.dark} />
+                <Ionicons name="close" size={24} color={Theme.Colors.text} />
               </TouchableOpacity>
             </View>
 
@@ -838,24 +860,28 @@ const VendorProfile = () => {
                 onPress={handleAddCategory}
                 disabled={addingCategory || !newCategoryName.trim()}
               >
-                {addingCategory ? (
-                  <ActivityIndicator color={COLORS.white} size="small" />
-                ) : (
-                  <Text style={styles.modalAddButtonText}>Add Category</Text>
-                )}
+                <LinearGradient
+                  colors={[Theme.Colors.primary, Theme.Colors.primaryDark]}
+                  style={styles.modalAddGradient}
+                >
+                  {addingCategory ? (
+                    <ActivityIndicator color={Theme.Colors.black} size="small" />
+                  ) : (
+                    <Text style={styles.modalAddButtonText}>Add Category</Text>
+                  )}
+                </LinearGradient>
               </TouchableOpacity>
             </View>
-          </View>
+          </LinearGradient>
         </View>
       </Modal>
-    </View>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.light,
   },
   keyboardContainer: {
     flex: 1,
@@ -864,12 +890,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.light,
   },
   loadingText: {
     marginTop: SPACING.md,
     fontSize: TYPOGRAPHY.body,
-    color: COLORS.gray,
+    color: Theme.Colors.textSecondary,
     fontWeight: '500',
   },
   scrollView: {
@@ -878,16 +903,12 @@ const styles = StyleSheet.create({
   
   // Header Styles
   header: {
-    backgroundColor: COLORS.primary,
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingBottom: SPACING.xl,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 100, 80, 0.2)',
   },
   headerContent: {
     paddingHorizontal: SPACING.lg,
@@ -897,7 +918,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(0, 200, 150, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.md,
@@ -905,12 +926,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.h1,
     fontWeight: 'bold',
-    color: COLORS.white,
+    color: Theme.Colors.text,
     textAlign: 'center',
   },
   headerSubtitle: {
     fontSize: TYPOGRAPHY.body,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: Theme.Colors.textSecondary,
     textAlign: 'center',
     marginTop: SPACING.sm,
   },
@@ -918,6 +939,9 @@ const styles = StyleSheet.create({
   // Toggle Styles
   statusToggleContainer: {
     padding: SPACING.md,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 100, 80, 0.2)',
   },
   statusToggleHeader: {
     flexDirection: 'row',
@@ -927,7 +951,7 @@ const styles = StyleSheet.create({
   statusToggleTitle: {
     fontSize: TYPOGRAPHY.h4,
     fontWeight: 'bold',
-    color: COLORS.dark,
+    color: Theme.Colors.text,
     marginLeft: SPACING.sm,
   },
   statusToggleContent: {
@@ -942,11 +966,11 @@ const styles = StyleSheet.create({
   statusLabel: {
     fontSize: TYPOGRAPHY.body,
     fontWeight: '600',
-    color: COLORS.dark,
+    color: Theme.Colors.text,
   },
   statusDescription: {
     fontSize: TYPOGRAPHY.small,
-    color: COLORS.gray,
+    color: Theme.Colors.textSecondary,
     marginTop: SPACING.xs,
   },
   toggleButton: {
@@ -959,11 +983,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   toggleButtonActive: {
-    backgroundColor: 'rgba(39, 174, 96, 0.1)',
+    backgroundColor: 'rgba(76, 175, 80, 0.15)',
     borderColor: COLORS.success,
   },
   toggleButtonInactive: {
-    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+    backgroundColor: 'rgba(239, 83, 80, 0.15)',
     borderColor: COLORS.danger,
   },
   toggleButtonDisabled: {
@@ -986,19 +1010,15 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.xl,
   },
   card: {
-    backgroundColor: COLORS.white,
     borderRadius: 16,
     padding: SPACING.lg,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 100, 80, 0.2)',
   },
   cardTitle: {
     fontSize: TYPOGRAPHY.h3,
     fontWeight: 'bold',
-    color: COLORS.dark,
+    color: Theme.Colors.text,
     marginBottom: SPACING.lg,
   },
   
@@ -1009,7 +1029,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: TYPOGRAPHY.body,
     fontWeight: '600',
-    color: COLORS.dark,
+    color: Theme.Colors.text,
     marginBottom: SPACING.sm,
   },
   inputLabelError: {
@@ -1019,9 +1039,9 @@ const styles = StyleSheet.create({
     color: COLORS.danger,
   },
   inputWrapper: {
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(0, 60, 50, 0.2)',
     borderWidth: 2,
-    borderColor: COLORS.lightGray,
+    borderColor: 'rgba(0, 100, 80, 0.3)',
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1035,7 +1055,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: TYPOGRAPHY.body,
-    color: COLORS.dark,
+    color: Theme.Colors.text,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
   },
@@ -1054,7 +1074,7 @@ const styles = StyleSheet.create({
     bottom: SPACING.xs,
     right: SPACING.sm,
     fontSize: TYPOGRAPHY.small,
-    color: COLORS.gray,
+    color: Theme.Colors.textTertiary,
   },
   errorContainer: {
     flexDirection: 'row',
@@ -1069,9 +1089,9 @@ const styles = StyleSheet.create({
   
   // Category Styles
   categoryContainer: {
-    backgroundColor: COLORS.light,
+    backgroundColor: 'rgba(0, 60, 50, 0.2)',
     borderWidth: 2,
-    borderColor: COLORS.lightGray,
+    borderColor: 'rgba(0, 100, 80, 0.3)',
     borderRadius: 12,
     padding: SPACING.md,
     flexDirection: 'row',
@@ -1086,7 +1106,7 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     fontSize: TYPOGRAPHY.body,
-    color: COLORS.gray,
+    color: Theme.Colors.textSecondary,
     marginLeft: SPACING.sm,
     fontWeight: '500',
   },
@@ -1104,7 +1124,7 @@ const styles = StyleSheet.create({
   addCategoryButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(74, 144, 226, 0.1)',
+    backgroundColor: 'rgba(0, 200, 150, 0.15)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: 20,
@@ -1121,12 +1141,12 @@ const styles = StyleSheet.create({
   emptyCategoriesText: {
     fontSize: TYPOGRAPHY.body,
     fontWeight: '600',
-    color: COLORS.dark,
+    color: Theme.Colors.text,
     marginTop: SPACING.md,
   },
   emptyCategoriesSubtext: {
     fontSize: TYPOGRAPHY.caption,
-    color: COLORS.gray,
+    color: Theme.Colors.textSecondary,
     marginTop: SPACING.xs,
   },
   categoriesList: {
@@ -1138,7 +1158,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.lightGray,
+    borderBottomColor: 'rgba(0, 100, 80, 0.15)',
   },
   categoryItemContent: {
     flexDirection: 'row',
@@ -1147,13 +1167,13 @@ const styles = StyleSheet.create({
   },
   categoryItemName: {
     fontSize: TYPOGRAPHY.body,
-    color: COLORS.dark,
+    color: Theme.Colors.text,
     marginLeft: SPACING.sm,
     flex: 1,
   },
   categoryItemCount: {
     fontSize: TYPOGRAPHY.small,
-    color: COLORS.gray,
+    color: Theme.Colors.textSecondary,
     marginLeft: SPACING.md,
   },
   deleteCategoryButton: {
@@ -1178,9 +1198,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     borderRadius: 12,
     minHeight: 52,
-    shadowColor: COLORS.shadow,
+    shadowColor: 'rgba(0, 0, 0, 0.3)',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 2,
   },
@@ -1188,12 +1208,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   secondaryButton: {
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(0, 60, 50, 0.3)',
     borderWidth: 2,
-    borderColor: COLORS.lightGray,
+    borderColor: 'rgba(0, 100, 80, 0.3)',
   },
   disabledButton: {
-    backgroundColor: COLORS.lightGray,
+    backgroundColor: 'rgba(0, 60, 50, 0.2)',
     shadowOpacity: 0,
     elevation: 0,
   },
@@ -1208,13 +1228,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   primaryButtonText: {
-    color: COLORS.white,
+    color: Theme.Colors.black,
   },
   secondaryButtonText: {
-    color: COLORS.gray,
+    color: Theme.Colors.textSecondary,
   },
   disabledButtonText: {
-    color: COLORS.gray,
+    color: Theme.Colors.textTertiary,
   },
   resetButton: {
     flex: 0.4,
@@ -1229,19 +1249,15 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xl,
   },
   infoCard: {
-    backgroundColor: COLORS.white,
     borderRadius: 16,
     padding: SPACING.lg,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 100, 80, 0.2)',
   },
   infoTitle: {
     fontSize: TYPOGRAPHY.h4,
     fontWeight: 'bold',
-    color: COLORS.dark,
+    color: Theme.Colors.text,
     marginBottom: SPACING.md,
   },
   infoItem: {
@@ -1251,7 +1267,7 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: TYPOGRAPHY.caption,
-    color: COLORS.gray,
+    color: Theme.Colors.textSecondary,
     marginLeft: SPACING.sm,
     flex: 1,
     lineHeight: 20,
@@ -1260,16 +1276,17 @@ const styles = StyleSheet.create({
   // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: COLORS.white,
     borderRadius: 16,
     padding: SPACING.lg,
     width: '85%',
     maxWidth: 400,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 100, 80, 0.3)',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1280,15 +1297,17 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: TYPOGRAPHY.h4,
     fontWeight: 'bold',
-    color: COLORS.dark,
+    color: Theme.Colors.text,
   },
   modalInput: {
     borderWidth: 2,
-    borderColor: COLORS.lightGray,
+    borderColor: 'rgba(0, 100, 80, 0.3)',
     borderRadius: 12,
     padding: SPACING.md,
     fontSize: TYPOGRAPHY.body,
     marginBottom: SPACING.md,
+    backgroundColor: 'rgba(0, 60, 50, 0.2)',
+    color: Theme.Colors.text,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -1297,22 +1316,28 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     flex: 1,
-    paddingVertical: SPACING.md,
     borderRadius: 12,
-    alignItems: 'center',
+    overflow: 'hidden',
   },
   modalCancelButton: {
-    backgroundColor: COLORS.lightGray,
+    backgroundColor: 'rgba(0, 60, 50, 0.3)',
+    padding: SPACING.md,
+    alignItems: 'center',
   },
   modalCancelButtonText: {
-    color: COLORS.gray,
+    color: Theme.Colors.textSecondary,
     fontWeight: '600',
   },
   modalAddButton: {
-    backgroundColor: COLORS.primary,
+    flex: 1,
+    overflow: 'hidden',
+  },
+  modalAddGradient: {
+    padding: SPACING.md,
+    alignItems: 'center',
   },
   modalAddButtonText: {
-    color: COLORS.white,
+    color: Theme.Colors.black,
     fontWeight: '600',
   },
 });

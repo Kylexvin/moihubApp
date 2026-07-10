@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 import { renderAIMessage } from './components';
+import AnimatedMessage from './components/AnimatedMessage';
 
 const { width } = Dimensions.get('window');
 
@@ -55,7 +56,7 @@ const AIChatMainScreen = () => {
       {
         id: Date.now(),
         role: 'assistant',
-        text: "Hi! I'm your MoiHub Assistant.\n\nI can help you with:\nRentals\nFood\nServices\nMarketplace\n\nJust tell me what you're looking for!",
+        text: "Hi! I'm your MoiHub Assistant.\n\nI can help you with:\nRentals\nFood\nServices\nMarketplace\nEshops\n\nJust tell me exactly what you're looking for!",
         module: null,
         data: null,
         timestamp: new Date(),
@@ -107,11 +108,22 @@ const AIChatMainScreen = () => {
     } catch (error) {
       console.error('Chat error:', error);
 
-      let errorText = 'Sorry, something went wrong. Please try again.';
-      if (error.response?.status === 404) {
+      let errorText = '😅 Sorry, something went wrong. Please try again.';
+      
+      if (error.response?.status === 429) {
+        errorText = '⏳ Too many requests. Please wait a moment and try again.';
+      } else if (error.response?.status === 503) {
+        errorText = '🔧 The AI service is currently busy. Please try again in a few seconds.';
+      } else if (error.response?.status === 404) {
         errorText = 'Sorry, that feature is not available yet. Try asking about rentals.';
       } else if (error.response?.status === 400) {
         errorText = 'Please enter a valid message. What would you like to find?';
+      } else if (error.response?.status === 500) {
+        errorText = '⚠️ Server error. Please try again later.';
+      } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        errorText = '⏱️ Request timed out. Please check your connection and try again.';
+      } else if (error.message?.includes('Network Error')) {
+        errorText = '📡 Network error. Please check your internet connection.';
       }
 
       const errorMessage = {
@@ -129,81 +141,77 @@ const AIChatMainScreen = () => {
     }
   };
 
-// ─── Navigation Handlers ──────────────────────────────────────────────────
-const handleViewRentalDetails = (rental) => {
-  navigation.navigate('AccomStack', {
-    screen: 'RentalDetail',
-    params: { rentalId: rental.id },
-  });
-};
-
-const handleViewServiceDetails = (provider, type) => {
-  // Dashboard provider → ServiceProviderDashboard
-  if (type === 'dashboard' || provider.hasDashboard) {
-    navigation.navigate('ServicesStack', {
-      screen: 'ServiceProviderDashboard',
-      params: { providerId: provider.id },
+  // ─── Navigation Handlers ──────────────────────────────────────────────────
+  const handleViewRentalDetails = (rental) => {
+    navigation.navigate('AccomStack', {
+      screen: 'RentalDetail',
+      params: { rentalId: rental.id },
     });
-  } else {
-    // Directory provider → ProviderProfile
-    navigation.navigate('ServicesStack', {
-      screen: 'ProviderProfile',
-      params: { providerId: provider.id },
+  };
+
+  const handleViewServiceDetails = (provider, type) => {
+    if (type === 'dashboard' || provider.hasDashboard) {
+      navigation.navigate('ServicesStack', {
+        screen: 'ServiceProviderDashboard',
+        params: { providerId: provider.id },
+      });
+    } else {
+      navigation.navigate('ServicesStack', {
+        screen: 'ProviderProfile',
+        params: { providerId: provider.id },
+      });
+    }
+  };
+
+  const handleViewFoodDetails = (vendor) => {
+    navigation.navigate('FoodStack', {
+      screen: 'FoodVendor',  
+      params: { vendorId: vendor.id },
     });
-  }
-};
+  };
 
-const handleViewFoodDetails = (vendor) => {
-  navigation.navigate('FoodStack', {
-    screen: 'FoodVendor',  
-    params: { vendorId: vendor.id },
-  });
-};
+  // ─── Unified onViewDetails handler ──────────────────────────────────────
+  const handleViewDetails = (item, type) => {
+    if (type === 'eshop') {
+      handleViewShopProducts(item);
+      return;
+    }
 
-// ─── Unified onViewDetails handler ──────────────────────────────────────
-const handleViewDetails = (item, type) => {
-  if (type === 'eshop') {
-    handleViewShopProducts(item);
-    return;
-  }
+    if (type === 'product') {
+      navigation.navigate('EshopNavigator', {
+        screen: 'ProductDetail',
+        params: { productId: item.id, shopId: item.shopId },
+      });
+      return;
+    }
 
-  if (type === 'product') {
-    navigation.navigate('EshopNavigator', {
-      screen: 'ProductDetail',
-      params: { productId: item.id, shopId: item.shopId },
-    });
-    return;
-  }
+    if (type === 'dashboard') {
+      navigation.navigate('ServicesStack', {
+        screen: 'ProviderProfile',
+        params: { providerId: item.id },
+      });
+      return;
+    }
 
-// Service - Dashboard (public view)
-if (type === 'dashboard') {
-  navigation.navigate('ServicesStack', {
-    screen: 'ProviderProfile',  // ← Change to ProviderProfile
-    params: { providerId: item.id },
-  });
-  return;
-}
+    if (type === 'service') {
+      navigation.navigate('ServicesStack', {
+        screen: 'ProviderProfile',
+        params: { providerId: item.id },
+      });
+      return;
+    }
 
-// Service - Directory
-if (type === 'service') {
-  navigation.navigate('ServicesStack', {
-    screen: 'ProviderProfile',
-    params: { providerId: item.id },
-  });
-  return;
-}
-
-  // Auto-detect by item properties
-  if (item.price && item.location && item.type) {
-    handleViewRentalDetails(item);
-  } else if (item.category || item.providerType) {
-    handleViewServiceDetails(item, item.hasDashboard ? 'dashboard' : 'service');
-  } else if (item.shopName || item.matchedItems) {
-    handleViewFoodDetails(item);
-  } else {
-    navigation.navigate('DetailScreen', { id: item.id });
-  }
-};
+    // Auto-detect by item properties
+    if (item.price && item.location && item.type) {
+      handleViewRentalDetails(item);
+    } else if (item.category || item.providerType) {
+      handleViewServiceDetails(item, item.hasDashboard ? 'dashboard' : 'service');
+    } else if (item.shopName || item.matchedItems) {
+      handleViewFoodDetails(item);
+    } else {
+      navigation.navigate('DetailScreen', { id: item.id });
+    }
+  };
 
   // ─── Eshop Handlers ──────────────────────────────────────────────────────
   const handleViewShopProducts = (shop) => {
@@ -217,28 +225,28 @@ if (type === 'service') {
     });
   };
 
-// ─── Combined View More Handler ──────────────────────────────────────────
-const handleViewMore = (type) => {
-  switch(type) {
-    case 'rentals':
-      navigation.navigate('AccomStack', { screen: 'AccomHome' });
-      break;
-    case 'marketplace':
-      navigation.navigate('SecondHandStack', { screen: 'SecondHandHome' });
-      break;
-    case 'eshops':
-      navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
-      break;
-    case 'food':
-      navigation.navigate('FoodStack', { screen: 'FoodHome' });
-      break;
-    case 'services':
-      navigation.navigate('ServicesStack', { screen: 'ServicesList' });
-      break;
-    default:
-      break;
-  }
-};
+  // ─── Combined View More Handler ──────────────────────────────────────────
+  const handleViewMore = (type) => {
+    switch(type) {
+      case 'rentals':
+        navigation.navigate('AccomStack', { screen: 'AccomHome' });
+        break;
+      case 'marketplace':
+        navigation.navigate('SecondHandStack', { screen: 'SecondHandHome' });
+        break;
+      case 'eshops':
+        navigation.navigate('EshopNavigator', { screen: 'EshopHome' });
+        break;
+      case 'food':
+        navigation.navigate('FoodStack', { screen: 'FoodHome' });
+        break;
+      case 'services':
+        navigation.navigate('ServicesStack', { screen: 'ServicesList' });
+        break;
+      default:
+        break;
+    }
+  };
 
   const handleCall = (phoneNumber) => {
     if (phoneNumber) {
@@ -249,26 +257,7 @@ const handleViewMore = (type) => {
   // ─── Render Message ──────────────────────────────────────────────────────
   const renderMessage = ({ item }) => {
     const isUser = item.role === 'user';
-
-    return (
-      <View style={[styles.messageWrapper, isUser ? styles.userMessageWrapper : styles.assistantMessageWrapper]}>
-        {!isUser && (
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatarImage}>
-              <Ionicons name="hardware-chip-outline" size={16} color={COLORS.green} />
-            </View>
-          </View>
-        )}
-        <View style={[styles.messageBubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-          <Text style={[styles.messageText, isUser ? styles.userText : styles.assistantText]}>
-            {item.text}
-          </Text>
-          <Text style={{ fontSize: 10, color: COLORS.textMeta, marginTop: 4, alignSelf: 'flex-end' }}>
-            {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-        </View>
-      </View>
-    );
+    return <AnimatedMessage item={item} isUser={isUser} />;
   };
 
   const renderTypingIndicator = () => {

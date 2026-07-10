@@ -14,10 +14,12 @@ import {
   Switch,
   Modal
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Theme from '../../theme/Theme';
 
 const EditProductScreen = ({ route, navigation }) => {
   const { product } = route.params;
@@ -232,189 +234,196 @@ const EditProductScreen = ({ route, navigation }) => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit Product</Text>
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={handleDelete}
-        >
-          <Ionicons name="trash" size={24} color="#f44336" />
-        </TouchableOpacity>
-      </View>
+      <LinearGradient colors={Theme.Gradients.dark} style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color={Theme.Colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Edit Product</Text>
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={handleDelete}
+          >
+            <Ionicons name="trash" size={24} color={Theme.Colors.danger} />
+          </TouchableOpacity>
+        </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={styles.form}>
-          {/* Image Picker */}
-          <View style={styles.imageSection}>
-            <Text style={styles.label}>Product Image</Text>
-            <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
-              {image ? (
-                <Image source={{ uri: image.uri }} style={styles.imagePreview} />
-              ) : currentImage ? (
-                <Image source={{ uri: currentImage }} style={styles.imagePreview} />
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          <View style={styles.form}>
+            {/* Image Picker */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Product Image</Text>
+              <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
+                {image ? (
+                  <Image source={{ uri: image.uri }} style={styles.imagePreview} />
+                ) : currentImage ? (
+                  <Image source={{ uri: currentImage }} style={styles.imagePreview} />
+                ) : (
+                  <View style={styles.imagePlaceholder}>
+                    <Ionicons name="camera" size={40} color={Theme.Colors.textTertiary} />
+                    <Text style={styles.imagePlaceholderText}>Tap to change image</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              {image && (
+                <Text style={styles.imageChangeText}>New image selected</Text>
+              )}
+            </View>
+
+            {/* Product Name */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Product Name *</Text>
+              <TextInput
+                style={[styles.input, errors.name && styles.inputError]}
+                value={formData.name}
+                onChangeText={(text) => handleInputChange('name', text)}
+                placeholder="Enter product name"
+                placeholderTextColor={Theme.Colors.textTertiary}
+              />
+              {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+            </View>
+
+            {/* Description */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Description *</Text>
+              <TextInput
+                style={[styles.textArea, errors.description && styles.inputError]}
+                value={formData.description}
+                onChangeText={(text) => handleInputChange('description', text)}
+                placeholder="Enter product description"
+                placeholderTextColor={Theme.Colors.textTertiary}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+              {errors.description && <Text style={styles.errorText}>{errors.description}</Text>}
+            </View>
+
+            {/* Price */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Price (KSh) *</Text>
+              <TextInput
+                style={[styles.input, errors.price && styles.inputError]}
+                value={formData.price}
+                onChangeText={(text) => handleInputChange('price', text)}
+                placeholder="0.00"
+                placeholderTextColor={Theme.Colors.textTertiary}
+                keyboardType="numeric"
+              />
+              {errors.price && <Text style={styles.errorText}>{errors.price}</Text>}
+            </View>
+
+            {/* Quantity */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Quantity *</Text>
+              <TextInput
+                style={[styles.input, errors.quantity && styles.inputError]}
+                value={formData.quantity}
+                onChangeText={(text) => handleInputChange('quantity', text)}
+                placeholder="1"
+                placeholderTextColor={Theme.Colors.textTertiary}
+                keyboardType="numeric"
+              />
+              {errors.quantity && <Text style={styles.errorText}>{errors.quantity}</Text>}
+            </View>
+
+            {/* Category - Dynamic */}
+            <View style={styles.inputGroup}>
+              <View style={styles.categoryHeader}>
+                <Text style={styles.label}>Category *</Text>
+                <TouchableOpacity 
+                  style={styles.addCategoryButton}
+                  onPress={() => setShowAddCategory(true)}
+                >
+                  <Ionicons name="add-circle" size={24} color={Theme.Colors.primary} />
+                  <Text style={styles.addCategoryText}>New</Text>
+                </TouchableOpacity>
+              </View>
+
+              {loadingCategories ? (
+                <ActivityIndicator size="small" color={Theme.Colors.primary} />
+              ) : categories.length === 0 ? (
+                <TouchableOpacity 
+                  style={styles.emptyCategories}
+                  onPress={() => setShowAddCategory(true)}
+                >
+                  <Ionicons name="folder-open" size={40} color={Theme.Colors.textTertiary} />
+                  <Text style={styles.emptyCategoriesText}>No categories yet</Text>
+                  <Text style={styles.emptyCategoriesSubText}>Tap "New" to create one</Text>
+                </TouchableOpacity>
               ) : (
-                <View style={styles.imagePlaceholder}>
-                  <Ionicons name="camera" size={40} color="#999" />
-                  <Text style={styles.imagePlaceholderText}>Tap to change image</Text>
+                <View style={styles.categoryContainer}>
+                  {categories.map((category) => (
+                    <TouchableOpacity
+                      key={category._id}
+                      style={[
+                        styles.categoryChip,
+                        formData.category === category._id && styles.categoryChipSelected
+                      ]}
+                      onPress={() => handleInputChange('category', category._id)}
+                    >
+                      <Text style={[
+                        styles.categoryChipText,
+                        formData.category === category._id && styles.categoryChipTextSelected
+                      ]}>
+                        {category.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
               )}
-            </TouchableOpacity>
-            {image && (
-              <Text style={styles.imageChangeText}>New image selected</Text>
-            )}
-          </View>
-
-          {/* Product Name */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Product Name *</Text>
-            <TextInput
-              style={[styles.input, errors.name && styles.inputError]}
-              value={formData.name}
-              onChangeText={(text) => handleInputChange('name', text)}
-              placeholder="Enter product name"
-              placeholderTextColor="#999"
-            />
-            {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
-          </View>
-
-          {/* Description */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Description *</Text>
-            <TextInput
-              style={[styles.textArea, errors.description && styles.inputError]}
-              value={formData.description}
-              onChangeText={(text) => handleInputChange('description', text)}
-              placeholder="Enter product description"
-              placeholderTextColor="#999"
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
-            {errors.description && <Text style={styles.errorText}>{errors.description}</Text>}
-          </View>
-
-          {/* Price */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Price ($) *</Text>
-            <TextInput
-              style={[styles.input, errors.price && styles.inputError]}
-              value={formData.price}
-              onChangeText={(text) => handleInputChange('price', text)}
-              placeholder="0.00"
-              placeholderTextColor="#999"
-              keyboardType="numeric"
-            />
-            {errors.price && <Text style={styles.errorText}>{errors.price}</Text>}
-          </View>
-
-          {/* Quantity */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Quantity *</Text>
-            <TextInput
-              style={[styles.input, errors.quantity && styles.inputError]}
-              value={formData.quantity}
-              onChangeText={(text) => handleInputChange('quantity', text)}
-              placeholder="1"
-              placeholderTextColor="#999"
-              keyboardType="numeric"
-            />
-            {errors.quantity && <Text style={styles.errorText}>{errors.quantity}</Text>}
-          </View>
-
-          {/* Category - Dynamic */}
-          <View style={styles.inputGroup}>
-            <View style={styles.categoryHeader}>
-              <Text style={styles.label}>Category *</Text>
-              <TouchableOpacity 
-                style={styles.addCategoryButton}
-                onPress={() => setShowAddCategory(true)}
-              >
-                <Ionicons name="add-circle" size={24} color="#2196F3" />
-                <Text style={styles.addCategoryText}>New</Text>
-              </TouchableOpacity>
+              
+              {errors.category && <Text style={styles.errorText}>{errors.category}</Text>}
             </View>
 
-            {loadingCategories ? (
-              <ActivityIndicator size="small" color="#2196F3" />
-            ) : categories.length === 0 ? (
-              <TouchableOpacity 
-                style={styles.emptyCategories}
-                onPress={() => setShowAddCategory(true)}
-              >
-                <Ionicons name="folder-open" size={40} color="#ccc" />
-                <Text style={styles.emptyCategoriesText}>No categories yet</Text>
-                <Text style={styles.emptyCategoriesSubText}>Tap "New" to create one</Text>
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.categoryContainer}>
-                {categories.map((category) => (
-                  <TouchableOpacity
-                    key={category._id}
-                    style={[
-                      styles.categoryChip,
-                      formData.category === category._id && styles.categoryChipSelected
-                    ]}
-                    onPress={() => handleInputChange('category', category._id)}
-                  >
-                    <Text style={[
-                      styles.categoryChipText,
-                      formData.category === category._id && styles.categoryChipTextSelected
-                    ]}>
-                      {category.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+            {/* Availability Toggle */}
+            <View style={styles.inputGroup}>
+              <View style={styles.switchContainer}>
+                <Text style={styles.label}>Available for Sale</Text>
+                <Switch
+                  value={formData.isAvailable}
+                  onValueChange={(value) => handleInputChange('isAvailable', value)}
+                  trackColor={{ false: 'rgba(0, 100, 80, 0.3)', true: Theme.Colors.primary }}
+                  thumbColor={formData.isAvailable ? Theme.Colors.white : Theme.Colors.textTertiary}
+                />
               </View>
-            )}
-            
-            {errors.category && <Text style={styles.errorText}>{errors.category}</Text>}
-          </View>
-
-          {/* Availability Toggle */}
-          <View style={styles.inputGroup}>
-            <View style={styles.switchContainer}>
-              <Text style={styles.label}>Available for Sale</Text>
-              <Switch
-                value={formData.isAvailable}
-                onValueChange={(value) => handleInputChange('isAvailable', value)}
-                trackColor={{ false: '#e0e0e0', true: '#2196F3' }}
-                thumbColor={formData.isAvailable ? '#fff' : '#f4f3f4'}
-              />
+              <Text style={styles.switchDescription}>
+                {formData.isAvailable ? 'Product is available for customers to purchase' : 'Product is hidden from customers'}
+              </Text>
             </View>
-            <Text style={styles.switchDescription}>
-              {formData.isAvailable ? 'Product is available for customers to purchase' : 'Product is hidden from customers'}
-            </Text>
-          </View>
 
-          {/* Action Buttons */}
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-              onPress={handleSubmit}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.submitButtonText}>Update Product</Text>
-              )}
-            </TouchableOpacity>
+            {/* Action Buttons */}
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity
+                style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+                onPress={handleSubmit}
+                disabled={loading}
+              >
+                <LinearGradient
+                  colors={[Theme.Colors.primary, Theme.Colors.primaryDark]}
+                  style={styles.submitGradient}
+                >
+                  {loading ? (
+                    <ActivityIndicator color={Theme.Colors.black} />
+                  ) : (
+                    <Text style={styles.submitButtonText}>Update Product</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => navigation.goBack()}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => navigation.goBack()}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </LinearGradient>
 
       {/* Add Category Modal */}
       <Modal
@@ -424,18 +433,21 @@ const EditProductScreen = ({ route, navigation }) => {
         onRequestClose={() => setShowAddCategory(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <LinearGradient
+            colors={['rgba(0, 60, 50, 0.95)', 'rgba(13, 31, 26, 0.98)']}
+            style={styles.modalContent}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add New Category</Text>
               <TouchableOpacity onPress={() => setShowAddCategory(false)}>
-                <Ionicons name="close" size={24} color="#333" />
+                <Ionicons name="close" size={24} color={Theme.Colors.text} />
               </TouchableOpacity>
             </View>
 
             <TextInput
               style={styles.modalInput}
               placeholder="Enter category name"
-              placeholderTextColor="#999"
+              placeholderTextColor={Theme.Colors.textTertiary}
               value={newCategoryName}
               onChangeText={setNewCategoryName}
               autoFocus
@@ -458,14 +470,19 @@ const EditProductScreen = ({ route, navigation }) => {
                 onPress={handleAddCategory}
                 disabled={addingCategory}
               >
-                {addingCategory ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.modalAddButtonText}>Add Category</Text>
-                )}
+                <LinearGradient
+                  colors={[Theme.Colors.primary, Theme.Colors.primaryDark]}
+                  style={styles.modalAddGradient}
+                >
+                  {addingCategory ? (
+                    <ActivityIndicator color={Theme.Colors.black} size="small" />
+                  ) : (
+                    <Text style={styles.modalAddButtonText}>Add Category</Text>
+                  )}
+                </LinearGradient>
               </TouchableOpacity>
             </View>
-          </View>
+          </LinearGradient>
         </View>
       </Modal>
     </KeyboardAvoidingView>
@@ -475,16 +492,15 @@ const EditProductScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 20,
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: 'rgba(0, 100, 80, 0.2)',
+    backgroundColor: 'rgba(0, 60, 50, 0.3)',
   },
   backButton: {
     marginRight: 16,
@@ -492,7 +508,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: Theme.Colors.text,
     flex: 1,
   },
   deleteButton: {
@@ -504,18 +520,18 @@ const styles = StyleSheet.create({
   form: {
     padding: 20,
   },
-  imageSection: {
+  inputGroup: {
     marginBottom: 24,
   },
   label: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: Theme.Colors.text,
     marginBottom: 8,
   },
   imagePicker: {
     borderWidth: 2,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(0, 100, 80, 0.3)',
     borderStyle: 'dashed',
     borderRadius: 12,
     overflow: 'hidden',
@@ -529,46 +545,43 @@ const styles = StyleSheet.create({
     height: 200,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f8f8',
+    backgroundColor: 'rgba(0, 60, 50, 0.2)',
   },
   imagePlaceholderText: {
     fontSize: 16,
-    color: '#999',
+    color: Theme.Colors.textTertiary,
     marginTop: 8,
   },
   imageChangeText: {
     fontSize: 14,
-    color: '#2196F3',
+    color: Theme.Colors.primary,
     marginTop: 8,
     textAlign: 'center',
   },
-  inputGroup: {
-    marginBottom: 24,
-  },
   input: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(0, 100, 80, 0.3)',
     borderRadius: 8,
     padding: 16,
     fontSize: 16,
-    backgroundColor: '#fff',
-    color: '#333',
+    backgroundColor: 'rgba(0, 60, 50, 0.2)',
+    color: Theme.Colors.text,
   },
   textArea: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(0, 100, 80, 0.3)',
     borderRadius: 8,
     padding: 16,
     fontSize: 16,
-    backgroundColor: '#fff',
-    color: '#333',
+    backgroundColor: 'rgba(0, 60, 50, 0.2)',
+    color: Theme.Colors.text,
     height: 100,
   },
   inputError: {
-    borderColor: '#f44336',
+    borderColor: Theme.Colors.danger,
   },
   errorText: {
-    color: '#f44336',
+    color: Theme.Colors.danger,
     fontSize: 14,
     marginTop: 4,
   },
@@ -583,7 +596,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addCategoryText: {
-    color: '#2196F3',
+    color: Theme.Colors.primary,
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 4,
@@ -596,41 +609,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(0, 60, 50, 0.3)',
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(0, 100, 80, 0.3)',
     marginRight: 8,
     marginBottom: 8,
   },
   categoryChipSelected: {
-    backgroundColor: '#2196F3',
-    borderColor: '#2196F3',
+    backgroundColor: Theme.Colors.primary,
+    borderColor: Theme.Colors.primary,
   },
   categoryChipText: {
     fontSize: 14,
-    color: '#666',
+    color: Theme.Colors.textSecondary,
   },
   categoryChipTextSelected: {
-    color: '#fff',
+    color: Theme.Colors.black,
+    fontWeight: '600',
   },
   emptyCategories: {
     padding: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f8f8f8',
+    backgroundColor: 'rgba(0, 60, 50, 0.2)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(0, 100, 80, 0.3)',
     borderStyle: 'dashed',
   },
   emptyCategoriesText: {
     fontSize: 16,
-    color: '#666',
+    color: Theme.Colors.textSecondary,
     marginTop: 8,
   },
   emptyCategoriesSubText: {
     fontSize: 14,
-    color: '#999',
+    color: Theme.Colors.textTertiary,
     marginTop: 4,
   },
   switchContainer: {
@@ -641,52 +655,56 @@ const styles = StyleSheet.create({
   },
   switchDescription: {
     fontSize: 14,
-    color: '#666',
+    color: Theme.Colors.textSecondary,
   },
   buttonContainer: {
     marginTop: 16,
+    marginBottom: 30,
   },
   submitButton: {
-    backgroundColor: '#2196F3',
-    padding: 16,
     borderRadius: 8,
-    alignItems: 'center',
+    overflow: 'hidden',
     marginBottom: 12,
   },
+  submitGradient: {
+    padding: 16,
+    alignItems: 'center',
+  },
   submitButtonDisabled: {
-    backgroundColor: '#ccc',
+    opacity: 0.6,
   },
   submitButtonText: {
-    color: '#fff',
+    color: Theme.Colors.black,
     fontSize: 16,
     fontWeight: 'bold',
   },
   cancelButton: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: 'rgba(0, 60, 50, 0.3)',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(0, 100, 80, 0.3)',
   },
   cancelButtonText: {
-    color: '#666',
+    color: Theme.Colors.textSecondary,
     fontSize: 16,
     fontWeight: 'bold',
   },
   // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 24,
     width: '85%',
     maxWidth: 400,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 100, 80, 0.3)',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -697,15 +715,17 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: Theme.Colors.text,
   },
   modalInput: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(0, 100, 80, 0.3)',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
     marginBottom: 16,
+    backgroundColor: 'rgba(0, 60, 50, 0.2)',
+    color: Theme.Colors.text,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -714,22 +734,28 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     flex: 1,
-    padding: 12,
     borderRadius: 8,
-    alignItems: 'center',
+    overflow: 'hidden',
   },
   modalCancelButton: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: 'rgba(0, 60, 50, 0.3)',
+    padding: 12,
+    alignItems: 'center',
   },
   modalCancelButtonText: {
-    color: '#666',
+    color: Theme.Colors.textSecondary,
     fontWeight: '600',
   },
   modalAddButton: {
-    backgroundColor: '#2196F3',
+    flex: 1,
+    overflow: 'hidden',
+  },
+  modalAddGradient: {
+    padding: 12,
+    alignItems: 'center',
   },
   modalAddButtonText: {
-    color: '#fff',
+    color: Theme.Colors.black,
     fontWeight: '600',
   },
 });

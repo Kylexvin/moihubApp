@@ -9,8 +9,10 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
+import theme from '../../theme/Theme';
 
 const VendorDashboard = () => {
   const [dashboardData, setDashboardData] = useState(null);
@@ -57,26 +59,29 @@ const VendorDashboard = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'completed':
-        return '#4CAF50';
+        return theme.Colors.success;
       case 'pending':
-        return '#FF9800';
+        return theme.Colors.warning;
       case 'processing':
-        return '#2196F3';
+        return theme.Colors.info;
       case 'cancelled':
-        return '#F44336';
+        return theme.Colors.danger;
       default:
-        return '#757575';
+        return theme.Colors.textSecondary;
     }
   };
 
-  const StatCard = ({ title, value, icon, color = '#2196F3' }) => (
-    <View style={[styles.statCard, { borderLeftColor: color }]}>
+  const StatCard = ({ title, value, icon, color = theme.Colors.info }) => (
+    <LinearGradient
+      colors={['rgba(0, 100, 80, 0.3)', 'rgba(0, 60, 50, 0.4)']}
+      style={[styles.statCard, { borderLeftColor: color }]}
+    >
       <View style={styles.statHeader}>
         <Ionicons name={icon} size={24} color={color} />
         <Text style={styles.statTitle}>{title}</Text>
       </View>
       <Text style={styles.statValue}>{value}</Text>
-    </View>
+    </LinearGradient>
   );
 
   const OrderStatusItem = ({ status, count }) => (
@@ -91,9 +96,12 @@ const VendorDashboard = () => {
 
   const TopProductItem = ({ product, index }) => (
     <View style={styles.topProductItem}>
-      <View style={styles.productRank}>
+      <LinearGradient
+        colors={['rgba(0, 200, 150, 0.2)', 'rgba(0, 100, 80, 0.1)']}
+        style={styles.productRank}
+      >
         <Text style={styles.rankNumber}>{index + 1}</Text>
-      </View>
+      </LinearGradient>
       <View style={styles.productInfo}>
         <Text style={styles.productName}>{product.name}</Text>
         <Text style={styles.productQuantity}>Sold: {product.quantity}</Text>
@@ -103,159 +111,168 @@ const VendorDashboard = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2196F3" />
+      <LinearGradient colors={theme.Gradients.dark} style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={theme.Colors.primary} />
         <Text style={styles.loadingText}>Loading dashboard...</Text>
-      </View>
+      </LinearGradient>
     );
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Eshop Dashboard</Text>
-        <Text style={styles.headerSubtitle}>
-          Welcome back, {dashboardData?.shop?.shopName || 'Shop Owner'}
-        </Text>
-      </View>
+    <LinearGradient colors={theme.Gradients.dark} style={styles.container}>
+      <ScrollView
+        refreshControl={
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh}
+            tintColor={theme.Colors.primary}
+            colors={[theme.Colors.primary]}
+          />
+        }
+      >
+        {/* Header */}
+        <LinearGradient
+          colors={['rgba(0, 200, 150, 0.2)', 'rgba(0, 100, 80, 0.1)']}
+          style={styles.header}
+        >
+          <Text style={styles.headerTitle}>Eshop Dashboard</Text>
+          <Text style={styles.headerSubtitle}>
+            Welcome back, {dashboardData?.shop?.shopName || 'Shop Owner'}
+          </Text>
+        </LinearGradient>
 
-     
-      {/* Stats Overview */}
-      <View style={styles.statsContainer}>
-        <Text style={styles.sectionTitle}>Overview</Text>
-        <View style={styles.statsGrid}>
-          <StatCard
-            title="Total Revenue"
-            value={formatCurrency(statsData?.totalRevenue || dashboardData?.totalRevenue)}
-            icon="cash-outline"
-            color="#4CAF50"
-          />
-          <StatCard
-            title="Total Orders"
-            value={statsData?.totalOrders || dashboardData?.totalOrders || 0}
-            icon="receipt-outline"
-            color="#2196F3"
-          />
-          <StatCard
-            title="Total Products"
-            value={dashboardData?.totalProducts || 0}
-            icon="pricetags-outline"
-            color="#FF9800"
-          />
-          <StatCard
-            title="Available Products"
-            value={dashboardData?.availableProducts || 0}
-            icon="checkmark-circle-outline"
-            color="#9C27B0"
-          />
-        </View>
-      </View>
-
-      {/* Orders by Status */}
-      {statsData?.ordersByStatus && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Orders by Status</Text>
-          <View style={styles.orderStatusContainer}>
-            {Object.entries(statsData.ordersByStatus).map(([status, count]) => (
-              <OrderStatusItem key={status} status={status} count={count} />
-            ))}
+        {/* Stats Overview */}
+        <View style={styles.statsContainer}>
+          <Text style={styles.sectionTitle}>Overview</Text>
+          <View style={styles.statsGrid}>
+            <StatCard
+              title="Total Revenue"
+              value={formatCurrency(statsData?.totalRevenue || dashboardData?.totalRevenue)}
+              icon="cash-outline"
+              color={theme.Colors.success}
+            />
+            <StatCard
+              title="Total Orders"
+              value={statsData?.totalOrders || dashboardData?.totalOrders || 0}
+              icon="receipt-outline"
+              color={theme.Colors.info}
+            />
+            <StatCard
+              title="Total Products"
+              value={dashboardData?.totalProducts || 0}
+              icon="pricetags-outline"
+              color={theme.Colors.warning}
+            />
+            <StatCard
+              title="Available Products"
+              value={dashboardData?.availableProducts || 0}
+              icon="checkmark-circle-outline"
+              color={theme.Colors.primary}
+            />
           </View>
         </View>
-      )}
 
-      {/* Top Products */}
-      {statsData?.topProducts && statsData.topProducts.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Top Products</Text>
-          <View style={styles.topProductsContainer}>
-            {statsData.topProducts.map((product, index) => (
-              <TopProductItem key={index} product={product} index={index} />
-            ))}
+        {/* Orders by Status */}
+        {statsData?.ordersByStatus && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Orders by Status</Text>
+            <LinearGradient
+              colors={['rgba(0, 100, 80, 0.2)', 'rgba(0, 60, 50, 0.3)']}
+              style={styles.orderStatusContainer}
+            >
+              {Object.entries(statsData.ordersByStatus).map(([status, count]) => (
+                <OrderStatusItem key={status} status={status} count={count} />
+              ))}
+            </LinearGradient>
           </View>
-        </View>
-      )}
+        )}
 
-
-
-
-      {/* Subscription Status */}
-      {dashboardData?.isSubscriptionValid !== undefined && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Subscription Status</Text>
-          <View style={styles.subscriptionContainer}>
-            <View style={styles.subscriptionStatus}>
-              <Ionicons
-                name={dashboardData.isSubscriptionValid ? "checkmark-circle" : "warning"}
-                size={24}
-                color={dashboardData.isSubscriptionValid ? "#4CAF50" : "#FF9800"}
-              />
-              <Text style={[
-                styles.subscriptionText,
-                { color: dashboardData.isSubscriptionValid ? "#4CAF50" : "#FF9800" }
-              ]}>
-                {dashboardData.isSubscriptionValid ? "Active" : "Expired"}
-              </Text>
-            </View>
-            {dashboardData.shop?.subscriptionEndDate && (
-              <Text style={styles.subscriptionDate}>
-                Ends: {new Date(dashboardData.shop.subscriptionEndDate).toLocaleDateString()}
-              </Text>
-            )}
+        {/* Top Products */}
+        {statsData?.topProducts && statsData.topProducts.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Top Products</Text>
+            <LinearGradient
+              colors={['rgba(0, 100, 80, 0.2)', 'rgba(0, 60, 50, 0.3)']}
+              style={styles.topProductsContainer}
+            >
+              {statsData.topProducts.map((product, index) => (
+                <TopProductItem key={index} product={product} index={index} />
+              ))}
+            </LinearGradient>
           </View>
-        </View>
-      )}
-    </ScrollView>
+        )}
+
+        {/* Subscription Status */}
+        {dashboardData?.isSubscriptionValid !== undefined && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Subscription Status</Text>
+            <LinearGradient
+              colors={['rgba(0, 100, 80, 0.2)', 'rgba(0, 60, 50, 0.3)']}
+              style={styles.subscriptionContainer}
+            >
+              <View style={styles.subscriptionStatus}>
+                <Ionicons
+                  name={dashboardData.isSubscriptionValid ? "checkmark-circle" : "warning"}
+                  size={24}
+                  color={dashboardData.isSubscriptionValid ? theme.Colors.success : theme.Colors.warning}
+                />
+                <Text style={[
+                  styles.subscriptionText,
+                  { color: dashboardData.isSubscriptionValid ? theme.Colors.success : theme.Colors.warning }
+                ]}>
+                  {dashboardData.isSubscriptionValid ? "Active" : "Expired"}
+                </Text>
+              </View>
+              {dashboardData.shop?.subscriptionEndDate && (
+                <Text style={styles.subscriptionDate}>
+                  Ends: {new Date(dashboardData.shop.subscriptionEndDate).toLocaleDateString()}
+                </Text>
+              )}
+            </LinearGradient>
+          </View>
+        )}
+      </ScrollView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
+    color: theme.Colors.textSecondary,
   },
   header: {
-    backgroundColor: '#2196F3',
     padding: 20,
     paddingTop: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 100, 80, 0.2)',
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    color: theme.Colors.text,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: '#fff',
-    opacity: 0.8,
+    color: theme.Colors.textSecondary,
     marginTop: 5,
   },
   shopStatus: {
-    backgroundColor: '#fff',
     margin: 15,
     padding: 15,
     borderRadius: 10,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    backgroundColor: 'rgba(0, 60, 50, 0.3)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 100, 80, 0.2)',
   },
   shopStatusHeader: {
     flexDirection: 'row',
@@ -266,7 +283,7 @@ const styles = StyleSheet.create({
   shopName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.Colors.text,
     flex: 1,
   },
   statusBadges: {
@@ -280,22 +297,22 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   approvedBadge: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: theme.Colors.success,
   },
   activeBadge: {
-    backgroundColor: '#2196F3',
+    backgroundColor: theme.Colors.info,
   },
   openBadge: {
-    backgroundColor: '#FF9800',
+    backgroundColor: theme.Colors.warning,
   },
   badgeText: {
-    color: '#fff',
+    color: theme.Colors.black,
     fontSize: 12,
     fontWeight: 'bold',
   },
   shopDescription: {
     fontSize: 14,
-    color: '#666',
+    color: theme.Colors.textSecondary,
     lineHeight: 20,
   },
   statsContainer: {
@@ -304,7 +321,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.Colors.text,
     marginBottom: 15,
   },
   statsGrid: {
@@ -314,16 +331,12 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   statCard: {
-    backgroundColor: '#fff',
     padding: 15,
     borderRadius: 10,
     width: '48%',
     borderLeftWidth: 4,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 100, 80, 0.2)',
   },
   statHeader: {
     flexDirection: 'row',
@@ -332,27 +345,23 @@ const styles = StyleSheet.create({
   },
   statTitle: {
     fontSize: 14,
-    color: '#666',
+    color: theme.Colors.textSecondary,
     marginLeft: 8,
   },
   statValue: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.Colors.text,
   },
   section: {
     margin: 15,
     marginTop: 0,
   },
   orderStatusContainer: {
-    backgroundColor: '#fff',
     borderRadius: 10,
     padding: 15,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 100, 80, 0.2)',
   },
   orderStatusItem: {
     flexDirection: 'row',
@@ -360,7 +369,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: 'rgba(0, 100, 80, 0.1)',
   },
   orderStatusLeft: {
     flexDirection: 'row',
@@ -374,41 +383,38 @@ const styles = StyleSheet.create({
   },
   orderStatusText: {
     fontSize: 16,
-    color: '#333',
+    color: theme.Colors.text,
   },
   orderStatusCount: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.Colors.text,
   },
   topProductsContainer: {
-    backgroundColor: '#fff',
     borderRadius: 10,
     padding: 15,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 100, 80, 0.2)',
   },
   topProductItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: 'rgba(0, 100, 80, 0.1)',
   },
   productRank: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#2196F3',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 200, 150, 0.3)',
   },
   rankNumber: {
-    color: '#fff',
+    color: theme.Colors.primary,
     fontWeight: 'bold',
     fontSize: 14,
   },
@@ -418,27 +424,23 @@ const styles = StyleSheet.create({
   productName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.Colors.text,
   },
   productQuantity: {
     fontSize: 14,
-    color: '#666',
+    color: theme.Colors.textSecondary,
     marginTop: 2,
   },
   recentOrdersContainer: {
-    backgroundColor: '#fff',
     borderRadius: 10,
     padding: 15,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 100, 80, 0.2)',
   },
   orderItem: {
     paddingVertical: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: 'rgba(0, 100, 80, 0.1)',
   },
   orderHeader: {
     flexDirection: 'row',
@@ -449,7 +451,7 @@ const styles = StyleSheet.create({
   orderAmount: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.Colors.text,
   },
   orderStatus: {
     paddingHorizontal: 8,
@@ -458,22 +460,18 @@ const styles = StyleSheet.create({
   },
   orderDate: {
     fontSize: 14,
-    color: '#666',
+    color: theme.Colors.textSecondary,
     marginBottom: 2,
   },
   orderItems: {
     fontSize: 14,
-    color: '#666',
+    color: theme.Colors.textSecondary,
   },
   subscriptionContainer: {
-    backgroundColor: '#fff',
     borderRadius: 10,
     padding: 15,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 100, 80, 0.2)',
   },
   subscriptionStatus: {
     flexDirection: 'row',
@@ -487,7 +485,7 @@ const styles = StyleSheet.create({
   },
   subscriptionDate: {
     fontSize: 14,
-    color: '#666',
+    color: theme.Colors.textSecondary,
   },
 });
 

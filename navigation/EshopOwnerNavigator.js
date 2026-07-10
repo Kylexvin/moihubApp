@@ -7,6 +7,7 @@ import EditProductScreen from '../screens/eshop/dashboards/EditProductScreen';
 import OrdersScreen from '../screens/eshop/dashboards/OrdersScreen';
 import VendorProfile from '../screens/eshop/dashboards/VendorProfile';
 import { Ionicons } from '@expo/vector-icons';
+import theme from '../screens/theme/Theme';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -14,7 +15,12 @@ const Stack = createStackNavigator();
 // Products Stack Navigator
 const ProductsStack = () => {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator 
+      screenOptions={{ 
+        headerShown: false,
+        cardStyle: { backgroundColor: theme.Colors.background }
+      }}
+    >
       <Stack.Screen name="ProductsList" component={ProductsScreen} />
       <Stack.Screen name="CreateProduct" component={CreateProductScreen} />
       <Stack.Screen name="EditProduct" component={EditProductScreen} />
@@ -27,18 +33,31 @@ export default function EshopOwnerNavigator() {
     <Tab.Navigator 
       screenOptions={{ 
         headerShown: false,
-        tabBarActiveTintColor: '#2196F3',
-        tabBarInactiveTintColor: '#666',
+        tabBarActiveTintColor: theme.Colors.primary,
+        tabBarInactiveTintColor: theme.Colors.textSecondary,
         tabBarStyle: {
-          backgroundColor: '#fff',
+          backgroundColor: 'rgba(0, 60, 50, 0.95)',
           borderTopWidth: 1,
-          borderTopColor: '#e0e0e0',
+          borderTopColor: 'rgba(0, 100, 80, 0.3)',
           paddingBottom: 5,
           height: 60,
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          elevation: 10,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.3,
+          shadowRadius: 5,
         },
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '500',
+          color: theme.Colors.textSecondary,
+        },
+        tabBarIconStyle: {
+          marginTop: 2,
         },
       }}
     >

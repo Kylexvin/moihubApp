@@ -28,35 +28,7 @@ import MarketplaceShowcase from './components/MarketplaceShowcase';
 
 const { width } = Dimensions.get('window');
 
-// Skeleton Components
-const SkeletonBox = ({ width, height, style }) => (
-  <View
-    style={[
-      {
-        width,
-        height,
-        backgroundColor: '#E1E9EE',
-        borderRadius: 8,
-      },
-      style
-    ]}
-  >
-    <Animatable.View
-      animation={{
-        0: { opacity: 0.3 },
-        0.5: { opacity: 0.7 },
-        1: { opacity: 0.3 }
-      }}
-      iterationCount="infinite"
-      duration={1500}
-      style={{
-        flex: 1,
-        backgroundColor: '#F2F8FC',
-        borderRadius: 8,
-      }}
-    />
-  </View>
-);
+
 
 const HomeScreen = () => {
   const { currentUser } = useAuth();
@@ -696,6 +668,45 @@ const HomeScreen = () => {
           </View>
         ) : (
           <>
+
+                      {/* Highlight */}
+            {homescreenData?.highlight && (
+              <View style={styles.sectionContainer}>
+                <Animatable.View animation="fadeInUp" delay={600} duration={1000} style={styles.highlightContainer}>
+                  {homescreenData.highlight.graphicUrl && (
+                    <View style={styles.highlightImageContainer}>
+                      <Image
+                        source={{ uri: homescreenData.highlight.graphicUrl }}
+                        style={styles.highlightImage}
+                        resizeMode="cover"
+                      />
+                      <LinearGradient colors={['transparent', 'rgba(0,0,0,0.7)']} style={styles.highlightImageOverlay} />
+                    </View>
+                  )}
+                  <View style={styles.highlightContent}>
+                    <View style={styles.highlightTitleContainer}>
+                      {iconsLoaded ? (
+                        <Ionicons name="flash" size={20} color="#FF6B6B" />
+                      ) : (
+                        <View style={{ width: 20, height: 20, backgroundColor: '#FF6B6B', borderRadius: 10 }} />
+                      )}
+                      <Text style={styles.highlightTitle}>{homescreenData.highlight.title}</Text>
+                    </View>
+                    <Text style={styles.highlightText}>{homescreenData.highlight.content}</Text>
+                    <TouchableOpacity style={styles.highlightButton} onPress={handleHighlightPress}>
+                      <Text style={styles.highlightButtonText}>Check out</Text>
+                      {iconsLoaded ? (
+                        <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+                      ) : (
+                        <View style={{ width: 16, height: 16, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 8 }} />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </Animatable.View>
+              </View>
+            )}
+
+
             {/* Today's Mission */}
             {homescreenData?.todaysMission && (
               <View style={styles.sectionContainer}>
@@ -735,53 +746,12 @@ const HomeScreen = () => {
               </View>
             )}
 
-            {/* Highlight */}
-            {homescreenData?.highlight && (
-              <View style={styles.sectionContainer}>
-                <Animatable.View animation="fadeInUp" delay={600} duration={1000} style={styles.highlightContainer}>
-                  {homescreenData.highlight.graphicUrl && (
-                    <View style={styles.highlightImageContainer}>
-                      <Image
-                        source={{ uri: homescreenData.highlight.graphicUrl }}
-                        style={styles.highlightImage}
-                        resizeMode="cover"
-                      />
-                      <LinearGradient colors={['transparent', 'rgba(0,0,0,0.7)']} style={styles.highlightImageOverlay} />
-                    </View>
-                  )}
-                  <View style={styles.highlightContent}>
-                    <View style={styles.highlightTitleContainer}>
-                      {iconsLoaded ? (
-                        <Ionicons name="flash" size={20} color="#FF6B6B" />
-                      ) : (
-                        <View style={{ width: 20, height: 20, backgroundColor: '#FF6B6B', borderRadius: 10 }} />
-                      )}
-                      <Text style={styles.highlightTitle}>{homescreenData.highlight.title}</Text>
-                    </View>
-                    <Text style={styles.highlightText}>{homescreenData.highlight.content}</Text>
-                    <TouchableOpacity style={styles.highlightButton} onPress={handleHighlightPress}>
-                      <Text style={styles.highlightButtonText}>Check out</Text>
-                      {iconsLoaded ? (
-                        <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
-                      ) : (
-                        <View style={{ width: 16, height: 16, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 8 }} />
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </Animatable.View>
-              </View>
-            )}
+
 
             {/* Marketplace Showcase */}
             {marketplaceShowcase.length > 0 && (
               <View style={styles.sectionContainer}>
-                <View style={styles.showcaseHeader}>
-                  <Text style={styles.sectionTitle}>Trending in Marketplace</Text>
-                  <TouchableOpacity style={styles.viewAllButton} onPress={() => navigation.navigate('SecondHandStack')}>
-                    <Text style={styles.viewAllText}>View All</Text>
-                    <Ionicons name="arrow-forward" size={14} color="#01604c" />
-                  </TouchableOpacity>
-                </View>
+
                 <MarketplaceShowcase items={marketplaceShowcase} loading={showcaseLoading} navigation={navigation} />
               </View>
             )}

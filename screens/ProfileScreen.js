@@ -36,7 +36,7 @@ const ProfileScreen = () => {
     refreshUser();
   }, []);
 
-  const rolesWithDashboard = ['vendor', 'shopowner', 'SERVICE_PROVIDER', 'writer'];
+  const rolesWithDashboard = ['vendor', 'shopowner', 'SERVICE_PROVIDER', 'writer', "admin"];
   const showDashboardCard = currentUser && rolesWithDashboard.includes(currentUser.role);
 
   const authHeaders = {
@@ -213,20 +213,22 @@ const ProfileScreen = () => {
   };
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
-  const getDashboardInfo = (role) => {
-    switch (role) {
-      case 'vendor':
-        return { title: 'VENDOR PORTAL', subtitle: 'Access Vendor Dashboard', icon: 'cube', route: 'VendorDashboard' };
-      case 'shopowner':
-        return { title: 'SHOP MANAGER', subtitle: 'Access Shop Dashboard', icon: 'storefront', route: 'Eshop' };
-      case 'SERVICE_PROVIDER':
-        return { title: 'SERVICE PROVIDER', subtitle: 'Manage Shop & Services', icon: 'construct', route: 'ServiceProviderDashboard' };
-      case 'writer':
-        return { title: 'WRITER PORTAL', subtitle: 'Manage your blog posts', icon: 'create', route: 'WriterNavigator' };
-      default:
-        return null;
-    }
-  };
+const getDashboardInfo = (role) => {
+  switch (role) {
+    case 'vendor':
+      return { title: 'VENDOR PORTAL', subtitle: 'Access Vendor Dashboard', icon: 'cube', route: 'VendorDashboard' };
+    case 'shopowner':
+      return { title: 'SHOP MANAGER', subtitle: 'Access Shop Dashboard', icon: 'storefront', route: 'Eshop' };
+    case 'SERVICE_PROVIDER':
+      return { title: 'SERVICE PROVIDER', subtitle: 'Manage Shop & Services', icon: 'construct', route: 'ServiceProviderDashboard' };
+    case 'writer':
+      return { title: 'WRITER PORTAL', subtitle: 'Manage your blog posts', icon: 'create', route: 'WriterNavigator' };
+    case 'admin':  // ← ADD THIS
+      return { title: 'WRITER PORTAL', subtitle: 'Manage blog posts as admin', icon: 'create', route: 'WriterNavigator' };
+    default:
+      return null;
+  }
+};
 
   const getRoleColor = (role) => {
     switch (role) {

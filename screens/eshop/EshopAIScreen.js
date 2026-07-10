@@ -41,7 +41,7 @@ const EshopAIScreen = () => {
       onViewDetails={handleViewDetails}
       onCall={handleCall}
       onViewMore={handleViewMore}
-      initialMessage="👋 Welcome to Eshop Assistant!\n\nI can help you find:\n🛒 Products\n🏪 Shops\n💎 Deals\n\nWhat are you looking for?"
+      initialMessage="👋 Welcome to Eshop Assistant! I can help you find Products in eshops. What are you looking for?"
     />
   );
 };

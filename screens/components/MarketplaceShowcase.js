@@ -11,17 +11,42 @@ import ShowcaseCarousel from './ShowcaseCarousel';
 import { Ionicons } from '@expo/vector-icons';
 
 const MarketplaceShowcase = ({ items, loading, navigation }) => {
+  const handleItemPress = (item) => {
+    navigation.navigate('SecondHandStack', {
+      screen: 'SecondHandHome',
+      params: { 
+        productId: item._id,
+        productName: item.displayTitle || item.name,
+        productPrice: item.displayPrice || item.price,
+        productImage: item.image,
+        productCategory: item.category
+      }
+    });
+  };
+
+  const handleWhatsApp = (item) => {
+    const phone = item.type === 'product' ? item.sellerWhatsApp : item.buyerWhatsApp;
+    if (phone) {
+      const message = item.type === 'product' 
+        ? `Hello! I'm interested in your product: ${item.displayTitle}`
+        : `Hello! I might have what you're looking for: ${item.displayTitle}`;
+      
+      Linking.openURL(`whatsapp://send?phone=${phone}&text=${encodeURIComponent(message)}`);
+    }
+  };
+
   const renderItem = ({ item }) => (
     <TouchableOpacity
       style={styles.card}
       onPress={() => handleItemPress(item)}
+      activeOpacity={0.8}
     >
       {item.image ? (
         <Image source={{ uri: item.image }} style={styles.image} />
       ) : (
         <View style={styles.placeholderImage}>
           <Ionicons 
-            name={item.type === 'product' ? 'cart' : 'search'} 
+            name={item.type === 'product' ? 'cart-outline' : 'search-outline'} 
             size={24} 
             color="#999" 
           />
@@ -52,32 +77,14 @@ const MarketplaceShowcase = ({ items, loading, navigation }) => {
           style={styles.whatsappButton}
           onPress={() => handleWhatsApp(item)}
         >
+          <Ionicons name="logo-whatsapp" size={16} color="#FFFFFF" />
           <Text style={styles.whatsappButtonText}>
-            {item.type === 'product' ? '💬 Contact Seller' : '💬 Contact Buyer'}
+            {item.type === 'product' ? 'Contact Seller' : 'Contact Buyer'}
           </Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
-
-  const handleItemPress = (item) => {
-    if (item.type === 'product') {
-      navigation.navigate('ProductDetails', { productId: item._id });
-    } else {
-      navigation.navigate('WantedDetails', { wantedId: item._id });
-    }
-  };
-
-  const handleWhatsApp = (item) => {
-    const phone = item.type === 'product' ? item.sellerWhatsApp : item.buyerWhatsApp;
-    if (phone) {
-      const message = item.type === 'product' 
-        ? `Hello! I'm interested in your product: ${item.displayTitle}`
-        : `Hello! I might have what you're looking for: ${item.displayTitle}`;
-      
-      Linking.openURL(`whatsapp://send?phone=${phone}&text=${encodeURIComponent(message)}`);
-    }
-  };
 
   return (
     <ShowcaseCarousel
@@ -152,7 +159,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 6,
     paddingHorizontal: 10,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
   whatsappButtonText: {
     color: '#FFFFFF',
