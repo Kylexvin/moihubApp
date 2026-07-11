@@ -27,7 +27,16 @@ import ServicesShowcase from './components/ServicesShowcase';
 import MarketplaceShowcase from './components/MarketplaceShowcase';
 
 const { width } = Dimensions.get('window');
-
+// Add this BEFORE your HomeScreen component (outside the component)
+const getCryptoColor = (id) => {
+  const colors = {
+    btc: '#f7931a',
+    eth: '#627eea', 
+    bnb: '#f3ba2f',
+    sol: '#9945ff',
+  };
+  return colors[id] || '#01604c';
+};
 
 
 const HomeScreen = () => {
@@ -52,6 +61,8 @@ const HomeScreen = () => {
   // Explore sections (personalized feed + recently viewed folded in / removed)
   const [exploreSections, setExploreSections] = useState([]);
   const [iconsLoaded, setIconsLoaded] = useState(false);
+
+  const [cryptoData, setCryptoData] = useState([]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -88,6 +99,47 @@ const HomeScreen = () => {
       console.error('Error tracking user behavior:', error);
     }
   }, [currentUser]);
+
+    // --- ADD THIS NEW FETCH FUNCTION ---
+  const fetchCryptoPrices = useCallback(async () => {
+    try {
+      const response = await axios.get(
+        'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin%2Cbinancecoin%2Csolana%2Cethereum&vs_currencies=usd&include_24hr_change=true'
+      );
+      
+      if (!isMountedRef.current) return;
+
+      const formattedData = [
+        { 
+          id: 'btc', 
+          name: 'BTC', 
+          price: response.data.bitcoin?.usd || 0, 
+          change: response.data.bitcoin?.usd_24h_change || 0 
+        },
+        { 
+          id: 'bnb', 
+          name: 'BNB', 
+          price: response.data.binancecoin?.usd || 0, 
+          change: response.data.binancecoin?.usd_24h_change || 0 
+        },
+        { 
+          id: 'sol', 
+          name: 'SOL', 
+          price: response.data.solana?.usd || 0, 
+          change: response.data.solana?.usd_24h_change || 0 
+        },
+        { 
+          id: 'eth', 
+          name: 'ETH', 
+          price: response.data.ethereum?.usd || 0, 
+          change: response.data.ethereum?.usd_24h_change || 0 
+        },
+      ];
+      setCryptoData(formattedData);
+    } catch (error) {
+      console.error('Error fetching crypto prices:', error);
+    }
+  }, []);
 
   const getDefaultExploreSections = useCallback(() => [
     {
@@ -345,9 +397,17 @@ const HomeScreen = () => {
 
       generatePersonalizedContent();
       fetchShowcases();
+      fetchCryptoPrices(); // <-- ADD THIS LINE
     };
 
     initializeData();
+
+    // Optional: Auto-refresh crypto every 60 seconds
+    const interval = setInterval(() => {
+      fetchCryptoPrices();
+    }, 60000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const onRefresh = useCallback(() => {
@@ -671,6 +731,36 @@ const handleHighlightPress = () => {
             ))}
           </View>
         </View>
+
+        {/* --- ADD CRYPTO WATCHLIST ROW HERE --- */}
+        {cryptoData.length > 0 && (
+          <View style={styles.sectionContainer}>
+          
+            
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              contentContainerStyle={styles.cryptoScrollContainer}
+            >
+              {cryptoData.map((item) => {
+                const isPositive = item.change >= 0;
+                return (
+                  <View key={item.id} style={[styles.cryptoCard, { borderLeftColor: getCryptoColor(item.id) }]}>
+                    <View style={styles.cryptoCardTop}>
+                      <Text style={styles.cryptoCoinName}>{item.name}</Text>
+                      <Text style={[styles.cryptoChange, { color: isPositive ? '#22c55e' : '#ef4444' }]}>
+                        {isPositive ? '+' : ''}{item.change.toFixed(2)}%
+                      </Text>
+                    </View>
+                    <Text style={styles.cryptoPrice}>
+                      ${item.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </Text>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
 
         {loading ? (
           <View style={styles.loadingContentContainer}>
@@ -1019,7 +1109,63 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 10,
   },
-
+  // --- CRYPTO STYLES (COMPACT WITH COLORS) ---
+  cryptoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  cryptoRefreshButton: {
+    padding: 2,
+  },
+  cryptoScrollContainer: {
+    paddingHorizontal: 2,
+    gap: 8,
+  },
+  cryptoCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    minWidth: 90,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    // ADD THIS ONE LINE FOR COLORED LEFT BORDER
+    borderLeftWidth: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  cryptoCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  cryptoCoinName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  cryptoChange: {
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  cryptoPrice: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  // --- ADD THESE NEW STYLES ---
+  cryptoBtc: { borderLeftWidth: 3, borderLeftColor: '#f7931a' },
+  cryptoEth: { borderLeftWidth: 3, borderLeftColor: '#627eea' },
+  cryptoBnb: { borderLeftWidth: 3, borderLeftColor: '#f3ba2f' },
+  cryptoSol: { borderLeftWidth: 3, borderLeftColor: '#9945ff' },
+  // --- END CRYPTO STYLES ---
   showcaseHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',

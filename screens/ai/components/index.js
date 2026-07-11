@@ -14,6 +14,8 @@ import EshopCard from './EshopCard';
 import EshopList from './EshopList';
 import EshopProductCard from './EshopProductCard';
 import EshopProductList from './EshopProductList';
+import RoommateCard from './RoommateCard';     
+import RoommateList from './RoommateList';      
 
 
 
@@ -37,17 +39,17 @@ export const renderAIMessage = (message, onViewDetails, onCall, onViewMore) => {
           </View>
         )}
 
-{/* Food */}
-{data.modules.includes('food') && data.foodVendors?.length > 0 && (
-  <View style={styles.moduleSection}>
-    <FoodList 
-      data={{ foodVendors: data.foodVendors }} 
-      onViewDetails={onViewDetails} 
-      onCall={onCall}
-      onViewMore={onViewMore}  // ← ADD
-    />
-  </View>
-)}
+        {/* Food */}
+        {data.modules.includes('food') && data.foodVendors?.length > 0 && (
+          <View style={styles.moduleSection}>
+            <FoodList 
+              data={{ foodVendors: data.foodVendors }} 
+              onViewDetails={onViewDetails} 
+              onCall={onCall}
+              onViewMore={onViewMore}
+            />
+          </View>
+        )}
 
         {/* Services */}
         {data.modules.includes('services') && data.providers?.length > 0 && (
@@ -81,16 +83,28 @@ export const renderAIMessage = (message, onViewDetails, onCall, onViewMore) => {
         )}
 
         {/* Eshop Products */}
-{data.modules.includes('eshops') && data.eshopProducts?.length > 0 && (
-  <View style={styles.moduleSection}>
-    <EshopProductList 
-      data={{ eshopProducts: data.eshopProducts }} 
-      onViewDetails={onViewDetails} 
-      onCall={onCall}
-      onViewMore={onViewMore}
-    />
-  </View>
-)}
+        {data.modules.includes('eshops') && data.eshopProducts?.length > 0 && (
+          <View style={styles.moduleSection}>
+            <EshopProductList 
+              data={{ eshopProducts: data.eshopProducts }} 
+              onViewDetails={onViewDetails} 
+              onCall={onCall}
+              onViewMore={onViewMore}
+            />
+          </View>
+        )}
+
+        {/* Roommate */}
+        {data.modules.includes('roommate') && data.roommates?.length > 0 && (
+          <View style={styles.moduleSection}>
+            <RoommateList 
+              data={{ roommates: data.roommates }} 
+              onViewDetails={onViewDetails} 
+              onCall={onCall}
+              onViewMore={onViewMore}
+            />
+          </View>
+        )}
       </View>
     );
   }
@@ -100,10 +114,6 @@ export const renderAIMessage = (message, onViewDetails, onCall, onViewMore) => {
 
   // Rentals
   if (module === 'rentals') {
-    // TODO: Uncomment when RentalDetailCard is created
-    // if (data.isDetails && data.rental) {
-    //   return <RentalDetailCard data={data.rental} onViewDetails={onViewDetails} />;
-    // }
     if (data.rentals?.length > 0) {
       if (data.rentals.length > 1) {
         return <RentalList 
@@ -118,10 +128,6 @@ export const renderAIMessage = (message, onViewDetails, onCall, onViewMore) => {
 
   // Services
   if (module === 'services') {
-    // TODO: Uncomment when ServiceDetailCard is created
-    // if (data.isDetails && data.provider) {
-    //   return <ServiceDetailCard data={data.provider} onViewDetails={onViewDetails} onCall={onCall} />;
-    // }
     if (data.providers?.length > 0) {
       if (data.providers.length > 1) {
         return <ServiceList data={{ providers: data.providers }} onViewDetails={onViewDetails} onCall={onCall} />;
@@ -135,29 +141,25 @@ export const renderAIMessage = (message, onViewDetails, onCall, onViewMore) => {
     if (data.isDetails && data.foodVendor) {
       return <FoodDetailCard data={data.foodVendor} onViewDetails={onViewDetails} onCall={onCall} />;
     }
-if (data.foodVendors?.length > 0) {
-  if (data.foodVendors.length > 1) {
-    return <FoodList 
-      data={{ foodVendors: data.foodVendors }} 
-      onViewDetails={onViewDetails} 
-      onCall={onCall}
-      onViewMore={onViewMore}  // ← ADD
-    />;
-  }
-  return <FoodCard 
-    data={{ foodVendors: data.foodVendors }} 
-    onViewDetails={onViewDetails} 
-    onCall={onCall} 
-  />;
-}
+    if (data.foodVendors?.length > 0) {
+      if (data.foodVendors.length > 1) {
+        return <FoodList 
+          data={{ foodVendors: data.foodVendors }} 
+          onViewDetails={onViewDetails} 
+          onCall={onCall}
+          onViewMore={onViewMore}
+        />;
+      }
+      return <FoodCard 
+        data={{ foodVendors: data.foodVendors }} 
+        onViewDetails={onViewDetails} 
+        onCall={onCall} 
+      />;
+    }
   }
 
   // Marketplace
   if (module === 'marketplace') {
-    // TODO: Uncomment when MarketplaceDetailCard is created
-    // if (data.isDetails && data.marketplaceItem) {
-    //   return <MarketplaceDetailCard data={data.marketplaceItem} onViewDetails={onViewDetails} onCall={onCall} />;
-    // }
     if (data.marketplaceItems?.length > 0) {
       if (data.marketplaceItems.length > 1) {
         return <MarketplaceList 
@@ -175,41 +177,60 @@ if (data.foodVendors?.length > 0) {
     }
   }
 
-// Eshops - Shops
-if (module === 'eshops') {
-  if (data.eshops?.length > 0) {
-    if (data.eshops.length > 1) {
-      return <EshopList 
+  // Eshops - Shops
+  if (module === 'eshops') {
+    if (data.eshops?.length > 0) {
+      if (data.eshops.length > 1) {
+        return <EshopList 
+          data={{ eshops: data.eshops }} 
+          onViewDetails={onViewDetails} 
+          onCall={onCall}
+          onViewMore={onViewMore}
+        />;
+      }
+      return <EshopCard 
         data={{ eshops: data.eshops }} 
+        onViewDetails={onViewDetails} 
+        onCall={onCall} 
+      />;
+    }
+  }
+
+  // Eshop Products
+  if (data.eshopProducts?.length > 0) {
+    if (data.eshopProducts.length > 1) {
+      return <EshopProductList 
+        data={{ eshopProducts: data.eshopProducts }} 
         onViewDetails={onViewDetails} 
         onCall={onCall}
         onViewMore={onViewMore}
       />;
     }
-    return <EshopCard 
-      data={{ eshops: data.eshops }} 
+    return <EshopProductCard 
+      data={{ eshopProducts: data.eshopProducts }} 
       onViewDetails={onViewDetails} 
       onCall={onCall} 
     />;
   }
-}
 
-// Eshop Products - Products from various shops (NEW)
-if (data.eshopProducts?.length > 0) {
-  if (data.eshopProducts.length > 1) {
-    return <EshopProductList 
-      data={{ eshopProducts: data.eshopProducts }} 
-      onViewDetails={onViewDetails} 
-      onCall={onCall}
-      onViewMore={onViewMore}
-    />;
+  // ─── Roommate ──────────────────────────────────────────────────────────
+  if (module === 'roommate') {
+    if (data.roommates?.length > 0) {
+      if (data.roommates.length > 1) {
+        return <RoommateList 
+          data={{ roommates: data.roommates }} 
+          onViewDetails={onViewDetails} 
+          onCall={onCall}
+          onViewMore={onViewMore}
+        />;
+      }
+      return <RoommateCard 
+        data={{ roommates: data.roommates }} 
+        onViewDetails={onViewDetails} 
+        onCall={onCall} 
+      />;
+    }
   }
-  return <EshopProductCard 
-    data={{ eshopProducts: data.eshopProducts }} 
-    onViewDetails={onViewDetails} 
-    onCall={onCall} 
-  />;
-}
 
   return null;
 };
@@ -236,5 +257,7 @@ export {
   EshopCard,
   EshopList,
   EshopProductCard,   
-  EshopProductList,   
+  EshopProductList,
+  RoommateCard,      
+  RoommateList,      
 };

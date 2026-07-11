@@ -6,15 +6,13 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-const { width } = Dimensions.get('window');
-const CARD_WIDTH = width * 0.75;
-
 const C = {
-  accent: '#059669',
+  primary: '#FF6B35',
+  secondary: '#F7C35C',
+  accent: '#EF476F',
   textPrimary: '#1a1a1a',
   textSecondary: '#4a4a4a',
   textMeta: '#888888',
@@ -25,7 +23,6 @@ const C = {
   success: '#4CAF50',
   danger: '#f44336',
   warning: '#FF9800',
-  gold: '#D4AF37',
 };
 
 const FoodCard = ({ data, onViewDetails, onCall }) => {
@@ -35,7 +32,6 @@ const FoodCard = ({ data, onViewDetails, onCall }) => {
 
   const vendor = data.foodVendors[0];
 
-  // ─── Status ──────────────────────────────────────────────────────
   const getStatusColor = () => {
     if (vendor.isOpen === true) return C.success;
     if (vendor.isOpen === false) return C.danger;
@@ -54,7 +50,6 @@ const FoodCard = ({ data, onViewDetails, onCall }) => {
     }
   };
 
-  // ─── Show matched items (what user searched for) ────────────────
   const matchedItems = vendor.matchedItems || [];
   const relatedItems = vendor.relatedItems || [];
   const hasMatched = matchedItems.length > 0;
@@ -70,7 +65,7 @@ const FoodCard = ({ data, onViewDetails, onCall }) => {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.iconContainer}>
-          <Ionicons name="restaurant" size={24} color={C.white} />
+          <Ionicons name="restaurant" size={22} color={C.white} />
         </View>
         <View style={styles.headerInfo}>
           <Text style={styles.name} numberOfLines={1}>
@@ -83,23 +78,18 @@ const FoodCard = ({ data, onViewDetails, onCall }) => {
         </View>
       </View>
 
-      {/* Matched Items (what user searched for) */}
+      {/* Matched Items */}
       {hasMatched && (
         <View style={styles.matchedSection}>
           <Text style={styles.sectionLabel}>🔍 Matched</Text>
           {matchedItems.map((item, index) => (
             <View key={index} style={styles.matchedItem}>
-             {item.imageUrl && (
-              <Image source={{ uri: item.imageUrl }} style={styles.itemImage} />
-              )} 
+              {item.imageUrl && (
+                <Image source={{ uri: item.imageUrl }} style={styles.itemImage} />
+              )}
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName}>{item.name}</Text>
                 <Text style={styles.itemPrice}>KSh {item.price}</Text>
-                {item.description && (
-                  <Text style={styles.itemDescription} numberOfLines={1}>
-                    {item.description}
-                  </Text>
-                )}
               </View>
             </View>
           ))}
@@ -110,23 +100,16 @@ const FoodCard = ({ data, onViewDetails, onCall }) => {
       {hasRelated && (
         <View style={styles.relatedSection}>
           <Text style={styles.sectionLabel}>🍽️ Also Available</Text>
-          {relatedItems.slice(0, 4).map((item, index) => (
+          {relatedItems.slice(0, 3).map((item, index) => (
             <View key={index} style={styles.relatedItem}>
-              <Text style={styles.relatedItemName}>{item.name}</Text>
+              <Text style={styles.relatedItemName} numberOfLines={1}>{item.name}</Text>
               <Text style={styles.relatedItemPrice}>KSh {item.price}</Text>
             </View>
           ))}
-          {relatedItems.length > 4 && (
-            <Text style={styles.moreText}>+{relatedItems.length - 4} more</Text>
+          {relatedItems.length > 3 && (
+            <Text style={styles.moreText}>+{relatedItems.length - 3} more</Text>
           )}
         </View>
-      )}
-
-      {/* Description */}
-      {vendor.description && (
-        <Text style={styles.description} numberOfLines={2}>
-          {vendor.description}
-        </Text>
       )}
 
       {/* Actions */}
@@ -136,14 +119,14 @@ const FoodCard = ({ data, onViewDetails, onCall }) => {
           onPress={() => onViewDetails?.(vendor)}
         >
           <Ionicons name="eye-outline" size={16} color={C.white} />
-          <Text style={styles.viewButtonText}>Full Menu</Text>
+          <Text style={styles.viewButtonText}>Menu</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.callButton}
           onPress={handleCall}
         >
-          <Ionicons name="call-outline" size={16} color={C.accent} />
+          <Ionicons name="call-outline" size={16} color={C.primary} />
           <Text style={styles.callButtonText}>Call</Text>
         </TouchableOpacity>
       </View>
@@ -153,30 +136,28 @@ const FoodCard = ({ data, onViewDetails, onCall }) => {
 
 const styles = StyleSheet.create({
   container: {
-    width: CARD_WIDTH,
+    width: '100%',
     backgroundColor: C.surface,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    padding: 12,
+    borderRadius: 14,
+    padding: 14,
     position: 'relative',
+    borderWidth: 1,
+    borderColor: C.border,
   },
   statusBadge: {
     position: 'absolute',
     top: 10,
     right: 10,
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: 3,
+    borderRadius: 10,
     zIndex: 1,
   },
   statusText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     color: C.white,
+    textTransform: 'uppercase',
   },
   header: {
     flexDirection: 'row',
@@ -184,10 +165,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   iconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: C.accent,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: C.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -197,105 +178,104 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: C.textPrimary,
   },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 2,
+    marginTop: 1,
   },
   locationText: {
     fontSize: 12,
     color: C.textMeta,
   },
   matchedSection: {
-    backgroundColor: '#e8f5e9',
-    borderRadius: 8,
+    backgroundColor: '#fef6f0',
+    borderRadius: 10,
     padding: 10,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#c8e6c9',
+    borderColor: '#fde8d8',
   },
   relatedSection: {
     backgroundColor: C.bg,
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 10,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   sectionLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: C.textMeta,
     marginBottom: 4,
+    letterSpacing: 0.3,
   },
   matchedItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 4,
+    gap: 10,
+    paddingVertical: 3,
   },
   itemImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 6,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     backgroundColor: C.bg,
   },
   itemInfo: {
     flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   itemName: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
     color: C.textPrimary,
   },
   itemPrice: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: C.accent,
-  },
-  itemDescription: {
-    fontSize: 11,
-    color: C.textMeta,
+    fontSize: 14,
+    fontWeight: '600',
+    color: C.primary,
   },
   relatedItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 3,
+    alignItems: 'center',
+    paddingVertical: 2,
   },
   relatedItemName: {
     fontSize: 13,
     color: C.textSecondary,
+    flex: 1,
+    marginRight: 8,
   },
   relatedItemPrice: {
     fontSize: 13,
     fontWeight: '500',
-    color: C.accent,
+    color: C.primary,
   },
   moreText: {
     fontSize: 11,
     color: C.textMeta,
     marginTop: 2,
-  },
-  description: {
-    fontSize: 12,
-    color: C.textSecondary,
-    marginBottom: 10,
+    fontWeight: '500',
   },
   actions: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
   },
   viewButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: C.accent,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    gap: 4,
+    backgroundColor: C.primary,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    gap: 6,
     flex: 1,
   },
   viewButtonText: {
@@ -308,10 +288,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: C.bg,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    gap: 4,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    gap: 6,
     flex: 1,
     borderWidth: 1,
     borderColor: C.border,

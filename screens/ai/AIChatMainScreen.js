@@ -56,7 +56,7 @@ const AIChatMainScreen = () => {
       {
         id: Date.now(),
         role: 'assistant',
-        text: "Hi! I'm your MoiHub Assistant.\n\nI can help you with:\nRentals\nFood\nServices\nMarketplace\nEshops\n\nJust tell me exactly what you're looking for!",
+        text: "Hi! I'm your MoiHub Assistant. 👋\n\nI can help you with:\nRentals | Food | Services\nMarketplace | Eshops | Roommate\n\nJust tell me exactly what you're looking for!",
         module: null,
         data: null,
         timestamp: new Date(),
@@ -108,7 +108,7 @@ const AIChatMainScreen = () => {
     } catch (error) {
       console.error('Chat error:', error);
 
-      let errorText = '😅 Sorry, something went wrong. Please try again.';
+      let errorText = '🤦‍♂️ Sorry, kuna shida mahali. Please try again.';
       
       if (error.response?.status === 429) {
         errorText = '⏳ Too many requests. Please wait a moment and try again.';
@@ -254,119 +254,131 @@ const AIChatMainScreen = () => {
     }
   };
 
-  // ─── Render Message ──────────────────────────────────────────────────────
-  const renderMessage = ({ item }) => {
-    const isUser = item.role === 'user';
-    return <AnimatedMessage item={item} isUser={isUser} />;
-  };
-
-  const renderTypingIndicator = () => {
-    if (!loading) return null;
-
+// ─── Render Message ──────────────────────────────────────────────────────
+const renderMessage = ({ item }) => {
+  const isUser = item.role === 'user';
+  
+  // For assistant messages with data
+  if (!isUser && item.data) {
     return (
-      <View style={[styles.messageWrapper, styles.assistantMessageWrapper]}>
-        <View style={styles.avatarContainer}>
-          <View style={styles.avatarImage}>
-            <Ionicons name="hardware-chip-outline" size={16} color={COLORS.green} />
+      <View style={{ marginBottom: 8 }}>
+        {/* Show avatar and text first */}
+        <View style={[styles.messageWrapper, styles.assistantMessageWrapper]}>
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatarImage}>
+              <Ionicons name="hardware-chip-outline" size={16} color={COLORS.green} />
+            </View>
+          </View>
+          <View style={[styles.messageBubble, styles.assistantBubble]}>
+            <Text style={[styles.messageText, styles.assistantText]}>
+              {item.text}
+            </Text>
           </View>
         </View>
-        <View style={[styles.messageBubble, styles.assistantBubble]}>
-          <View style={styles.typingIndicator}>
-            <View style={styles.typingDot} />
-            <View style={styles.typingDot} />
-            <View style={styles.typingDot} />
-          </View>
+        
+        {/* Render the card - remove negative margin */}
+        <View style={{ marginTop: 4 }}>
+          {renderAIMessage(item, handleViewDetails, handleCall, handleViewMore)}
         </View>
       </View>
     );
-  };
+  }
+  
+  // Regular message render
+  return <AnimatedMessage item={item} isUser={isUser} />;
+};
 
-  // ─── Render AI Components ─────────────────────────────────────────────────
-  const renderAIComponents = ({ item }) => {
-    if (item.role === 'user' || !item.data) return null;
-
-    return (
-      <View style={{ marginTop: 4, marginLeft: 42 }}>
-        {renderAIMessage(item, handleViewDetails, handleCall, handleViewMore)}
-      </View>
-    );
-  };
+const renderTypingIndicator = () => {
+  if (!loading) return null;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
-
-      {/* ─── Header ────────────────────────────────────────────────────────── */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <View style={styles.headerLogo}>
-            <Ionicons name="hardware-chip-outline" size={20} color={COLORS.white} />
-          </View>
-          <View>
-            <Text style={styles.headerTitle}>MoiHub Assistant</Text>
-            <Text style={styles.headerSub}>● Online</Text>
-          </View>
+    <View style={[styles.messageWrapper, styles.assistantMessageWrapper]}>
+      <View style={styles.avatarContainer}>
+        <View style={styles.avatarImage}>
+          <Ionicons name="hardware-chip-outline" size={16} color={COLORS.green} />
         </View>
-        <TouchableOpacity style={{ padding: 8 }}>
-          <Ionicons name="ellipsis-vertical" size={22} color={COLORS.textPrimary} />
-        </TouchableOpacity>
       </View>
-
-      {/* ─── Messages ──────────────────────────────────────────────────────── */}
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
-          <View>
-            {renderMessage({ item })}
-            {renderAIComponents({ item })}
-          </View>
-        )}
-        ListFooterComponent={renderTypingIndicator}
-        contentContainerStyle={styles.messagesContent}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
-        onLayout={() => flatListRef.current?.scrollToEnd()}
-        showsVerticalScrollIndicator={false}
-      />
-
-      {/* ─── Input ────────────────────────────────────────────────────────── */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        <View style={styles.inputContainer}>
-          <View style={styles.inputWrapper}>
-            <TextInput
-              style={styles.input}
-              placeholder="Ask MoiHub anything..."
-              placeholderTextColor={COLORS.textMeta}
-              value={inputText}
-              onChangeText={setInputText}
-              multiline
-              maxLength={500}
-              onSubmitEditing={() => sendMessage()}
-              returnKeyType="send"
-            />
-            <TouchableOpacity
-              style={[styles.sendButton, (!inputText.trim() || loading) && styles.sendButtonDisabled]}
-              onPress={() => sendMessage()}
-              disabled={!inputText.trim() || loading}
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color={COLORS.white} />
-              ) : (
-                <Ionicons name="send" size={18} color={COLORS.white} />
-              )}
-            </TouchableOpacity>
-          </View>
+      <View style={[styles.messageBubble, styles.assistantBubble]}>
+        <View style={styles.typingIndicator}>
+          <View style={styles.typingDot} />
+          <View style={styles.typingDot} />
+          <View style={styles.typingDot} />
         </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      </View>
+    </View>
   );
+};
+
+return (
+  <SafeAreaView style={styles.container}>
+    <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+
+    {/* ─── Header ────────────────────────────────────────────────────────── */}
+    <View style={styles.header}>
+      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
+      </TouchableOpacity>
+      <View style={styles.headerCenter}>
+        <View style={styles.headerLogo}>
+          <Ionicons name="hardware-chip-outline" size={20} color={COLORS.white} />
+        </View>
+        <View>
+          <Text style={styles.headerTitle}>MoiHub Assistant</Text>
+          <Text style={styles.headerSub}>● Online</Text>
+        </View>
+      </View>
+      <TouchableOpacity style={{ padding: 8 }}>
+        <Ionicons name="ellipsis-vertical" size={22} color={COLORS.textPrimary} />
+      </TouchableOpacity>
+    </View>
+
+    {/* ─── Messages ──────────────────────────────────────────────────────── */}
+    <FlatList
+      ref={flatListRef}
+      data={messages}
+      keyExtractor={(item) => item.id.toString()}
+      renderItem={renderMessage}
+      ListFooterComponent={renderTypingIndicator}
+      contentContainerStyle={styles.messagesContent}
+      onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+      onLayout={() => flatListRef.current?.scrollToEnd()}
+      showsVerticalScrollIndicator={false}
+    />
+
+    {/* ─── Input ────────────────────────────────────────────────────────── */}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      <View style={styles.inputContainer}>
+        <View style={styles.inputWrapper}>
+          <TextInput
+            style={styles.input}
+            placeholder="Ask MoiHub anything..."
+            placeholderTextColor={COLORS.textMeta}
+            value={inputText}
+            onChangeText={setInputText}
+            multiline
+            maxLength={500}
+            onSubmitEditing={() => sendMessage()}
+            returnKeyType="send"
+          />
+          <TouchableOpacity
+            style={[styles.sendButton, (!inputText.trim() || loading) && styles.sendButtonDisabled]}
+            onPress={() => sendMessage()}
+            disabled={!inputText.trim() || loading}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color={COLORS.white} />
+            ) : (
+              <Ionicons name="send" size={18} color={COLORS.white} />
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </KeyboardAvoidingView>
+  </SafeAreaView>
+);
 };
 
 const styles = StyleSheet.create({

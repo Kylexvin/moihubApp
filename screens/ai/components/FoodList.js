@@ -12,10 +12,10 @@ import { Ionicons } from '@expo/vector-icons';
 import FoodCard from './FoodCard';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = width * 0.75;
+const CARD_WIDTH = width - 40; // 20px padding on each side
 
 const C = {
-  accent: '#059669',
+  primary: '#FF6B35',
   textPrimary: '#1a1a1a',
   surface: '#ffffff',
 };
@@ -36,22 +36,21 @@ const FoodList = ({ data, onViewDetails, onCall, onViewMore }) => {
           if (item.isViewMore) {
             return (
               <TouchableOpacity 
-                style={styles.viewMoreCard} 
+                style={[styles.viewMoreCard, { width: CARD_WIDTH * 0.6 }]} 
                 onPress={() => {
-                  console.log('🔍 FoodList - View All pressed, onViewMore:', !!onViewMore);
                   if (onViewMore) {
                     onViewMore('food');
                   }
                 }}
               >
-                <Ionicons name="arrow-forward-circle" size={40} color={C.accent} />
+                <Ionicons name="arrow-forward-circle" size={40} color={C.primary} />
                 <Text style={styles.viewMoreText}>View All</Text>
                 <Text style={styles.viewMoreSubtext}>See all {data.foodVendors.length} vendors</Text>
               </TouchableOpacity>
             );
           }
           return (
-            <View style={styles.cardWrapper}>
+            <View style={[styles.cardWrapper, { width: CARD_WIDTH }]}>
               <FoodCard
                 data={{ count: 1, foodVendors: [item] }}
                 onViewDetails={onViewDetails}
@@ -62,7 +61,7 @@ const FoodList = ({ data, onViewDetails, onCall, onViewMore }) => {
         }}
         horizontal
         showsHorizontalScrollIndicator={false}
-        snapToInterval={CARD_WIDTH + 16}
+        snapToInterval={CARD_WIDTH + 12}
         decelerationRate="fast"
         contentContainerStyle={styles.listContent}
       />
@@ -73,18 +72,16 @@ const FoodList = ({ data, onViewDetails, onCall, onViewMore }) => {
 const styles = StyleSheet.create({
   container: {
     marginVertical: 4,
-    marginLeft: -8,
+    width: '100%',
   },
   listContent: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 16,
     paddingVertical: 4,
   },
   cardWrapper: {
-    width: CARD_WIDTH,
     marginRight: 12,
   },
   viewMoreCard: {
-    width: CARD_WIDTH * 0.6,
     backgroundColor: C.surface,
     borderRadius: 12,
     shadowColor: '#000',
