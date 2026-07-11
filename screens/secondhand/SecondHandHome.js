@@ -662,7 +662,7 @@ const SecondHandHome = () => {
               style={styles.createButtonGradient}
             >
               <Ionicons name="add" size={20} color="#FFFFFF" />
-              <Text style={styles.createButtonText}>Post</Text>
+              <Text style={styles.createButtonText}>Your Dashboard</Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
