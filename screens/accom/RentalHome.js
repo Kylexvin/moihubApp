@@ -23,7 +23,7 @@ import { useAuth } from '../../context/AuthContext';
 import RentalDbService from '../../services/RentalDbService';
 
 const { width } = Dimensions.get('window');
-const API_URL = 'http://192.168.100.10:5000/api';
+const API_URL = 'https://moihub.onrender.com/api';
 
 const RentalColors = {
   primary: '#0A4D3C',

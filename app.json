@@ -2,7 +2,7 @@
   "expo": {
     "name": "MoiHub",
     "slug": "moihubapp",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/appicon.png",
     "userInterfaceStyle": "dark",
@@ -24,7 +24,7 @@
     },
     "android": {
       "package": "com.kylexvin.moihub",
-      "versionCode": 3,
+      "versionCode": 4,
       "permissions": [
         "NOTIFICATIONS",
         "CAMERA",

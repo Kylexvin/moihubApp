@@ -510,8 +510,8 @@ function AppNavigator() {
        
 export default function App() {
   const baseURL = Platform.OS === 'ios'
-    ? 'http://192.168.100.10:5000'
-    : 'http://192.168.100.10:5000'; 
+    ? 'https://moihub.onrender.com'
+    : 'https://moihub.onrender.com'; 
 
   axios.defaults.baseURL = baseURL;
 
