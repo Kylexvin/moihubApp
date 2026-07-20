@@ -49,15 +49,20 @@ import ServiceProviderDashboardNavigator from './navigation/ServiceProviderDashb
 import WriterNavigator from './navigation/WriterNavigator';
 import AIChatScreen from './screens/AIChatScreen';
 import AIChatNavigator from './navigation/AIChatNavigator';
+import Icon from 'react-native-vector-icons/FontAwesome';
+import TeamNavigator from './navigation/TeamNavigator';
 
-import Icon from 'react-native-vector-icons/FontAwesome';  
 
+// ============================================================
+// CONSTANTS & CONFIGURATION
+// ============================================================
 const isExpoGo = Constants?.appOwnership === 'expo';
 const messaging = !isExpoGo ? require('@react-native-firebase/messaging').default : null;
-
-// Navigation ref for notification handling
 const navigationRef = createNavigationContainerRef();
 
+// ============================================================
+// NOTIFICATION HANDLERS
+// ============================================================
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -72,8 +77,14 @@ if (messaging) {
   });
 }
 
+// ============================================================
+// NAVIGATORS
+// ============================================================
 const Stack = createNativeStackNavigator();
 
+// ============================================================
+// THEME CONFIGURATION
+// ============================================================
 const MyTheme = {
   ...DefaultTheme,
   colors: {
@@ -104,7 +115,9 @@ const MyTheme = {
   },
 };
 
-// Permission Modal Component
+// ============================================================
+// PERMISSION MODAL COMPONENT
+// ============================================================
 const PermissionModal = ({ visible, onAllow, onMaybeLater }) => {
   return (
     <Modal
@@ -176,6 +189,9 @@ const PermissionModal = ({ visible, onAllow, onMaybeLater }) => {
   );
 };
 
+// ============================================================
+// APP NAVIGATOR
+// ============================================================
 function AppNavigator() {
   const { isAuthenticated, loading } = useAuth();
   const [appState, setAppState] = useState('splash');
@@ -183,7 +199,9 @@ function AppNavigator() {
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState(false);
 
-  // Check notification permission
+  // ============================================================
+  // PERMISSION FUNCTIONS
+  // ============================================================
   const checkNotificationPermission = async () => {
     try {
       const { status } = await Notifications.getPermissionsAsync();
@@ -205,10 +223,8 @@ function AppNavigator() {
     }
   };
 
-  // Request notification permission - THIS TRIGGERS NATIVE PROMPT
   const requestNotificationPermission = async () => {
     try {
-      // This will show the native system permission dialog
       const { status } = await Notifications.requestPermissionsAsync({
         ios: {
           allowAlert: true,
@@ -226,7 +242,6 @@ function AppNavigator() {
         Alert.alert('Success', 'Notifications enabled!', [{ text: 'Continue' }]);
         return true;
       } else {
-        // If user denies in system prompt, show our modal again
         Alert.alert(
           'Permission Required',
           'Notifications are required to use MoiHub. Please enable them in Settings to continue.',
@@ -234,11 +249,9 @@ function AppNavigator() {
             { 
               text: 'Open Settings', 
               onPress: async () => {
-                // For iOS, open app settings
                 if (Platform.OS === 'ios') {
                   await Linking.openURL('app-settings:');
                 } else {
-                  // For Android
                   await Notifications.getPermissionsAsync();
                 }
               } 
@@ -263,37 +276,9 @@ function AppNavigator() {
     }
   };
 
-  // AppState listener to re-check permissions when app comes to foreground
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', async (nextAppState) => {
-      console.log('AppState changed to:', nextAppState);
-      
-      if (nextAppState === 'active') {
-        // Re-check permissions when app comes to foreground
-        const hasPermission = await checkNotificationPermission();
-        
-        // If permission was revoked while app was in background
-        if (!hasPermission && appState !== 'splash') {
-          // Show blocking modal again
-          setShowPermissionModal(true);
-          
-          // Prevent navigation if user somehow got past the block
-          if (navigationRef.isReady()) {
-            navigationRef.navigate('Auth');
-          }
-        }
-      }
-    });
-
-    return () => subscription.remove();
-  }, [appState]);
-
-  // Exit app function
   const exitApp = () => {
     if (Platform.OS === 'ios') {
-      // For iOS, we can't force close, but we can prevent app usage
       setShowPermissionModal(true);
-      // Optionally, show an alert that app is unusable
       Alert.alert(
         'App Unavailable',
         'MoiHub requires notifications to function. Please enable them in Settings to continue.',
@@ -308,11 +293,33 @@ function AppNavigator() {
         ]
       );
     } else {
-      // For Android
       const BackHandler = require('react-native').BackHandler;
       BackHandler.exitApp();
     }
   };
+
+  // ============================================================
+  // LIFECYCLE HOOKS
+  // ============================================================
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      console.log('AppState changed to:', nextAppState);
+      
+      if (nextAppState === 'active') {
+        const hasPermission = await checkNotificationPermission();
+        
+        if (!hasPermission && appState !== 'splash') {
+          setShowPermissionModal(true);
+          
+          if (navigationRef.isReady()) {
+            navigationRef.navigate('Auth');
+          }
+        }
+      }
+    });
+
+    return () => subscription.remove();
+  }, [appState]);
 
   useEffect(() => {
     const configureAudio = async () => {
@@ -354,7 +361,6 @@ function AppNavigator() {
     return unsubscribe;
   }, []);
 
-  // Handle notification tap
   useEffect(() => {
     const unsubscribe = Notifications.addNotificationResponseReceivedListener(response => {
       console.log('Notification tapped:', response);
@@ -378,7 +384,6 @@ function AppNavigator() {
     return () => unsubscribe.remove();
   }, []);
 
-  // Handle foreground notifications
   useEffect(() => {
     const subscription = Notifications.addNotificationReceivedListener(notification => {
       console.log('Foreground Local notification:', notification);
@@ -401,14 +406,15 @@ function AppNavigator() {
     checkFirstLaunch();
   }, []);
 
+  // ============================================================
+  // HANDLERS
+  // ============================================================
   const handleSplashComplete = async () => {
     if (firstLaunch === null) return;
     
-    // Check permission before proceeding
     const hasPermission = await checkNotificationPermission();
     
     if (!hasPermission) {
-      // If no permission, show modal and don't proceed
       setShowPermissionModal(true);
       return;
     }
@@ -425,7 +431,9 @@ function AppNavigator() {
     setAppState('main');
   };
 
-  // If permissions modal is showing, show it with blocking UI
+  // ============================================================
+  // RENDER
+  // ============================================================
   if (showPermissionModal) {
     return (
       <View style={styles.blockedContainer}>
@@ -446,7 +454,6 @@ function AppNavigator() {
     return <OnboardingScreen onComplete={handleOnboardingComplete} />;
   }
 
-  // If permission is granted, show the actual app
   return (
     <CartProvider>
       <Stack.Navigator
@@ -475,15 +482,15 @@ function AppNavigator() {
             <Stack.Screen name="OnboardingNavigator" component={OnboardingNavigator} /> 
             <Stack.Screen name="WriterNavigator" component={WriterNavigator} options={{ headerShown: false }} />
             <Stack.Screen name="AIChat" component={AIChatScreen} />
-              
-        <Stack.Screen 
-      name="AIChatNavigator" 
-      component={AIChatNavigator} 
-      options={{ 
-        headerShown: false,
-        title: 'AI Assistant'
-      }}
-    />
+            <Stack.Screen name="TeamNavigator" component={TeamNavigator} />
+            <Stack.Screen 
+              name="AIChatNavigator" 
+              component={AIChatNavigator} 
+              options={{ 
+                headerShown: false,
+                title: 'AI Assistant'
+              }}
+            />
             <Stack.Screen
               name="EditProduct"
               component={EditProductScreen}
@@ -507,7 +514,10 @@ function AppNavigator() {
     </CartProvider>
   );
 }
-       
+
+// ============================================================
+// MAIN APP COMPONENT
+// ============================================================
 export default function App() {
   const baseURL = Platform.OS === 'ios'
     ? 'https://moihub.onrender.com'
@@ -515,7 +525,6 @@ export default function App() {
 
   axios.defaults.baseURL = baseURL;
 
-  // Set status bar configuration once at app level
   useEffect(() => {
     if (Platform.OS === 'android') {
       StatusBar.setBarStyle('light-content');
@@ -547,6 +556,9 @@ export default function App() {
   );
 }
 
+// ============================================================
+// STYLES
+// ============================================================
 const styles = StyleSheet.create({
   blockedContainer: {
     flex: 1,

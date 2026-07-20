@@ -22,6 +22,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import axios from 'axios';
 import WhatsAppFAB from './WhatsAppFAB';
 import DataService from '../services/DataService';
+import CustomSideMenu from '../components/CustomSideMenu'; // <- ADD THIS
 
 import ServicesShowcase from './components/ServicesShowcase';
 import MarketplaceShowcase from './components/MarketplaceShowcase';
@@ -46,6 +47,9 @@ const HomeScreen = () => {
   const slideRef = useRef(null);
   const adsRef = useRef(null);
   const isMountedRef = useRef(true);
+
+  // ADD THIS STATE FOR MENU
+  const [menuVisible, setMenuVisible] = useState(false);
 
   // Backend data states
   const [homescreenData, setHomescreenData] = useState(null);
@@ -661,15 +665,16 @@ const handleHighlightPress = () => {
           </View>
 
           <TouchableOpacity
-            style={styles.notificationButton}
-            onPress={() => navigation.navigate('Messages', { screen: 'ChatList' })}
+            style={styles.menuButton}
+            onPress={() => setMenuVisible(true)} // <- CHANGE THIS
           >
             {iconsLoaded ? (
-              <Ionicons name="notifications-outline" size={28} color="#2C5F2D" />
+              <Ionicons name="menu" size={28} color="#2C5F2D" />
             ) : (
               <View style={{ width: 28, height: 28, backgroundColor: '#2C5F2D', borderRadius: 14 }} />
             )}
           </TouchableOpacity>
+
         </View>
       </View>
 
@@ -954,6 +959,12 @@ const handleHighlightPress = () => {
           <Text style={styles.footerCopyright}>✟𝗞𝗬𝗟𝗘𝗫✟</Text>
         </View>
       </ScrollView>
+
+      {/* ADD THE CUSTOM SIDE MENU HERE */}
+      <CustomSideMenu 
+        visible={menuVisible} 
+        onClose={() => setMenuVisible(false)} 
+      />
     </View>
   );
 };
@@ -1002,6 +1013,12 @@ const styles = StyleSheet.create({
     color: '#000',
     marginTop: 0,
   },
+  
+menuButton: {
+  backgroundColor: '#E8F5E8',
+  borderRadius: 20,
+  padding: 8,
+},
   notificationButton: {
     backgroundColor: '#E8F5E8',
     borderRadius: 20,
