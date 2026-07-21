@@ -56,9 +56,9 @@ const CustomSideMenu = ({ visible, onClose }) => {
     },
 { 
   id: 'team', 
-  label: 'Meet the Team', 
+  label: 'Our Team', 
   icon: 'people-outline',
-  description: 'The people behind MoiHub',
+  description: 'People behind',
   onPress: () => {
     onClose();
     navigation.navigate('TeamNavigator');
@@ -66,9 +66,9 @@ const CustomSideMenu = ({ visible, onClose }) => {
 },
     { 
       id: 'vendor', 
-      label: 'Become a Vendor', 
+      label: 'Own A Shop', 
       icon: 'business-outline',
-      description: 'List your business today',
+      description: 'Set a business',
       onPress: () => {
         onClose();
         navigation.navigate('OnboardingNavigator');
@@ -91,7 +91,7 @@ const CustomSideMenu = ({ visible, onClose }) => {
       description: 'Reach out to us',
       onPress: () => {
         onClose();
-        Linking.openURL('mailto:support@moihub.com');
+        Linking.openURL('mailto:info.moihub@gmail.com');
       }
     },
   ];
@@ -214,10 +214,7 @@ const CustomSideMenu = ({ visible, onClose }) => {
                   </React.Fragment>
                 ))}
               </View>
-              <View style={styles.versionContainer}>
-                <Text style={styles.versionText}>App Version 1.0.0</Text>
-                <Text style={styles.footerCopyright}>✟𝗞𝗬𝗟𝗘𝗫✟</Text>
-              </View>
+
             </View>
           </SafeAreaView>
         </Animated.View>

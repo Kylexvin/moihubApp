@@ -135,18 +135,7 @@ const TeamScreen = () => {
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor="#01604c" barStyle="light-content" />
       
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Team MoiHub</Text>
-        <View style={styles.headerRight} />
-      </View>
+ 
 
       <ScrollView 
         style={styles.content}
