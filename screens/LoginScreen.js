@@ -139,6 +139,7 @@ const handleSocialLogin = async (provider, token = null) => {
   }
 };
 
+
   const syncPushToken = async (userId) => {
     if (!messaging) return;
     try {
