@@ -189,10 +189,12 @@ const CustomSideMenu = ({ visible, onClose }) => {
                   resizeMode="contain"
                 />
               </View>
-              <Text style={styles.appName}>MoiHub</Text>
-              <View style={styles.userBadge}>
-                <Ionicons name="person-outline" size={12} color="#FFF" />
-                <Text style={styles.userName}>
+              <View style={styles.headerTextGroup}>
+                <View style={styles.brandRow}>
+                  <Text style={styles.appName}>MOIHUB</Text>
+                  <View style={styles.brandDot} />
+                </View>
+                <Text style={styles.userName} numberOfLines={1}>
                   {currentUser?.username || 'Guest'}
                 </Text>
               </View>
@@ -310,6 +312,8 @@ const styles = StyleSheet.create({
     }),
   },
   drawerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingTop: Platform.OS === 'ios' ? 46 : 36,
     paddingBottom: 18,
     paddingHorizontal: 18,
@@ -317,33 +321,41 @@ const styles = StyleSheet.create({
   logoWrapper: {
     width: 42,
     height: 42,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginRight: 11,
   },
   logo: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
+    width: 26,
+    height: 26,
   },
-  appName: {
-    fontSize: 19,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
+  headerTextGroup: {
+    flex: 1,
   },
-  userBadge: {
+  brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
+  },
+  appName: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.75)',
+    letterSpacing: 0.8,
+  },
+  brandDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    marginLeft: 6,
   },
   userName: {
-    fontSize: 12.5,
-    color: 'rgba(255,255,255,0.8)',
-    marginLeft: 5,
-    fontWeight: '400',
+    fontSize: 16.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginTop: 2,
   },
   menuList: {
     flex: 1,
