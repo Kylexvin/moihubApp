@@ -22,13 +22,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import axios from 'axios';
 import WhatsAppFAB from './WhatsAppFAB';
 import DataService from '../services/DataService';
-import CustomSideMenu from '../components/CustomSideMenu'; // <- ADD THIS
+import CustomSideMenu from '../components/CustomSideMenu'; 
 
 import ServicesShowcase from './components/ServicesShowcase';
 import MarketplaceShowcase from './components/MarketplaceShowcase';
 
 const { width } = Dimensions.get('window');
-// Add this BEFORE your HomeScreen component (outside the component)
+
 const getCryptoColor = (id) => {
   const colors = {
     btc: '#f7931a',
@@ -39,6 +39,19 @@ const getCryptoColor = (id) => {
   return colors[id] || '#01604c';
 };
 
+const getGreeting = () => {
+  const hour = new Date().getHours();
+  
+  if (hour < 12) {
+    return 'Good Morning';
+  } else if (hour < 17) {
+    return 'Good Afternoon';
+  } else if (hour < 21) {
+    return 'Good Evening';
+  } else {
+    return 'Good Night';
+  }
+};
 
 const HomeScreen = () => {
   const { currentUser } = useAuth();
@@ -48,7 +61,6 @@ const HomeScreen = () => {
   const adsRef = useRef(null);
   const isMountedRef = useRef(true);
 
-  // ADD THIS STATE FOR MENU
   const [menuVisible, setMenuVisible] = useState(false);
 
   // Backend data states
@@ -62,11 +74,12 @@ const HomeScreen = () => {
   const [servicesShowcase, setServicesShowcase] = useState([]);
   const [showcaseLoading, setShowcaseLoading] = useState(false);
 
-  // Explore sections (personalized feed + recently viewed folded in / removed)
+
   const [exploreSections, setExploreSections] = useState([]);
   const [iconsLoaded, setIconsLoaded] = useState(false);
 
   const [cryptoData, setCryptoData] = useState([]);
+  const greeting = getGreeting();
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -104,7 +117,7 @@ const HomeScreen = () => {
     }
   }, [currentUser]);
 
-    // --- ADD THIS NEW FETCH FUNCTION ---
+    
   const fetchCryptoPrices = useCallback(async () => {
     try {
       const response = await axios.get(
@@ -656,13 +669,15 @@ const handleHighlightPress = () => {
 
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <View style={styles.logoTextContainer}>
-            <Image source={require('../assets/moihublogo.png')} style={styles.logo} resizeMode="contain" />
-            <View>
-              <Text style={styles.appName}>MoiHub</Text>
-              <Text style={styles.greeting}>Welcome back, {currentUser?.username || 'Guest'}!</Text>
-            </View>
-          </View>
+<View style={styles.logoTextContainer}>
+  <Image source={require('../assets/moihublogo.png')} style={styles.logo} resizeMode="contain" />
+  <View>
+    <Text style={styles.appName}>MoiHub</Text>
+    <Text style={styles.greeting}>
+      {greeting}, {currentUser?.username || 'Guest'}!
+    </Text>
+  </View>
+</View>
 
           <TouchableOpacity
             style={styles.menuButton}
