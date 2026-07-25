@@ -12,17 +12,13 @@ import {
   StatusBar,
   ActivityIndicator,
   RefreshControl,
-  Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { LinearGradient } from 'expo-linear-gradient';
 import axios from 'axios';
 
-const { width } = Dimensions.get('window');
+const BRAND = '#01604c';
 
 const TeamScreen = () => {
-  const navigation = useNavigation();
   const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -50,17 +46,15 @@ const TeamScreen = () => {
     fetchTeamMembers();
   };
 
-  const getAvatarSource = (imageUrl) => {
-    if (imageUrl && imageUrl !== '') {
-      return { uri: imageUrl };
-    }
-    return require('../../assets/moihublogo.png');
-  };
+  const getAvatarSource = (imageUrl) =>
+    imageUrl && imageUrl !== ''
+      ? { uri: imageUrl }
+      : require('../../assets/moihublogo.png');
 
   const renderSocialIcon = (url, iconName, color) => {
-    if (!url || url === '') return null;
+    if (!url) return null;
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.socialButton}
         onPress={() => Linking.openURL(url)}
         activeOpacity={0.7}
@@ -70,28 +64,28 @@ const TeamScreen = () => {
     );
   };
 
-  // Separate founders and team members
-  const founders = teamMembers.filter(m => 
-    m.role?.toLowerCase().includes('founder') || 
-    m.role?.toLowerCase().includes('co-founder')
+  const founders = teamMembers.filter((m) =>
+    m.role?.toLowerCase().includes('founder')
   );
-  const otherMembers = teamMembers.filter(m => 
-    !m.role?.toLowerCase().includes('founder') && 
-    !m.role?.toLowerCase().includes('co-founder')
+  const otherMembers = teamMembers.filter(
+    (m) => !m.role?.toLowerCase().includes('founder')
   );
 
   const renderMemberCard = (member, isFounder = false) => (
-    <View key={member._id} style={[styles.memberCard, isFounder && styles.founderCard]}>
+    <View
+      key={member._id}
+      style={[styles.memberCard, isFounder && styles.founderCard]}
+    >
       <View style={styles.cardHeader}>
         <View style={styles.avatarContainer}>
-          <Image 
-            source={getAvatarSource(member.image)} 
-            style={styles.avatar} 
+          <Image
+            source={getAvatarSource(member.image)}
+            style={styles.avatar}
             resizeMode="cover"
           />
           {isFounder && (
             <View style={styles.crownBadge}>
-              <Ionicons name="star" size={12} color="#FFD700" />
+              <Ionicons name="star" size={11} color="#FFD700" />
             </View>
           )}
         </View>
@@ -103,19 +97,21 @@ const TeamScreen = () => {
         </View>
       </View>
 
-      <Text style={styles.memberBio}>{member.bio}</Text>
-      
+      {!!member.bio && <Text style={styles.memberBio}>{member.bio}</Text>}
+
       <View style={styles.socialLinks}>
         {renderSocialIcon(member.socials?.github, 'logo-github', '#333')}
         {renderSocialIcon(member.socials?.linkedin, 'logo-linkedin', '#0077B5')}
         {renderSocialIcon(member.socials?.whatsapp, 'logo-whatsapp', '#25D366')}
         {renderSocialIcon(member.socials?.instagram, 'logo-instagram', '#E4405F')}
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.socialButton}
-          onPress={() => Linking.openURL(`mailto:${member.email || 'support@moihub.com'}`)}
+          onPress={() =>
+            Linking.openURL(`mailto:${member.email || 'support@moihub.com'}`)
+          }
           activeOpacity={0.7}
         >
-          <Ionicons name="mail-outline" size={16} color="#01604c" />
+          <Ionicons name="mail-outline" size={16} color={BRAND} />
         </TouchableOpacity>
       </View>
     </View>
@@ -125,7 +121,7 @@ const TeamScreen = () => {
     return (
       <SafeAreaView style={[styles.container, styles.centerContent]}>
         <StatusBar backgroundColor="#01604c" barStyle="light-content" />
-        <ActivityIndicator size="large" color="#01604c" />
+        <ActivityIndicator size="large" color={BRAND} />
         <Text style={styles.loadingText}>Loading team...</Text>
       </SafeAreaView>
     );
@@ -134,29 +130,24 @@ const TeamScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor="#01604c" barStyle="light-content" />
-      
- 
 
-      <ScrollView 
+      <ScrollView
         style={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BRAND} />
         }
       >
-        {/* Hero Section */}
-        <LinearGradient
-          colors={['#01604c', '#0a7a62']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.heroSection}
-        >
-          <Ionicons name="people" size={40} color="#FFFFFF" />
-          <Text style={styles.heroTitle}>Meet the Team</Text>
-          <Text style={styles.heroSubtitle}>
-            Passionate students building the future of campus life
-          </Text>
-        </LinearGradient>
+        {/* Compact Hero */}
+        <View style={styles.heroSection}>
+          <View style={styles.heroIconWrap}>
+            <Ionicons name="people" size={20} color="#FFFFFF" />
+          </View>
+          <View style={styles.heroTextWrap}>
+            <Text style={styles.heroTitle}>Meet the Team</Text>
+            <Text style={styles.heroSubtitle}>Building the future of campus life</Text>
+          </View>
+        </View>
 
         {/* Founders Section */}
         {founders.length > 0 && (
@@ -195,11 +186,9 @@ const TeamScreen = () => {
             We're always looking for passionate students to help build MoiHub.
             Reach out and be part of something great!
           </Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.joinButton}
-            onPress={() => {
-              Linking.openURL('https://wa.me/254768610613');
-            }}
+            onPress={() => Linking.openURL('https://wa.me/254768610613')}
             activeOpacity={0.8}
           >
             <Ionicons name="logo-whatsapp" size={18} color="#FFFFFF" />
@@ -227,59 +216,52 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#01604c',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  headerRight: {
-    width: 32,
-  },
   content: {
     flex: 1,
   },
+
+  // Compact hero — icon chip + text side by side instead of a tall gradient block
   heroSection: {
-    paddingVertical: 30,
-    paddingHorizontal: 20,
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: BRAND,
     marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 20,
-    shadowColor: '#01604c',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 8,
+    marginTop: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    shadowColor: BRAND,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  heroIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroTextWrap: {
+    marginLeft: 12,
+    flex: 1,
   },
   heroTitle: {
-    fontSize: 24,
+    fontSize: 17,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    marginTop: 8,
-    letterSpacing: 0.5,
   },
   heroSubtitle: {
-    fontSize: 14,
+    fontSize: 12.5,
     color: 'rgba(255,255,255,0.85)',
-    textAlign: 'center',
-    marginTop: 4,
-    lineHeight: 20,
+    marginTop: 1,
   },
+
   sectionContainer: {
     paddingHorizontal: 16,
-    marginTop: 16,
+    marginTop: 18,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -294,7 +276,7 @@ const styles = StyleSheet.create({
   sectionLine: {
     flex: 1,
     height: 2,
-    backgroundColor: '#01604c',
+    backgroundColor: BRAND,
     marginLeft: 12,
     opacity: 0.2,
   },
@@ -311,7 +293,7 @@ const styles = StyleSheet.create({
   },
   founderCard: {
     borderWidth: 1,
-    borderColor: '#01604c',
+    borderColor: BRAND,
     borderLeftWidth: 4,
   },
   cardHeader: {
@@ -360,7 +342,7 @@ const styles = StyleSheet.create({
   },
   memberRole: {
     fontSize: 12,
-    color: '#01604c',
+    color: BRAND,
     fontWeight: '500',
   },
   memberBio: {
