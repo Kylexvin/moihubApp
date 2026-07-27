@@ -77,7 +77,7 @@ const CustomSideMenu = ({ visible, onClose }) => {
       description: 'Learn more about us',
       onPress: () => {
         onClose();
-        Linking.openURL('https://moihub-silk.vercel.app/learnmore');
+        Linking.openURL('https://moihub-silk.vercel.app/about');
       },
     },
     {
@@ -107,7 +107,7 @@ const CustomSideMenu = ({ visible, onClose }) => {
       description: 'Get support',
       onPress: () => {
         onClose();
-        Linking.openURL('https://moihub-silk.vercel.app/learnmore');
+        Linking.openURL('https://moihub-silk.vercel.app/contact');
       },
     },
     {
