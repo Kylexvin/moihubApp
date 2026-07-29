@@ -15,22 +15,66 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 const BRAND = '#01604c';
 
+// Helper function to get dashboard info based on role
+const getDashboardInfo = (role) => {
+  switch (role) {
+    case 'vendor':
+      return { 
+        title: 'Shop Dashboard', 
+       icon: 'pizza-outline',
+        route: 'VendorDashboard',
+        description: 'Manage your shop',
+        tabName: 'VendorDashboard'
+      };
+    case 'shopowner':
+      return { 
+        title: 'Shop Manager', 
+        icon: 'storefront-outline', 
+        route: 'Eshop',
+        description: 'Manage your shop',
+        tabName: 'Eshop'
+      };
+    case 'SERVICE_PROVIDER':
+      return { 
+        title: 'Service Provider', 
+        icon: 'construct-outline', 
+        route: 'ServiceProviderDashboard',
+        description: 'Manage your services',
+        tabName: 'ServiceProviderDashboard'
+      };
+    case 'writer':
+      return { 
+        title: 'Writer Portal', 
+        icon: 'create-outline', 
+        route: 'WriterNavigator',
+        description: 'Manage your blog posts',
+        tabName: 'WriterNavigator'
+      };
+    case 'admin':
+      return { 
+        title: 'Admin Portal', 
+        icon: 'create-outline', 
+        route: 'WriterNavigator',
+        description: 'Manage blog posts',
+        tabName: 'WriterNavigator'
+      };
+    default:
+      return null;
+  }
+};
+
 const CustomSideMenu = ({ visible, onClose }) => {
   const navigation = useNavigation();
-  const { currentUser } = useAuth();
+  const { currentUser, logout } = useAuth();
   const slideAnim = useRef(new Animated.Value(width)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
-  // Keeps the Modal mounted while the close animation plays. Without this,
-  // `visible` flipping to false unmounts everything instantly, cutting the
-  // animation off mid-flight and leaving the Animated values in a stuck
-  // state — which is what made the hamburger look unresponsive on reopen.
   const [renderMenu, setRenderMenu] = useState(visible);
 
   useEffect(() => {
@@ -40,7 +84,6 @@ const CustomSideMenu = ({ visible, onClose }) => {
         Animated.spring(slideAnim, {
           toValue: 0,
           useNativeDriver: true,
-          // snappier than before — less travel time, less overshoot wobble
           tension: 90,
           friction: 14,
         }),
@@ -63,13 +106,76 @@ const CustomSideMenu = ({ visible, onClose }) => {
           useNativeDriver: true,
         }),
       ]).start(() => {
-        // Only unmount once the slide/fade has actually finished.
         setRenderMenu(false);
       });
     }
   }, [visible]);
 
-  const menuItems = [
+  // Get dashboard info for current user
+  const dashboardInfo = currentUser?.role ? getDashboardInfo(currentUser.role) : null;
+
+  // Navigation helper that works with tab navigator
+  const navigateToScreen = (routeName) => {
+    onClose();
+    
+    try {
+      // First, try to navigate from the root
+      let rootNav = navigation;
+      while (rootNav.getParent) {
+        const parent = rootNav.getParent();
+        if (!parent) break;
+        rootNav = parent;
+      }
+
+      // Check if we're in a tab navigator
+      if (rootNav && rootNav.getState) {
+        const state = rootNav.getState();
+        const routes = state.routes || [];
+        
+        // Find if the route exists in the navigation tree
+        const routeExists = routes.some(r => r.name === routeName);
+        
+        if (routeExists) {
+          // If route exists at root level, navigate directly
+          rootNav.navigate(routeName);
+          return;
+        }
+      }
+
+      // If not found at root, try navigating from the current screen
+      // This handles cases where the screen is nested in a tab
+      navigation.navigate(routeName);
+      
+    } catch (error) {
+      console.log('Navigation error:', error);
+      // Fallback: try to navigate using the navigation object directly
+      try {
+        navigation.navigate(routeName);
+      } catch (e) {
+        console.log('Fallback navigation failed:', e);
+      }
+    }
+  };
+
+  // Handle logout
+  const handleLogout = () => {
+    onClose();
+    logout();
+  };
+
+  // Base menu items
+  const baseMenuItems = [
+    {
+      id: 'profile',
+      label: 'Profile',
+      icon: 'person-outline',
+      description: 'View and edit profile',
+      onPress: () => {
+        onClose();
+        // Navigate to Profile tab
+        navigateToScreen('Profile');
+      },
+    },
     {
       id: 'about',
       label: 'About MoiHub',
@@ -120,7 +226,34 @@ const CustomSideMenu = ({ visible, onClose }) => {
         Linking.openURL('mailto:info.moihub@gmail.com');
       },
     },
+    {
+      id: 'logout',
+      label: 'Log Out',
+      icon: 'log-out-outline',
+      description: 'Sign out of your account',
+      onPress: handleLogout,
+      isLogout: true,
+    },
   ];
+
+  // If user has dashboard access, add it as the second item (after Profile)
+  const menuItems = dashboardInfo 
+    ? [
+        baseMenuItems[0], // Profile
+        {
+          id: 'dashboard',
+          label: dashboardInfo.title,
+          icon: dashboardInfo.icon,
+          description: dashboardInfo.description,
+          onPress: () => {
+            onClose();
+            // Navigate to dashboard
+            navigateToScreen(dashboardInfo.route);
+          },
+        },
+        ...baseMenuItems.slice(1), // Rest of items (without Profile)
+      ]
+    : baseMenuItems;
 
   const footerItems = [
     {
@@ -142,6 +275,18 @@ const CustomSideMenu = ({ visible, onClose }) => {
   ];
 
   if (!renderMenu) return null;
+
+  // Helper to get role color
+  const getRoleColor = (role) => {
+    switch (role) {
+      case 'vendor':           return '#9c27b0';
+      case 'shopowner':        return '#4caf50';
+      case 'SERVICE_PROVIDER': return '#2196f3';
+      case 'writer':           return '#FF9800';
+      case 'admin':            return '#FF9800';
+      default:                 return '#6c7ce7';
+    }
+  };
 
   return (
     <Modal
@@ -169,35 +314,61 @@ const CustomSideMenu = ({ visible, onClose }) => {
         >
           <SafeAreaView style={styles.safeArea}>
             {/* Close Button */}
-            <TouchableOpacity style={styles.closeButton} onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <TouchableOpacity 
+              style={styles.closeButton} 
+              onPress={onClose} 
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <View style={styles.closeButtonInner}>
                 <Ionicons name="close" size={20} color="#1a1a2e" />
               </View>
             </TouchableOpacity>
 
-            {/* Header */}
+            {/* Header with Profile Picture and User Info */}
             <LinearGradient
               colors={[BRAND, '#0a7a62']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.drawerHeader}
             >
-              <View style={styles.logoWrapper}>
-                <Image
-                  source={require('../assets/moihublogo.png')}
-                  style={styles.logo}
-                  resizeMode="contain"
-                />
-              </View>
-              <View style={styles.headerTextGroup}>
-                <View style={styles.brandRow}>
-                  <Text style={styles.appName}>MOIHUB</Text>
-                  <View style={styles.brandDot} />
+              <TouchableOpacity 
+                style={styles.profileSection}
+                onPress={() => {
+                  onClose();
+                  navigateToScreen('Profile');
+                }}
+              >
+                <View style={styles.profileImageContainer}>
+                  {currentUser?.avatar ? (
+                    <Image 
+                      source={{ uri: currentUser.avatar }} 
+                      style={styles.profileImage}
+                    />
+                  ) : (
+                    <View style={[styles.profileImage, styles.profileImagePlaceholder]}>
+                      <Text style={styles.profileInitial}>
+                        {currentUser?.username?.charAt(0).toUpperCase() || 'U'}
+                      </Text>
+                    </View>
+                  )}
                 </View>
-                <Text style={styles.userName} numberOfLines={1}>
-                  {currentUser?.username || 'Guest'}
-                </Text>
-              </View>
+                <View style={styles.headerTextGroup}>
+                  <Text style={styles.userName} numberOfLines={1}>
+                    {currentUser?.username || 'Guest'}
+                  </Text>
+                  <View style={styles.roleContainer}>
+                    <Text style={styles.userRole}>
+                      {currentUser?.role?.toUpperCase() || 'USER'}
+                    </Text>
+                    {currentUser?.role && (
+                      <View style={[styles.roleDot, { 
+                        backgroundColor: getRoleColor(currentUser.role) 
+                      }]} />
+                    )}
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.6)" />
+              </TouchableOpacity>
             </LinearGradient>
 
             {/* Menu Items */}
@@ -206,25 +377,60 @@ const CustomSideMenu = ({ visible, onClose }) => {
               contentContainerStyle={styles.menuListContent}
               showsVerticalScrollIndicator={false}
             >
-              {menuItems.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.menuItem}
-                  onPress={item.onPress}
-                  activeOpacity={0.55}
-                >
-                  <View style={styles.menuIconWrapper}>
-                    <Ionicons name={item.icon} size={20} color={BRAND} />
-                  </View>
-                  <View style={styles.menuTextWrapper}>
-                    <Text style={styles.menuItemText}>{item.label}</Text>
-                    <Text style={styles.menuItemDescription}>
-                      {item.description}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color="#c2c2c8" />
-                </TouchableOpacity>
-              ))}
+              {menuItems.map((item) => {
+                const isDashboard = item.id === 'dashboard';
+                const isLogout = item.isLogout === true;
+                
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[
+                      styles.menuItem,
+                      isDashboard && styles.dashboardMenuItem,
+                      isLogout && styles.logoutMenuItem,
+                    ]}
+                    onPress={item.onPress}
+                    activeOpacity={0.55}
+                  >
+                    <View style={[
+                      styles.menuIconWrapper,
+                      isDashboard && styles.dashboardIconWrapper,
+                      isLogout && styles.logoutIconWrapper,
+                    ]}>
+                      <Ionicons 
+                        name={item.icon} 
+                        size={isDashboard ? 22 : 20} 
+                        color={
+                          isLogout ? '#ff3366' : 
+                          isDashboard ? '#01604c' : 
+                          BRAND
+                        } 
+                      />
+                    </View>
+                    <View style={styles.menuTextWrapper}>
+                      <Text style={[
+                        styles.menuItemText,
+                        isDashboard && styles.dashboardMenuItemText,
+                        isLogout && styles.logoutMenuItemText,
+                      ]}>
+                        {item.label}
+                      </Text>
+                      <Text style={styles.menuItemDescription}>
+                        {item.description}
+                      </Text>
+                    </View>
+                    <Ionicons 
+                      name="chevron-forward" 
+                      size={16} 
+                      color={
+                        isLogout ? '#ff3366' :
+                        isDashboard ? '#01604c' : 
+                        '#c2c2c8'
+                      } 
+                    />
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
 
             {/* Footer */}
@@ -312,72 +518,109 @@ const styles = StyleSheet.create({
     }),
   },
   drawerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingTop: Platform.OS === 'ios' ? 46 : 36,
     paddingBottom: 18,
     paddingHorizontal: 18,
   },
-  logoWrapper: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    backgroundColor: 'rgba(255,255,255,0.16)',
+  profileSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  profileImageContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    marginRight: 14,
+  },
+  profileImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 26,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  profileImagePlaceholder: {
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 11,
+    backgroundColor: 'rgba(255,255,255,0.15)',
   },
-  logo: {
-    width: 26,
-    height: 26,
+  profileInitial: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
   headerTextGroup: {
     flex: 1,
   },
-  brandRow: {
+  userName: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 3,
+  },
+  roleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  appName: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.75)',
-    letterSpacing: 0.8,
+  userRole: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.8)',
+    letterSpacing: 0.5,
   },
-  brandDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: 'rgba(255,255,255,0.4)',
+  roleDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     marginLeft: 6,
-  },
-  userName: {
-    fontSize: 16.5,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginTop: 2,
   },
   menuList: {
     flex: 1,
   },
   menuListContent: {
-    paddingTop: 10,
-    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 11,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 2,
+  },
+  dashboardMenuItem: {
+    backgroundColor: 'rgba(1,96,76,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(1,96,76,0.12)',
+    marginBottom: 6,
+  },
+  logoutMenuItem: {
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,51,102,0.12)',
+    backgroundColor: 'rgba(255,51,102,0.04)',
   },
   menuIconWrapper: {
     width: 36,
     height: 36,
-    borderRadius: 11,
+    borderRadius: 10,
     backgroundColor: 'rgba(1,96,76,0.08)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 13,
+  },
+  dashboardIconWrapper: {
+    backgroundColor: 'rgba(1,96,76,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(1,96,76,0.2)',
+  },
+  logoutIconWrapper: {
+    backgroundColor: 'rgba(255,51,102,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,51,102,0.12)',
   },
   menuTextWrapper: {
     flex: 1,
@@ -386,6 +629,12 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     color: '#1a1a2e',
     fontWeight: '600',
+  },
+  dashboardMenuItemText: {
+    color: '#01604c',
+  },
+  logoutMenuItemText: {
+    color: '#ff3366',
   },
   menuItemDescription: {
     fontSize: 11.5,
