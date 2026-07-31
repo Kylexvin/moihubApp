@@ -15,7 +15,7 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, CommonActions } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -28,7 +28,7 @@ const getDashboardInfo = (role) => {
     case 'vendor':
       return { 
         title: 'Shop Dashboard', 
-       icon: 'pizza-outline',
+        icon: 'pizza-outline',
         route: 'VendorDashboard',
         description: 'Manage your shop',
         tabName: 'VendorDashboard'
@@ -114,46 +114,14 @@ const CustomSideMenu = ({ visible, onClose }) => {
   // Get dashboard info for current user
   const dashboardInfo = currentUser?.role ? getDashboardInfo(currentUser.role) : null;
 
-  // Navigation helper that works with tab navigator
+  // Simplified navigation helper - no more complex rootNav logic
   const navigateToScreen = (routeName) => {
     onClose();
-    
     try {
-      // First, try to navigate from the root
-      let rootNav = navigation;
-      while (rootNav.getParent) {
-        const parent = rootNav.getParent();
-        if (!parent) break;
-        rootNav = parent;
-      }
-
-      // Check if we're in a tab navigator
-      if (rootNav && rootNav.getState) {
-        const state = rootNav.getState();
-        const routes = state.routes || [];
-        
-        // Find if the route exists in the navigation tree
-        const routeExists = routes.some(r => r.name === routeName);
-        
-        if (routeExists) {
-          // If route exists at root level, navigate directly
-          rootNav.navigate(routeName);
-          return;
-        }
-      }
-
-      // If not found at root, try navigating from the current screen
-      // This handles cases where the screen is nested in a tab
+      // ✅ CORRECT: Simple navigation with string route name
       navigation.navigate(routeName);
-      
     } catch (error) {
       console.log('Navigation error:', error);
-      // Fallback: try to navigate using the navigation object directly
-      try {
-        navigation.navigate(routeName);
-      } catch (e) {
-        console.log('Fallback navigation failed:', e);
-      }
     }
   };
 

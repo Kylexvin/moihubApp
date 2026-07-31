@@ -16,8 +16,7 @@ import {
   TextInput,
   Keyboard,
   Platform,
-  ScrollView
-  
+  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
@@ -48,6 +47,28 @@ const ShopColors = {
 };
 
 // -------------------------------------------------------------------
+// Helpers
+// -------------------------------------------------------------------
+const mergeUniqueById = (existing, incoming) => {
+  const seen = new Set(existing.map((p) => p._id));
+  const deduped = incoming.filter((p) => {
+    if (seen.has(p._id)) return false;
+    seen.add(p._id);
+    return true;
+  });
+  return [...existing, ...deduped];
+};
+
+const dedupeById = (list) => {
+  const seen = new Set();
+  return list.filter((p) => {
+    if (seen.has(p._id)) return false;
+    seen.add(p._id);
+    return true;
+  });
+};
+
+// -------------------------------------------------------------------
 // ProductCard
 // -------------------------------------------------------------------
 const ProductCard = React.memo(({ item, onAddToCart, isAdding }) => {
@@ -55,7 +76,7 @@ const ProductCard = React.memo(({ item, onAddToCart, isAdding }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const itemQuantity = useMemo(() => {
-    const cartItem = cartItems.find(ci => ci.productId === item._id);
+    const cartItem = cartItems.find((ci) => ci.productId === item._id);
     return cartItem?.quantity || 0;
   }, [cartItems, item._id]);
 
@@ -98,10 +119,7 @@ const ProductCard = React.memo(({ item, onAddToCart, isAdding }) => {
             style={styles.productImage}
             defaultSource={{ uri: 'https://via.placeholder.com/200x200?text=Product' }}
           />
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.3)']}
-            style={styles.imageGradient}
-          />
+          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.3)']} style={styles.imageGradient} />
           {!item.isAvailable && (
             <View style={styles.unavailableBadge}>
               <Icon name="block" size={12} color={ShopColors.gold} />
@@ -126,12 +144,7 @@ const ProductCard = React.memo(({ item, onAddToCart, isAdding }) => {
 
           <View style={styles.ratingContainer}>
             {[1, 2, 3, 4, 5].map((star) => (
-              <Icon
-                key={star}
-                name="star"
-                size={12}
-                color={star <= 4 ? ShopColors.gold : ShopColors.textMuted}
-              />
+              <Icon key={star} name="star" size={12} color={star <= 4 ? ShopColors.gold : ShopColors.textMuted} />
             ))}
             <Text style={styles.ratingText}>(4.0)</Text>
           </View>
@@ -142,23 +155,12 @@ const ProductCard = React.memo(({ item, onAddToCart, isAdding }) => {
               <Text style={styles.originalPrice}>KSh {(item.price * 1.2).toLocaleString()}</Text>
             </View>
             {item.isAvailable && (
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={handlePress}
-                disabled={isAdding}
-              >
-                <LinearGradient
-                  colors={[ShopColors.primary, ShopColors.secondary]}
-                  style={styles.addButtonGradient}
-                >
+              <TouchableOpacity style={styles.addButton} onPress={handlePress} disabled={isAdding}>
+                <LinearGradient colors={[ShopColors.primary, ShopColors.secondary]} style={styles.addButtonGradient}>
                   {isAdding ? (
                     <ActivityIndicator size={16} color={ShopColors.gold} />
                   ) : (
-                    <Icon
-                      name={itemQuantity > 0 ? 'add' : 'add-shopping-cart'}
-                      size={16}
-                      color={ShopColors.gold}
-                    />
+                    <Icon name={itemQuantity > 0 ? 'add' : 'add-shopping-cart'} size={16} color={ShopColors.gold} />
                   )}
                 </LinearGradient>
               </TouchableOpacity>
@@ -176,37 +178,21 @@ const ProductCard = React.memo(({ item, onAddToCart, isAdding }) => {
 const CategoryChips = React.memo(({ categories, selectedCategory, onSelectCategory }) => {
   return (
     <View style={styles.categoryChipsContainer}>
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoryChipsScroll}
-      >
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryChipsScroll}>
         <TouchableOpacity
-          style={[
-            styles.categoryChip,
-            !selectedCategory && styles.categoryChipSelected
-          ]}
+          style={[styles.categoryChip, !selectedCategory && styles.categoryChipSelected]}
           onPress={() => onSelectCategory(null)}
         >
-          <Text style={[
-            styles.categoryChipText,
-            !selectedCategory && styles.categoryChipTextSelected
-          ]}>All</Text>
+          <Text style={[styles.categoryChipText, !selectedCategory && styles.categoryChipTextSelected]}>All</Text>
         </TouchableOpacity>
-        
+
         {categories.map((category) => (
           <TouchableOpacity
             key={category._id}
-            style={[
-              styles.categoryChip,
-              selectedCategory === category._id && styles.categoryChipSelected
-            ]}
+            style={[styles.categoryChip, selectedCategory === category._id && styles.categoryChipSelected]}
             onPress={() => onSelectCategory(category._id)}
           >
-            <Text style={[
-              styles.categoryChipText,
-              selectedCategory === category._id && styles.categoryChipTextSelected
-            ]}>
+            <Text style={[styles.categoryChipText, selectedCategory === category._id && styles.categoryChipTextSelected]}>
               {category.name}
             </Text>
           </TouchableOpacity>
@@ -217,20 +203,97 @@ const CategoryChips = React.memo(({ categories, selectedCategory, onSelectCatego
 });
 
 // -------------------------------------------------------------------
+// SearchBar
+// -------------------------------------------------------------------
+// This is the key structural change. The TextInput's value lives ENTIRELY
+// in this component's own local state — it never round-trips through the
+// parent screen on every keystroke. The parent (and therefore the header
+// and the FlatList it sits inside) only re-renders once, after the user
+// pauses typing (debounced) or explicitly submits. That means nothing you
+// type can ever again cause the search box itself to be torn down and
+// remounted, because the parent has no reason to re-render mid-keystroke.
+const SearchBar = React.memo(({ onDebouncedChange, resultCount, showResultInfo }) => {
+  const [text, setText] = useState('');
+  const [focused, setFocused] = useState(false);
+  const inputRef = useRef(null);
+  const debounceHandle = useRef(null);
+
+  const handleChangeText = useCallback((value) => {
+    setText(value);
+    if (debounceHandle.current) clearTimeout(debounceHandle.current);
+    debounceHandle.current = setTimeout(() => {
+      onDebouncedChange(value);
+    }, 400);
+  }, [onDebouncedChange]);
+
+  const submitNow = useCallback(() => {
+    if (debounceHandle.current) clearTimeout(debounceHandle.current);
+    onDebouncedChange(text);
+  }, [text, onDebouncedChange]);
+
+  const clear = useCallback(() => {
+    setText('');
+    if (debounceHandle.current) clearTimeout(debounceHandle.current);
+    onDebouncedChange('');
+    inputRef.current?.focus();
+  }, [onDebouncedChange]);
+
+  useEffect(() => () => {
+    if (debounceHandle.current) clearTimeout(debounceHandle.current);
+  }, []);
+
+  return (
+    <View style={styles.searchContainer}>
+      <View style={[styles.searchInputContainer, focused && styles.searchInputContainerFocused]}>
+        <Icon name="search" size={20} color={ShopColors.gold} style={styles.searchIcon} />
+        <TextInput
+          ref={inputRef}
+          style={styles.searchInput}
+          placeholder="Search products..."
+          placeholderTextColor={ShopColors.textMuted}
+          value={text}
+          onChangeText={handleChangeText}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          onSubmitEditing={submitNow}
+          returnKeyType="search"
+          blurOnSubmit={false}
+          autoCorrect={false}
+        />
+        {text.length > 0 && (
+          <TouchableOpacity onPress={clear} style={styles.clearButton}>
+            <Icon name="close" size={18} color={ShopColors.gold} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {showResultInfo && text.length > 0 && (
+        <View style={styles.searchResultsInfo}>
+          <Text style={styles.searchResultsText}>
+            Found {resultCount} product{resultCount !== 1 ? 's' : ''}
+          </Text>
+          <TouchableOpacity onPress={clear} style={styles.clearSearchButton}>
+            <Text style={styles.clearSearchText}>Clear</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+});
+
+// -------------------------------------------------------------------
 // ShopHeader
 // -------------------------------------------------------------------
+// Declared once, at module scope, and always referenced by this same
+// function identity. Passed to the FlatList as a plain JSX element
+// below (not rebuilt through a useCallback each render), so React can
+// diff and update it in place instead of ever unmounting it.
 const ShopHeader = React.memo(({
   shopInfo,
   shopName,
   filteredCount,
-  searchQuery,
-  searchFocused,
-  onSearchChange,
-  onSearchFocus,
-  onSearchBlur,
-  onClearSearch,
   onScrollToTop,
-  searchInputRef,
+  onDebouncedSearchChange,
   categories,
   selectedCategory,
   onSelectCategory,
@@ -256,58 +319,19 @@ const ShopHeader = React.memo(({
               </View>
             </TouchableOpacity>
           </View>
-
-         
-
-
         </View>
         <View style={styles.headerGlow} />
       </LinearGradient>
     </View>
 
-    <View style={styles.searchContainer}>
-      <View style={[
-        styles.searchInputContainer,
-        searchFocused && styles.searchInputContainerFocused,
-      ]}>
-        <Icon name="search" size={20} color={ShopColors.gold} style={styles.searchIcon} />
-        <TextInput
-          ref={searchInputRef}
-          style={styles.searchInput}
-          placeholder="Search products..."
-          placeholderTextColor={ShopColors.textMuted}
-          value={searchQuery}
-          onChangeText={onSearchChange}
-          onFocus={onSearchFocus}
-          onBlur={onSearchBlur}
-          returnKeyType="search"
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={onClearSearch} style={styles.clearButton}>
-            <Icon name="close" size={18} color={ShopColors.gold} />
-          </TouchableOpacity>
-        )}
-      </View>
+    <SearchBar
+      onDebouncedChange={onDebouncedSearchChange}
+      resultCount={filteredCount}
+      showResultInfo
+    />
 
-      {searchQuery.length > 0 && (
-        <View style={styles.searchResultsInfo}>
-          <Text style={styles.searchResultsText}>
-            Found {filteredCount} product{filteredCount !== 1 ? 's' : ''}
-          </Text>
-          <TouchableOpacity onPress={onClearSearch} style={styles.clearSearchButton}>
-            <Text style={styles.clearSearchText}>Clear</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-
-    {/* Category Chips */}
     {categories.length > 0 && (
-      <CategoryChips
-        categories={categories}
-        selectedCategory={selectedCategory}
-        onSelectCategory={onSelectCategory}
-      />
+      <CategoryChips categories={categories} selectedCategory={selectedCategory} onSelectCategory={onSelectCategory} />
     )}
   </>
 ));
@@ -323,21 +347,24 @@ const ShopProductsScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [addingMap, setAddingMap] = useState({});
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchFocused, setSearchFocused] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(''); // debounced value only
   const [cartTotal, setCartTotal] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState(null);
-  
+
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
 
   const scrollY = useRef(new Animated.Value(0)).current;
-  const searchInputRef = useRef(null);
   const { cartItems, addToCart } = useCart();
   const flatListRef = useRef(null);
+
+  // Concurrency guards — checked synchronously, unlike React state,
+  // so overlapping onEndReached / category-tap calls can't both slip
+  // through and fetch+append the same page twice (duplicate items).
+  const isFetchingRef = useRef(false);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     const total = cartItems.reduce((sum, item) => sum + item.quantity, 0);
@@ -351,136 +378,137 @@ const ShopProductsScreen = ({ navigation, route }) => {
     }, [cartItems])
   );
 
-  // Fetch categories for this shop
   useEffect(() => {
     fetchCategories();
   }, [shopSlug]);
 
-const fetchCategories = async () => {
-  try {
-    const response = await axios.get(
-      `/api/eshop/vendor/shops/${shopSlug}/categories`
-    );
-    if (response.data.success) {
-      setCategories(response.data.data);
+  const fetchCategories = async () => {
+    try {
+      const response = await axios.get(`/api/eshop/vendor/shops/${shopSlug}/categories`);
+      if (response.data.success) {
+        setCategories(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
     }
-  } catch (error) {
-    console.error('Error fetching categories:', error);
-  }
-};
+  };
 
-  // Filter products by category and search
+  // Client-side filtering — search only touches already-loaded pages.
+  // Category filtering happens server-side (see fetchProducts); this
+  // local pass is just a safety net in case a stray item slips through.
   const filteredProducts = useMemo(() => {
     if (!products.length) return [];
-    
+
     let filtered = products;
-    
-    // Filter by category
+
     if (selectedCategory) {
-      filtered = filtered.filter(product => 
-        product.category?._id === selectedCategory || product.category === selectedCategory
+      filtered = filtered.filter(
+        (product) => product.category?._id === selectedCategory || product.category === selectedCategory
       );
     }
-    
-    // Filter by search
+
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(product =>
-        product.name.toLowerCase().includes(query) ||
-        product.description?.toLowerCase().includes(query)
+      const query = searchQuery.trim().toLowerCase();
+      filtered = filtered.filter(
+        (product) =>
+          product.name.toLowerCase().includes(query) ||
+          product.description?.toLowerCase().includes(query)
       );
     }
-    
+
     return filtered;
   }, [products, selectedCategory, searchQuery]);
 
-  // Initial fetch
   useEffect(() => {
     fetchProducts(1);
     StatusBar.setBarStyle('light-content', true);
   }, []);
 
-  // Refetch when category changes
   useEffect(() => {
     if (!loading) {
+      setProducts([]);
+      setHasMore(true);
       fetchProducts(1);
     }
   }, [selectedCategory]);
 
-const fetchProducts = async (page = 1, append = false) => {
-  try {
-    if (page === 1) setLoading(true);
-    else setLoadingMore(true);
-    
-    let url = `/api/eshop/vendor/shops/${shopSlug}/products?page=${page}&limit=10`;
-    
-    if (selectedCategory) {
-      url += `&category=${selectedCategory}`;
-    }
-    
-    const response = await axios.get(url);
-    
-    if (response.data.success) {
-      if (append) {
-        setProducts(prev => [...prev, ...response.data.data]);
+  const fetchProducts = async (page = 1, append = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    const thisRequestId = ++requestIdRef.current;
+
+    try {
+      if (page === 1) setLoading(true);
+      else setLoadingMore(true);
+
+      let url = `/api/eshop/vendor/shops/${shopSlug}/products?page=${page}&limit=10`;
+      if (selectedCategory) url += `&category=${selectedCategory}`;
+
+      const response = await axios.get(url);
+
+      // Drop stale responses from requests that have since been
+      // superseded (e.g. rapid category switching).
+      if (thisRequestId !== requestIdRef.current) return;
+
+      if (response.data.success) {
+        if (append) {
+          setProducts((prev) => mergeUniqueById(prev, response.data.data));
+        } else {
+          setProducts(dedupeById(response.data.data));
+        }
+        setShopInfo(response.data.shop);
+        setCurrentPage(response.data.currentPage || page);
+        setHasMore(page < (response.data.totalPages || 1));
       } else {
-        setProducts(response.data.data);
+        Alert.alert('Error', 'Failed to fetch products');
       }
-      setShopInfo(response.data.shop);
-      setCurrentPage(response.data.currentPage || page);
-      setTotalPages(response.data.totalPages || 1);
-      setHasMore(page < response.data.totalPages);
-    } else {
-      Alert.alert('Error', 'Failed to fetch products');
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      Alert.alert('Error', 'Network error. Please check your connection.');
+    } finally {
+      if (thisRequestId === requestIdRef.current) {
+        setLoading(false);
+        setLoadingMore(false);
+        setRefreshing(false);
+      }
+      isFetchingRef.current = false;
     }
-  } catch (error) {
-    console.error('Error fetching products:', error);
-    Alert.alert('Error', 'Network error. Please check your connection.');
-  } finally {
-    setLoading(false);
-    setLoadingMore(false);
-    setRefreshing(false);
-  }
-};
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
     setCurrentPage(1);
+    setHasMore(true);
     await fetchProducts(1);
-    setRefreshing(false);
   };
 
   const loadMore = useCallback(() => {
-    if (!loadingMore && hasMore && !loading) {
-      const nextPage = currentPage + 1;
-      fetchProducts(nextPage, true);
-    }
-  }, [loadingMore, hasMore, loading, currentPage]);
+    if (isFetchingRef.current || !hasMore || loading) return;
+    fetchProducts(currentPage + 1, true);
+  }, [hasMore, loading, currentPage, selectedCategory]);
 
-  const handleAddToCart = useCallback(async (product) => {
-    setAddingMap(prev => ({ ...prev, [product._id]: true }));
-    try {
-      addToCart({
-        productId: product._id,
-        name: product.name,
-        price: product.price,
-        image: product.image,
-        shopId,
-        shopName,
-      });
-      await new Promise(resolve => setTimeout(resolve, 200));
-    } catch (error) {
-      console.error('Error adding to cart:', error);
-      Alert.alert('Error', 'Failed to add item to cart');
-    } finally {
-      setAddingMap(prev => ({ ...prev, [product._id]: false }));
-    }
-  }, [shopId, shopName, addToCart]);
-
-  const clearSearch = useCallback(() => {
-    setSearchQuery('');
-    searchInputRef.current?.focus();
-  }, []);
+  const handleAddToCart = useCallback(
+    async (product) => {
+      setAddingMap((prev) => ({ ...prev, [product._id]: true }));
+      try {
+        addToCart({
+          productId: product._id,
+          name: product.name,
+          price: product.price,
+          image: product.image,
+          shopId,
+          shopName,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      } catch (error) {
+        console.error('Error adding to cart:', error);
+        Alert.alert('Error', 'Failed to add item to cart');
+      } finally {
+        setAddingMap((prev) => ({ ...prev, [product._id]: false }));
+      }
+    },
+    [shopId, shopName, addToCart]
+  );
 
   const scrollToTop = useCallback(() => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
@@ -491,13 +519,16 @@ const fetchProducts = async (page = 1, append = false) => {
     setCurrentPage(1);
   }, []);
 
-  const renderProductItem = useCallback(({ item }) => (
-    <ProductCard
-      item={item}
-      onAddToCart={handleAddToCart}
-      isAdding={!!addingMap[item._id]}
-    />
-  ), [addingMap, handleAddToCart]);
+  // The only bridge from the search box back to this screen — called
+  // once per debounced pause (or explicit submit), never per keystroke.
+  const handleDebouncedSearchChange = useCallback((value) => {
+    setSearchQuery(value);
+  }, []);
+
+  const renderProductItem = useCallback(
+    ({ item }) => <ProductCard item={item} onAddToCart={handleAddToCart} isAdding={!!addingMap[item._id]} />,
+    [addingMap, handleAddToCart]
+  );
 
   const renderFooter = useCallback(() => {
     if (!loadingMore) return null;
@@ -509,68 +540,42 @@ const fetchProducts = async (page = 1, append = false) => {
     );
   }, [loadingMore]);
 
-  const headerProps = useMemo(() => ({
-    shopInfo,
-    shopName,
-    filteredCount: filteredProducts.length,
-    searchQuery,
-    searchFocused,
-    onSearchChange: setSearchQuery,
-    onSearchFocus: () => setSearchFocused(true),
-    onSearchBlur: () => setSearchFocused(false),
-    onClearSearch: clearSearch,
-    onScrollToTop: scrollToTop,
-    searchInputRef,
-    categories,
-    selectedCategory,
-    onSelectCategory: handleCategorySelect,
-  }), [shopInfo, shopName, filteredProducts.length, searchQuery, searchFocused, clearSearch, scrollToTop, categories, selectedCategory, handleCategorySelect]);
-
-  const renderHeader = useCallback(() => <ShopHeader {...headerProps} />, [headerProps]);
-
-  const ListEmptyComponent = useCallback(() => (
-    <View style={styles.emptyContainer}>
-      {searchQuery.length > 0 ? (
-        <>
-          <View style={styles.emptyIconContainer}>
-            <Icon name="search-off" size={60} color={ShopColors.gold} />
-          </View>
-          <Text style={styles.emptyTitle}>No Results Found</Text>
-          <Text style={styles.emptyText}>
-            No products match "{searchQuery}". Try different keywords.
-          </Text>
-          <TouchableOpacity style={styles.retryButton} onPress={clearSearch}>
-            <LinearGradient
-              colors={[ShopColors.primary, ShopColors.secondary]}
-              style={styles.retryGradient}
-            >
-              <Icon name="close" size={20} color={ShopColors.gold} />
-              <Text style={styles.retryText}>Clear Search</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </>
-      ) : (
-        <>
-          <View style={styles.emptyIconContainer}>
-            <Icon name="inventory" size={60} color={ShopColors.gold} />
-          </View>
-          <Text style={styles.emptyTitle}>No Products Available</Text>
-          <Text style={styles.emptyText}>
-            This shop is currently updating their inventory. Check back soon!
-          </Text>
-          <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
-            <LinearGradient
-              colors={[ShopColors.primary, ShopColors.secondary]}
-              style={styles.retryGradient}
-            >
-              <Icon name="refresh" size={20} color={ShopColors.gold} />
-              <Text style={styles.retryText}>Refresh</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </>
-      )}
-    </View>
-  ), [searchQuery, clearSearch]);
+  const ListEmptyComponent = useCallback(
+    () => (
+      <View style={styles.emptyContainer}>
+        {searchQuery.length > 0 ? (
+          <>
+            <View style={styles.emptyIconContainer}>
+              <Icon name="search-off" size={60} color={ShopColors.gold} />
+            </View>
+            <Text style={styles.emptyTitle}>No Results Found</Text>
+            <Text style={styles.emptyText}>No products match "{searchQuery}". Try different keywords.</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={() => setSearchQuery('')}>
+              <LinearGradient colors={[ShopColors.primary, ShopColors.secondary]} style={styles.retryGradient}>
+                <Icon name="close" size={20} color={ShopColors.gold} />
+                <Text style={styles.retryText}>Clear Search</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <View style={styles.emptyIconContainer}>
+              <Icon name="inventory" size={60} color={ShopColors.gold} />
+            </View>
+            <Text style={styles.emptyTitle}>No Products Available</Text>
+            <Text style={styles.emptyText}>This shop is currently updating their inventory. Check back soon!</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
+              <LinearGradient colors={[ShopColors.primary, ShopColors.secondary]} style={styles.retryGradient}>
+                <Icon name="refresh" size={20} color={ShopColors.gold} />
+                <Text style={styles.retryText}>Refresh</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
+    ),
+    [searchQuery]
+  );
 
   if (loading) {
     return (
@@ -606,7 +611,21 @@ const fetchProducts = async (page = 1, append = false) => {
           renderItem={renderProductItem}
           keyExtractor={(item) => item._id}
           numColumns={2}
-          ListHeaderComponent={renderHeader}
+          // Passed as a stable element, not rebuilt via a function each
+          // render — React diffs ShopHeader's props in place instead of
+          // treating it as a new component type to mount/unmount.
+          ListHeaderComponent={
+            <ShopHeader
+              shopInfo={shopInfo}
+              shopName={shopName}
+              filteredCount={filteredProducts.length}
+              onScrollToTop={scrollToTop}
+              onDebouncedSearchChange={handleDebouncedSearchChange}
+              categories={categories}
+              selectedCategory={selectedCategory}
+              onSelectCategory={handleCategorySelect}
+            />
+          }
           ListFooterComponent={renderFooter}
           contentContainerStyle={styles.productsList}
           columnWrapperStyle={styles.row}
@@ -614,14 +633,11 @@ const fetchProducts = async (page = 1, append = false) => {
           refreshing={refreshing}
           onRefresh={onRefresh}
           onScrollBeginDrag={Keyboard.dismiss}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: true }
-          )}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
           scrollEventThrottle={16}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={ListEmptyComponent}
-          removeClippedSubviews={true}
+          removeClippedSubviews={false}
           maxToRenderPerBatch={6}
           windowSize={7}
           initialNumToRender={6}
@@ -630,15 +646,8 @@ const fetchProducts = async (page = 1, append = false) => {
         />
 
         <View style={styles.cartButtonContainer} pointerEvents="box-none">
-          <TouchableOpacity
-            style={styles.cartButton}
-            onPress={() => navigation.navigate('Cart')}
-            activeOpacity={0.8}
-          >
-            <LinearGradient
-              colors={[ShopColors.primary, ShopColors.secondary]}
-              style={styles.cartButtonGradient}
-            >
+          <TouchableOpacity style={styles.cartButton} onPress={() => navigation.navigate('Cart')} activeOpacity={0.8}>
+            <LinearGradient colors={[ShopColors.primary, ShopColors.secondary]} style={styles.cartButtonGradient}>
               <Icon name="shopping-cart" size={24} color={ShopColors.gold} />
             </LinearGradient>
           </TouchableOpacity>
@@ -656,18 +665,8 @@ const fetchProducts = async (page = 1, append = false) => {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1, position: 'relative' },
-  floatingIcons: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    zIndex: 0,
-  },
-  floatingIcon: {
-    position: 'absolute',
-    fontSize: 24,
-    opacity: 0.1,
-    color: ShopColors.gold,
-  },
+  floatingIcons: { position: 'absolute', width: '100%', height: '100%', zIndex: 0 },
+  floatingIcon: { position: 'absolute', fontSize: 24, opacity: 0.1, color: ShopColors.gold },
   icon1: { top: '10%', right: '5%', transform: [{ rotate: '15deg' }] },
   icon2: { top: '30%', left: '5%', transform: [{ rotate: '-10deg' }] },
   icon3: { bottom: '20%', right: '10%', transform: [{ rotate: '25deg' }] },
@@ -687,14 +686,8 @@ const styles = StyleSheet.create({
   loadingText: { marginTop: 15, fontSize: 16, color: ShopColors.textSecondary },
   productsList: { padding: 16, paddingBottom: 100 },
   row: { justifyContent: 'space-between', marginBottom: 16 },
-  
-  // Category Chips
-  categoryChipsContainer: {
-    marginBottom: 16,
-  },
-  categoryChipsScroll: {
-    paddingHorizontal: 4,
-  },
+  categoryChipsContainer: { marginBottom: 16 },
+  categoryChipsScroll: { paddingHorizontal: 4 },
   categoryChip: {
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -704,19 +697,9 @@ const styles = StyleSheet.create({
     borderColor: ShopColors.gold + '30',
     marginRight: 8,
   },
-  categoryChipSelected: {
-    backgroundColor: ShopColors.gold,
-    borderColor: ShopColors.gold,
-  },
-  categoryChipText: {
-    fontSize: 13,
-    color: ShopColors.textMuted,
-  },
-  categoryChipTextSelected: {
-    color: ShopColors.background,
-    fontWeight: '600',
-  },
-  
+  categoryChipSelected: { backgroundColor: ShopColors.gold, borderColor: ShopColors.gold },
+  categoryChipText: { fontSize: 13, color: ShopColors.textMuted },
+  categoryChipTextSelected: { color: ShopColors.background, fontWeight: '600' },
   shopHeader: {
     marginBottom: 16,
     borderRadius: 20,
@@ -738,20 +721,9 @@ const styles = StyleSheet.create({
     backgroundColor: ShopColors.gold + '15',
   },
   shopHeaderContent: { padding: 20 },
-  shopTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
+  shopTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   shopTitleContainer: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  shopName: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: ShopColors.gold,
-    marginLeft: 10,
-    flex: 1,
-  },
+  shopName: { fontSize: 22, fontWeight: '700', color: ShopColors.gold, marginLeft: 10, flex: 1 },
   shopStatsHeader: { alignItems: 'flex-end' },
   statItemHeader: {
     flexDirection: 'row',
@@ -764,31 +736,6 @@ const styles = StyleSheet.create({
     borderColor: ShopColors.gold + '30',
   },
   statText: { color: ShopColors.gold, fontSize: 12, marginLeft: 4, fontWeight: '600' },
-  shopContact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: ShopColors.gold + '10',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginBottom: 16,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: ShopColors.gold + '30',
-  },
-  contactText: { color: ShopColors.gold, fontSize: 14, marginLeft: 6, fontWeight: '500' },
-  shopStats: { flexDirection: 'row', justifyContent: 'space-between' },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: ShopColors.gold + '10',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 15,
-    flex: 0.48,
-    borderWidth: 1,
-    borderColor: ShopColors.gold + '30',
-  },
   searchContainer: { marginBottom: 20, zIndex: 1000 },
   searchInputContainer: {
     flexDirection: 'row',
@@ -800,10 +747,7 @@ const styles = StyleSheet.create({
     borderColor: ShopColors.gold + '30',
     minHeight: 50,
   },
-  searchInputContainerFocused: {
-    borderColor: ShopColors.gold,
-    backgroundColor: ShopColors.surface,
-  },
+  searchInputContainerFocused: { borderColor: ShopColors.gold, backgroundColor: ShopColors.surface },
   searchIcon: { marginRight: 8 },
   searchInput: {
     flex: 1,
@@ -830,30 +774,10 @@ const styles = StyleSheet.create({
     borderColor: ShopColors.gold + '30',
   },
   clearSearchText: { color: ShopColors.gold, fontSize: 12, fontWeight: '500' },
-  productCard: {
-    width: ITEM_WIDTH,
-    borderRadius: 20,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: ShopColors.gold + '20',
-  },
+  productCard: { width: ITEM_WIDTH, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: ShopColors.gold + '20' },
   cardGradient: { position: 'relative' },
-  cardGoldAccent: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: ShopColors.gold,
-  },
-  cardPattern: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    flexDirection: 'row',
-    opacity: 0.1,
-    zIndex: 1,
-  },
+  cardGoldAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 3, backgroundColor: ShopColors.gold },
+  cardPattern: { position: 'absolute', top: 8, right: 8, flexDirection: 'row', opacity: 0.1, zIndex: 1 },
   patternIcon: { fontSize: 16, marginHorizontal: 1 },
   unavailableProduct: { opacity: 0.6, borderColor: ShopColors.error },
   productImageContainer: { height: 150, position: 'relative' },
@@ -882,11 +806,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 10,
   },
-  categoryBadgeText: {
-    color: ShopColors.background,
-    fontSize: 9,
-    fontWeight: '600',
-  },
+  categoryBadgeText: { color: ShopColors.background, fontSize: 9, fontWeight: '600' },
   cartBadge: {
     position: 'absolute',
     top: 8,
@@ -902,19 +822,8 @@ const styles = StyleSheet.create({
   },
   cartBadgeText: { color: ShopColors.gold, fontSize: 12, fontWeight: 'bold' },
   productInfo: { padding: 12 },
-  productName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: ShopColors.gold,
-    marginBottom: 4,
-    lineHeight: 18,
-  },
-  productDescription: {
-    fontSize: 12,
-    color: ShopColors.textSecondary,
-    marginBottom: 8,
-    lineHeight: 16,
-  },
+  productName: { fontSize: 14, fontWeight: '700', color: ShopColors.gold, marginBottom: 4, lineHeight: 18 },
+  productDescription: { fontSize: 12, color: ShopColors.textSecondary, marginBottom: 8, lineHeight: 16 },
   ratingContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   ratingText: { fontSize: 10, color: ShopColors.textMuted, marginLeft: 4 },
   productFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -935,49 +844,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: ShopColors.gold + '30',
   },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: ShopColors.gold,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: ShopColors.textMuted,
-    textAlign: 'center',
-    marginBottom: 24,
-    paddingHorizontal: 32,
-    lineHeight: 20,
-  },
+  emptyTitle: { fontSize: 20, fontWeight: '700', color: ShopColors.gold, marginTop: 16, marginBottom: 8 },
+  emptyText: { fontSize: 14, color: ShopColors.textMuted, textAlign: 'center', marginBottom: 24, paddingHorizontal: 32, lineHeight: 20 },
   retryButton: { borderRadius: 25, overflow: 'hidden' },
-  retryGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-  },
+  retryGradient: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 12 },
   retryText: { color: ShopColors.gold, fontSize: 14, fontWeight: '600', marginLeft: 8 },
-  footerLoader: {
-    paddingVertical: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  footerLoaderText: {
-    color: ShopColors.textMuted,
-    fontSize: 12,
-    marginLeft: 8,
-  },
-  cartButtonContainer: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    zIndex: 9999,
-    elevation: 10,
-    width: 56,
-    height: 56,
-  },
+  footerLoader: { paddingVertical: 20, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' },
+  footerLoaderText: { color: ShopColors.textMuted, fontSize: 12, marginLeft: 8 },
+  cartButtonContainer: { position: 'absolute', bottom: 24, right: 24, zIndex: 9999, elevation: 10, width: 56, height: 56 },
   cartButton: {
     width: 56,
     height: 56,
@@ -988,13 +862,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 8,
   },
-  cartButtonGradient: {
-    flex: 1,
-    borderRadius: 28,
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  cartButtonGradient: { flex: 1, borderRadius: 28, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
   cartBadgeFloat: {
     position: 'absolute',
     top: -6,

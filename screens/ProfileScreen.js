@@ -213,22 +213,22 @@ const ProfileScreen = () => {
   };
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
-const getDashboardInfo = (role) => {
-  switch (role) {
-    case 'vendor':
-      return { title: 'VENDOR PORTAL', subtitle: 'Access Vendor Dashboard', icon: 'cube', route: 'VendorDashboard' };
-    case 'shopowner':
-      return { title: 'SHOP MANAGER', subtitle: 'Access Shop Dashboard', icon: 'storefront', route: 'Eshop' };
-    case 'SERVICE_PROVIDER':
-      return { title: 'SERVICE PROVIDER', subtitle: 'Manage Shop & Services', icon: 'construct', route: 'ServiceProviderDashboard' };
-    case 'writer':
-      return { title: 'WRITER PORTAL', subtitle: 'Manage your blog posts', icon: 'create', route: 'WriterNavigator' };
-    case 'admin':  // ← ADD THIS
-      return { title: 'WRITER PORTAL', subtitle: 'Manage blog posts as admin', icon: 'create', route: 'WriterNavigator' };
-    default:
-      return null;
-  }
-};
+  const getDashboardInfo = (role) => {
+    switch (role) {
+      case 'vendor':
+        return { title: 'VENDOR PORTAL', subtitle: 'Access Vendor Dashboard', icon: 'cube', route: 'VendorDashboard' };
+      case 'shopowner':
+        return { title: 'SHOP MANAGER', subtitle: 'Access Shop Dashboard', icon: 'storefront', route: 'Eshop' };
+      case 'SERVICE_PROVIDER':
+        return { title: 'SERVICE PROVIDER', subtitle: 'Manage Shop & Services', icon: 'construct', route: 'ServiceProviderDashboard' };
+      case 'writer':
+        return { title: 'WRITER PORTAL', subtitle: 'Manage your blog posts', icon: 'create', route: 'WriterNavigator' };
+      case 'admin':
+        return { title: 'WRITER PORTAL', subtitle: 'Manage blog posts as admin', icon: 'create', route: 'WriterNavigator' };
+      default:
+        return null;
+    }
+  };
 
   const getRoleColor = (role) => {
     switch (role) {
@@ -236,7 +236,18 @@ const getDashboardInfo = (role) => {
       case 'shopowner':        return '#4caf50';
       case 'SERVICE_PROVIDER': return '#2196f3';
       case 'writer':           return '#FF9800';
+      case 'admin':            return '#FF9800';
       default:                 return '#6c7ce7';
+    }
+  };
+
+  // ─── Navigation helper ───────────────────────────────────────────────────
+  const navigateToDashboard = (routeName) => {
+    // ✅ Ensure routeName is a string
+    if (typeof routeName === 'string') {
+      navigation.navigate(routeName);
+    } else {
+      console.warn('Invalid route name:', routeName);
     }
   };
 
@@ -381,7 +392,7 @@ const getDashboardInfo = (role) => {
           return (
             <TouchableOpacity
               style={styles.actionCard}
-              onPress={() => navigation.navigate(info.route)}
+              onPress={() => navigateToDashboard(info.route)} // ✅ Fixed: using helper
               activeOpacity={0.8}
             >
               <LinearGradient

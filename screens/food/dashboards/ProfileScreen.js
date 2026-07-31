@@ -45,15 +45,23 @@ const VendorProfileScreen = () => {
 
   const fetchVendorProfile = async () => {
     try {
-      // Use the new storefront endpoint
-      const res = await axios.get(`${baseURL}/api/food/vendors/storefront`);
-      const data = res.data.vendor;
-      setVendor(data);
+      const profileRes = await axios.get(`${baseURL}/api/food/vendors/profile`);
+      const vendorData = profileRes.data.vendor;
+
+      const storefrontRes = await axios.get(`${baseURL}/api/food/vendors/storefront`);
+      const storefrontData = storefrontRes.data.vendor;
+
+      const mergedData = {
+        ...vendorData,
+        storefrontUrl: storefrontData.storefrontUrl
+      };
+
+      setVendor(mergedData);
       setForm({
-        shopName: data.shopName || '',
-        phone: data.phone || '',
-        location: data.location || '',
-        description: data.description || ''
+        shopName: mergedData.shopName || '',
+        phone: mergedData.phone || '',
+        location: mergedData.location || '',
+        description: mergedData.description || ''
       });
     } catch (error) {
       console.error('Fetch profile error:', error);
@@ -96,7 +104,6 @@ const VendorProfileScreen = () => {
     setEditing(false);
   };
 
-  // ========== IMAGE UPLOAD ==========
   const pickImage = async (type) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -117,60 +124,52 @@ const VendorProfileScreen = () => {
     }
   };
 
-const uploadImage = async (uri, type) => {
-  setUploadingImage(true);
-  
-  try {
-    const formData = new FormData();
-    
-    const filename = uri.split('/').pop();
-    const match = /\.(\w+)$/.exec(filename);
-    const fileType = match ? `image/${match[1]}` : 'image/jpeg';
-    
-    // ✅ Use the correct field name that backend expects
-    // For logo: backend expects 'logo'
-    // For cover: backend expects 'coverImage'
-    const fieldName = type === 'logo' ? 'logo' : 'coverImage';
-    
-    formData.append(fieldName, {
-      uri: uri,
-      type: fileType,
-      name: filename || `${type}.jpg`,
-    });
+  const uploadImage = async (uri, type) => {
+    setUploadingImage(true);
 
-    const endpoint = type === 'logo' 
-      ? `${baseURL}/api/food/vendors/storefront/logo`
-      : `${baseURL}/api/food/vendors/storefront/cover`;
+    try {
+      const formData = new FormData();
 
-    console.log('Uploading to:', endpoint);
-    console.log('Field name:', fieldName);
-    console.log('File:', { uri, type, name: filename });
+      const filename = uri.split('/').pop();
+      const match = /\.(\w+)$/.exec(filename);
+      const fileType = match ? `image/${match[1]}` : 'image/jpeg';
 
-    const res = await axios.patch(endpoint, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+      const fieldName = type === 'logo' ? 'logo' : 'coverImage';
 
-    if (res.data.success) {
-      setVendor(prev => ({
-        ...prev,
-        [type]: res.data[type],
-        storefrontUrl: res.data.storefrontUrl
-      }));
-      Alert.alert('Success', `${type === 'logo' ? 'Logo' : 'Cover image'} updated successfully`);
+      formData.append(fieldName, {
+        uri: uri,
+        type: fileType,
+        name: filename || `${type}.jpg`,
+      });
+
+      const endpoint = type === 'logo'
+        ? `${baseURL}/api/food/vendors/storefront/logo`
+        : `${baseURL}/api/food/vendors/storefront/cover`;
+
+      const res = await axios.patch(endpoint, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (res.data.success) {
+        setVendor(prev => ({
+          ...prev,
+          [type]: res.data[type],
+          storefrontUrl: res.data.storefrontUrl
+        }));
+        Alert.alert('Success', `${type === 'logo' ? 'Logo' : 'Cover image'} updated successfully`);
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      console.error('Response:', error.response?.data);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to upload image');
+    } finally {
+      setUploadingImage(false);
+      setImageType(null);
     }
-  } catch (error) {
-    console.error('Upload error:', error);
-    console.error('Response:', error.response?.data);
-    Alert.alert('Error', error.response?.data?.message || 'Failed to upload image');
-  } finally {
-    setUploadingImage(false);
-    setImageType(null);
-  }
-};
+  };
 
-  // ========== SHARE & COPY ==========
   const shareStorefront = async () => {
     if (!vendor?.storefrontUrl) {
       Alert.alert('Error', 'Storefront URL not available');
@@ -189,7 +188,7 @@ const uploadImage = async (uri, type) => {
 
   const copyToClipboard = async () => {
     if (!vendor?.storefrontUrl) return;
-    
+
     try {
       await Clipboard.setStringAsync(vendor.storefrontUrl);
       Alert.alert('Success', 'Storefront URL copied to clipboard!');
@@ -211,14 +210,91 @@ const uploadImage = async (uri, type) => {
 
   return (
     <LinearGradient colors={theme.Gradients.dark} style={styles.container}>
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
-        <ScrollView 
+        <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
+          {/* ====== COVER + AVATAR (single hero block) ====== */}
+          <View style={styles.heroContainer}>
+            <View style={styles.coverContainer}>
+              {vendor?.coverImage ? (
+                <Image source={{ uri: vendor.coverImage }} style={styles.coverImage} />
+              ) : (
+                <LinearGradient
+                  colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.01)']}
+                  style={styles.coverPlaceholder}
+                >
+                  <Ionicons name="image" size={40} color={theme.Colors.textTertiary} />
+                  <Text style={styles.coverPlaceholderText}>No Cover Image</Text>
+                </LinearGradient>
+              )}
+
+              <TouchableOpacity
+                style={styles.coverUploadButton}
+                onPress={() => pickImage('cover')}
+                disabled={uploadingImage}
+              >
+                <LinearGradient
+                  colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0.3)']}
+                  style={styles.coverUploadGradient}
+                >
+                  {uploadingImage && imageType === 'cover' ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="camera" size={18} color="#fff" />
+                      <Text style={styles.coverUploadText}>Change Cover</Text>
+                    </>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.avatarWrapper}
+              onPress={() => pickImage('logo')}
+              disabled={uploadingImage}
+            >
+              {vendor?.logo ? (
+                <Image source={{ uri: vendor.logo }} style={styles.avatarImage} />
+              ) : (
+                <LinearGradient
+                  colors={[theme.Colors.primary, theme.Colors.primaryDark]}
+                  style={styles.avatarContainer}
+                >
+                  <Text style={styles.avatarText}>
+                    {form.shopName ? form.shopName.charAt(0).toUpperCase() : 'S'}
+                  </Text>
+                </LinearGradient>
+              )}
+
+              <View style={styles.avatarBadge}>
+                {uploadingImage && imageType === 'logo' ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Ionicons name="camera" size={12} color="#fff" />
+                )}
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* ====== IDENTITY (title + status, under avatar) ====== */}
+          <View style={styles.identityContainer}>
+            <Text style={styles.headerTitle}>{form.shopName || 'Vendor Profile'}</Text>
+            {!editing && (
+              <View style={styles.statusContainer}>
+                <View style={[styles.statusDot, { backgroundColor: vendor?.isActive ? theme.Colors.success : theme.Colors.danger }]} />
+                <Text style={styles.statusText}>
+                  {vendor?.isActive ? 'Active' : 'Inactive'}
+                </Text>
+              </View>
+            )}
+          </View>
+
           {/* ====== STOREFRONT URL SECTION ====== */}
           {vendor?.storefrontUrl && (
             <View style={styles.storefrontCard}>
@@ -229,12 +305,12 @@ const uploadImage = async (uri, type) => {
                   <Text style={styles.storefrontBadgeText}>LIVE</Text>
                 </View>
               </View>
-              
+
               <View style={styles.urlContainer}>
                 <Text style={styles.urlText} numberOfLines={1}>
                   {vendor.storefrontUrl}
                 </Text>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.copyButton}
                   onPress={copyToClipboard}
                 >
@@ -243,7 +319,7 @@ const uploadImage = async (uri, type) => {
               </View>
 
               <View style={styles.storefrontActions}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.shareButton}
                   onPress={shareStorefront}
                 >
@@ -256,7 +332,7 @@ const uploadImage = async (uri, type) => {
                   </LinearGradient>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.previewButton}
                   onPress={() => {
                     if (vendor?.storefrontUrl) {
@@ -275,83 +351,7 @@ const uploadImage = async (uri, type) => {
             </View>
           )}
 
-          {/* ====== COVER IMAGE ====== */}
-          <View style={styles.coverContainer}>
-            {vendor?.coverImage ? (
-              <Image source={{ uri: vendor.coverImage }} style={styles.coverImage} />
-            ) : (
-              <LinearGradient
-                colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.01)']}
-                style={styles.coverPlaceholder}
-              >
-                <Ionicons name="image" size={40} color={theme.Colors.textTertiary} />
-                <Text style={styles.coverPlaceholderText}>No Cover Image</Text>
-              </LinearGradient>
-            )}
-            
-            <TouchableOpacity 
-              style={styles.coverUploadButton}
-              onPress={() => pickImage('cover')}
-              disabled={uploadingImage}
-            >
-              <LinearGradient
-                colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0.3)']}
-                style={styles.coverUploadGradient}
-              >
-                {uploadingImage && imageType === 'cover' ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="camera" size={18} color="#fff" />
-                    <Text style={styles.coverUploadText}>Change Cover</Text>
-                  </>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-
-          {/* ====== HEADER WITH AVATAR/LOGO ====== */}
-          <View style={styles.headerContainer}>
-            <TouchableOpacity 
-              style={styles.avatarWrapper}
-              onPress={() => pickImage('logo')}
-              disabled={uploadingImage}
-            >
-              {vendor?.logo ? (
-                <Image source={{ uri: vendor.logo }} style={styles.avatarImage} />
-              ) : (
-                <LinearGradient
-                  colors={[theme.Colors.primary, theme.Colors.primaryDark]}
-                  style={styles.avatarContainer}
-                >
-                  <Text style={styles.avatarText}>
-                    {form.shopName ? form.shopName.charAt(0).toUpperCase() : 'S'}
-                  </Text>
-                </LinearGradient>
-              )}
-              
-              <View style={styles.avatarBadge}>
-                {uploadingImage && imageType === 'logo' ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Ionicons name="camera" size={12} color="#fff" />
-                )}
-              </View>
-            </TouchableOpacity>
-
-            <Text style={styles.headerTitle}>Vendor Profile</Text>
-            
-            {!editing && (
-              <View style={styles.statusContainer}>
-                <View style={[styles.statusDot, { backgroundColor: vendor?.isActive ? theme.Colors.success : theme.Colors.danger }]} />
-                <Text style={styles.statusText}>
-                  {vendor?.isActive ? 'Active' : 'Inactive'}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* ====== PROFILE CARD ====== */}
+          {/* ====== PROFILE FIELDS CARD ====== */}
           <LinearGradient
             colors={['rgba(255,255,255,0.03)', 'rgba(255,255,255,0.01)']}
             style={styles.profileCard}
@@ -443,28 +443,28 @@ const uploadImage = async (uri, type) => {
                 )}
               </View>
             </View>
-
-            {/* Stats Section */}
-            {!editing && vendor && (
-              <View style={styles.statsContainer}>
-                <View style={styles.statItem}>
-                  <Ionicons name="calendar" size={16} color={theme.Colors.primary} />
-                  <Text style={styles.statLabel}>Member since</Text>
-                  <Text style={styles.statValue}>
-                    {new Date(vendor.createdAt).toLocaleDateString()}
-                  </Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Ionicons name="time" size={16} color={theme.Colors.primary} />
-                  <Text style={styles.statLabel}>Last updated</Text>
-                  <Text style={styles.statValue}>
-                    {vendor.updatedAt ? new Date(vendor.updatedAt).toLocaleDateString() : 'N/A'}
-                  </Text>
-                </View>
-              </View>
-            )}
           </LinearGradient>
+
+          {/* ====== STATS CARD (separated from fields) ====== */}
+          {!editing && vendor && (
+            <View style={styles.statsCard}>
+              <View style={styles.statItem}>
+                <Ionicons name="calendar" size={16} color={theme.Colors.primary} />
+                <Text style={styles.statLabel}>Member since</Text>
+                <Text style={styles.statValue}>
+                  {new Date(vendor.createdAt).toLocaleDateString()}
+                </Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Ionicons name="time" size={16} color={theme.Colors.primary} />
+                <Text style={styles.statLabel}>Last updated</Text>
+                <Text style={styles.statValue}>
+                  {vendor.updatedAt ? new Date(vendor.updatedAt).toLocaleDateString() : 'N/A'}
+                </Text>
+              </View>
+            </View>
+          )}
 
           {/* ====== ACTION BUTTONS ====== */}
           <View style={styles.buttonContainer}>
@@ -546,12 +546,124 @@ const styles = StyleSheet.create({
     marginTop: theme.Spacing.md,
   },
   scrollContent: {
-    padding: theme.Spacing.lg,
+    paddingBottom: theme.Spacing.lg,
+  },
+  // ====== HERO (cover + overlapping avatar) ======
+  heroContainer: {
+    marginBottom: theme.Spacing.xxl ?? 48,
+  },
+  coverContainer: {
+    width: '100%',
+    height: 150,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  coverImage: {
+    width: '100%',
+    height: '100%',
+  },
+  coverPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.Colors.cardBorder,
+    borderStyle: 'dashed',
+  },
+  coverPlaceholderText: {
+    ...theme.Typography.caption,
+    color: theme.Colors.textTertiary,
+    marginTop: theme.Spacing.xs,
+  },
+  coverUploadButton: {
+    position: 'absolute',
+    bottom: theme.Spacing.md,
+    right: theme.Spacing.md,
+    borderRadius: theme.BorderRadius.sm,
+    overflow: 'hidden',
+  },
+  coverUploadGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.Spacing.xs,
+    paddingHorizontal: theme.Spacing.md,
+    paddingVertical: theme.Spacing.xs,
+  },
+  coverUploadText: {
+    ...theme.Typography.caption,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  avatarWrapper: {
+    position: 'absolute',
+    left: theme.Spacing.lg,
+    top: 150 - 40, // overlaps bottom edge of 150px cover, avatar is 80px
+  },
+  avatarContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: theme.Colors.black,
+    ...theme.Shadows.medium,
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    borderColor: theme.Colors.black,
+  },
+  avatarText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: theme.Colors.black,
+  },
+  avatarBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: theme.Colors.black,
+  },
+  // ====== IDENTITY ======
+  identityContainer: {
+    paddingHorizontal: theme.Spacing.lg,
+    marginTop: theme.Spacing.sm,
+    marginBottom: theme.Spacing.lg,
+  },
+  headerTitle: {
+    ...theme.Typography.h2,
+    marginBottom: theme.Spacing.xs,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.Spacing.xs,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: {
+    ...theme.Typography.caption,
+    color: theme.Colors.textSecondary,
   },
   // ====== STOREFRONT URL ======
   storefrontCard: {
     ...theme.Components.card,
     padding: theme.Spacing.md,
+    marginHorizontal: theme.Spacing.lg,
     marginBottom: theme.Spacing.lg,
     backgroundColor: 'rgba(1,96,76,0.08)',
     borderColor: 'rgba(1,96,76,0.2)',
@@ -643,115 +755,11 @@ const styles = StyleSheet.create({
     marginTop: theme.Spacing.xs,
     textAlign: 'center',
   },
-  // ====== COVER IMAGE ======
-  coverContainer: {
-    width: '100%',
-    height: 150,
-    borderRadius: theme.BorderRadius.md,
-    overflow: 'hidden',
-    marginBottom: theme.Spacing.lg,
-    position: 'relative',
-  },
-  coverImage: {
-    width: '100%',
-    height: '100%',
-  },
-  coverPlaceholder: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: theme.Colors.cardBorder,
-    borderStyle: 'dashed',
-  },
-  coverPlaceholderText: {
-    ...theme.Typography.caption,
-    color: theme.Colors.textTertiary,
-    marginTop: theme.Spacing.xs,
-  },
-  coverUploadButton: {
-    position: 'absolute',
-    bottom: theme.Spacing.md,
-    right: theme.Spacing.md,
-    borderRadius: theme.BorderRadius.sm,
-    overflow: 'hidden',
-  },
-  coverUploadGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.Spacing.xs,
-    paddingHorizontal: theme.Spacing.md,
-    paddingVertical: theme.Spacing.xs,
-  },
-  coverUploadText: {
-    ...theme.Typography.caption,
-    color: '#fff',
-    fontWeight: '600',
-  },
-  // ====== AVATAR/LOGO ======
-  headerContainer: {
-    alignItems: 'center',
-    marginBottom: theme.Spacing.xl,
-  },
-  avatarWrapper: {
-    position: 'relative',
-    marginBottom: theme.Spacing.md,
-  },
-  avatarContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: theme.Spacing.md,
-    ...theme.Shadows.medium,
-  },
-  avatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-  },
-  avatarText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: theme.Colors.black,
-  },
-  avatarBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: theme.Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: theme.Colors.black,
-  },
-  headerTitle: {
-    ...theme.Typography.h2,
-    marginBottom: theme.Spacing.sm,
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.Spacing.xs,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  statusText: {
-    ...theme.Typography.caption,
-    color: theme.Colors.textSecondary,
-  },
-  // ====== PROFILE CARD ======
+  // ====== PROFILE FIELDS ======
   profileCard: {
     ...theme.Components.card,
     padding: theme.Spacing.lg,
+    marginHorizontal: theme.Spacing.lg,
     marginBottom: theme.Spacing.lg,
   },
   inputGroup: {
@@ -801,12 +809,13 @@ const styles = StyleSheet.create({
     top: theme.Spacing.md,
     right: theme.Spacing.md,
   },
-  statsContainer: {
+  // ====== STATS (own card) ======
+  statsCard: {
+    ...theme.Components.card,
     flexDirection: 'row',
-    marginTop: theme.Spacing.md,
-    paddingTop: theme.Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: theme.Colors.cardBorder,
+    marginHorizontal: theme.Spacing.lg,
+    marginBottom: theme.Spacing.lg,
+    padding: theme.Spacing.md,
   },
   statItem: {
     flex: 1,
@@ -826,9 +835,11 @@ const styles = StyleSheet.create({
     color: theme.Colors.text,
     fontWeight: '600',
   },
+  // ====== ACTIONS ======
   buttonContainer: {
     flexDirection: 'row',
     gap: theme.Spacing.md,
+    marginHorizontal: theme.Spacing.lg,
     marginBottom: theme.Spacing.lg,
   },
   editButton: {

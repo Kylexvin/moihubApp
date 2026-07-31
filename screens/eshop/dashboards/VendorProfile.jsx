@@ -14,10 +14,14 @@ import {
   StatusBar,
   Animated,
   Modal,
-  FlatList
+  Image,
+  Share,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard';
 import axios from 'axios';
 import Theme from '../../theme/Theme';
 
@@ -63,7 +67,7 @@ const useFormValidation = (profile) => {
 
   const validateField = useCallback((field, value) => {
     let error = '';
-    
+
     switch (field) {
       case 'shopName':
         if (!value.trim()) {
@@ -125,12 +129,12 @@ const useFormValidation = (profile) => {
 };
 
 // Memoized Input Component
-const InputField = React.memo(({ 
-  label, 
-  value, 
-  onChangeText, 
-  placeholder, 
-  multiline = false, 
+const InputField = React.memo(({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  multiline = false,
   keyboardType = 'default',
   error,
   onBlur,
@@ -170,14 +174,14 @@ const InputField = React.memo(({
         {label}
         {label.includes('*') && <Text style={styles.required}> *</Text>}
       </Text>
-      
+
       <Animated.View style={[styles.inputWrapper, { borderColor }]}>
         {icon && (
           <View style={styles.inputIcon}>
             <Ionicons name={icon} size={20} color={isFocused ? COLORS.primary : COLORS.gray} />
           </View>
         )}
-        
+
         <TextInput
           style={[
             styles.input,
@@ -197,14 +201,14 @@ const InputField = React.memo(({
           maxLength={maxLength}
           textAlignVertical={multiline ? 'top' : 'center'}
         />
-        
+
         {maxLength && (
           <Text style={styles.characterCount}>
             {value.length}/{maxLength}
           </Text>
         )}
       </Animated.View>
-      
+
       {error && (
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle" size={14} color={COLORS.danger} />
@@ -216,14 +220,14 @@ const InputField = React.memo(({
 });
 
 // Memoized Button Component
-const Button = React.memo(({ 
-  title, 
-  onPress, 
-  disabled, 
-  loading, 
+const Button = React.memo(({
+  title,
+  onPress,
+  disabled,
+  loading,
   variant = 'primary',
   icon,
-  style 
+  style
 }) => {
   const [pressed, setPressed] = useState(false);
 
@@ -255,10 +259,10 @@ const Button = React.memo(({
       ) : (
         <>
           {icon && (
-            <Ionicons 
-              name={icon} 
-              size={20} 
-              color={variant === 'primary' ? Theme.Colors.black : COLORS.gray} 
+            <Ionicons
+              name={icon}
+              size={20}
+              color={variant === 'primary' ? Theme.Colors.black : COLORS.gray}
               style={styles.buttonIcon}
             />
           )}
@@ -292,27 +296,27 @@ const ShopStatusToggle = React.memo(({ isActive, onToggle, loading }) => {
       style={styles.statusToggleContainer}
     >
       <View style={styles.statusToggleHeader}>
-        <Ionicons 
-          name={isEnabled ? "checkmark-circle" : "close-circle"} 
-          size={24} 
-          color={isEnabled ? COLORS.success : COLORS.danger} 
+        <Ionicons
+          name={isEnabled ? "checkmark-circle" : "close-circle"}
+          size={24}
+          color={isEnabled ? COLORS.success : COLORS.danger}
         />
         <Text style={styles.statusToggleTitle}>Shop Status</Text>
       </View>
-      
+
       <View style={styles.statusToggleContent}>
         <View style={styles.statusTextContainer}>
           <Text style={styles.statusLabel}>
             {isEnabled ? 'Shop is OPEN' : 'Shop is CLOSED'}
           </Text>
           <Text style={styles.statusDescription}>
-            {isEnabled 
-              ? 'Accepting new orders from customers' 
+            {isEnabled
+              ? 'Accepting new orders from customers'
               : 'Not accepting new orders - customers cannot place orders'
             }
           </Text>
         </View>
-        
+
         <TouchableOpacity
           style={[
             styles.toggleButton,
@@ -323,9 +327,9 @@ const ShopStatusToggle = React.memo(({ isActive, onToggle, loading }) => {
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator 
-              size="small" 
-              color={isEnabled ? COLORS.success : COLORS.danger} 
+            <ActivityIndicator
+              size="small"
+              color={isEnabled ? COLORS.success : COLORS.danger}
             />
           ) : (
             <Text style={[
@@ -350,12 +354,17 @@ const VendorProfile = () => {
     phoneNumber: '',
     category: '',
     isActive: true,
+    logo: null,
+    coverImage: null,
+    storefrontUrl: '',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [togglingStatus, setTogglingStatus] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [originalProfile, setOriginalProfile] = useState({});
-  
+
   // Category States
   const [categories, setCategories] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
@@ -363,7 +372,7 @@ const VendorProfile = () => {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [addingCategory, setAddingCategory] = useState(false);
   const [deletingCategory, setDeletingCategory] = useState(null);
-  
+
   const { errors, validateField, validateForm, setErrors } = useFormValidation(profile);
 
   // Memoized handlers
@@ -381,17 +390,20 @@ const VendorProfile = () => {
   const fetchProfile = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/eshop/vendor/dashboard');
-      
-      if (response.data.success && response.data.data.shop) {
-        const shop = response.data.data.shop;
+      const response = await axios.get('/api/eshop/vendor/storefront');
+
+      if (response.data.success) {
+        const shop = response.data.shop;
         const profileData = {
           shopName: shop.shopName || '',
           description: shop.description || '',
           address: shop.address || '',
           phoneNumber: shop.phoneNumber || '',
-          category: shop.category?.name || '',
+          category: shop.category || '',
           isActive: shop.isActive || false,
+          logo: shop.logo || null,
+          coverImage: shop.coverImage || null,
+          storefrontUrl: shop.storefrontUrl || '',
         };
         setProfile(profileData);
         setOriginalProfile(profileData);
@@ -422,11 +434,103 @@ const VendorProfile = () => {
     }
   }, []);
 
+  // Image Upload Functions
+  const handleImageUpload = useCallback(async (uri, type) => {
+    const formData = new FormData();
+    const filename = uri.split('/').pop();
+    const match = /\.(\w+)$/.exec(filename);
+    const fileType = match ? `image/${match[1]}` : 'image/jpeg';
+
+    formData.append(type === 'logo' ? 'logo' : 'coverImage', {
+      uri: uri,
+      type: fileType,
+      name: filename,
+    });
+
+    try {
+      if (type === 'logo') setUploadingLogo(true);
+      else setUploadingCover(true);
+
+      const endpoint = type === 'logo'
+        ? '/api/eshop/vendor/storefront/logo'
+        : '/api/eshop/vendor/storefront/cover';
+
+      const response = await axios.patch(endpoint, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (response.data.success) {
+        setProfile(prev => ({
+          ...prev,
+          [type === 'logo' ? 'logo' : 'coverImage']: response.data[type === 'logo' ? 'logo' : 'coverImage'],
+          storefrontUrl: response.data.storefrontUrl || prev.storefrontUrl,
+        }));
+        Alert.alert('Success', `${type === 'logo' ? 'Logo' : 'Cover image'} updated successfully!`);
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to upload image');
+    } finally {
+      if (type === 'logo') setUploadingLogo(false);
+      else setUploadingCover(false);
+    }
+  }, []);
+
+  // Shared picker used by both hero image slots
+  const pickAndUpload = useCallback(async (type) => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Please allow access to your photo library');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: type === 'logo' ? [1, 1] : [16, 9],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      handleImageUpload(result.assets[0].uri, type);
+    }
+  }, [handleImageUpload]);
+
+  // Share & Copy Functions
+  const shareStorefront = useCallback(async () => {
+    if (!profile.storefrontUrl) {
+      Alert.alert('Error', 'Storefront URL not available');
+      return;
+    }
+
+    try {
+      await Share.share({
+        message: `Check out my shop: ${profile.shopName}\n${profile.storefrontUrl}`,
+        title: 'Share my shop',
+      });
+    } catch (error) {
+      console.error('Share error:', error);
+    }
+  }, [profile.storefrontUrl, profile.shopName]);
+
+  const copyToClipboard = useCallback(async () => {
+    if (!profile.storefrontUrl) return;
+
+    try {
+      await Clipboard.setStringAsync(profile.storefrontUrl);
+      Alert.alert('Success', 'Storefront URL copied to clipboard!');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to copy URL');
+    }
+  }, [profile.storefrontUrl]);
+
   const handleToggleShopStatus = useCallback(async (newStatus) => {
     try {
       setTogglingStatus(true);
       const response = await axios.patch('/api/eshop/vendor/toggle-shop-status');
-      
+
       if (response.data.success) {
         setProfile(prev => ({ ...prev, isActive: response.data.data.isActive }));
         Alert.alert('Success', response.data.message);
@@ -515,11 +619,12 @@ const VendorProfile = () => {
 
     setSaving(true);
     try {
-      const response = await axios.put('/api/eshop/vendor/profile', {
+      const response = await axios.put('/api/eshop/vendor/storefront', {
         shopName: profile.shopName.trim(),
         description: profile.description.trim(),
         address: profile.address.trim(),
         phoneNumber: profile.phoneNumber.trim(),
+        isOpen: profile.isActive,
       });
 
       if (response.data.success) {
@@ -547,8 +652,8 @@ const VendorProfile = () => {
       'Are you sure you want to discard all changes?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Reset', 
+        {
+          text: 'Reset',
           style: 'destructive',
           onPress: () => {
             setProfile(originalProfile);
@@ -564,8 +669,8 @@ const VendorProfile = () => {
   }, [profile, originalProfile]);
 
   const isFormValid = useMemo(() => {
-    return Object.keys(errors).length === 0 && 
-           profile.shopName.trim() && 
+    return Object.keys(errors).length === 0 &&
+           profile.shopName.trim() &&
            profile.phoneNumber.trim();
   }, [errors, profile.shopName, profile.phoneNumber]);
 
@@ -581,7 +686,7 @@ const VendorProfile = () => {
   return (
     <LinearGradient colors={Theme.Gradients.dark} style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Theme.Colors.background} />
-      
+
       <KeyboardAvoidingView
         style={styles.keyboardContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -592,34 +697,141 @@ const VendorProfile = () => {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
-          <LinearGradient
-            colors={['rgba(0, 200, 150, 0.2)', 'rgba(0, 100, 80, 0.1)']}
-            style={styles.header}
-          >
-            <View style={styles.headerContent}>
-              <View style={styles.headerIcon}>
-                <Ionicons name="storefront" size={32} color={COLORS.primary} />
+          {/* ====== HERO (cover + overlapping logo) ====== */}
+          <View style={styles.heroContainer}>
+            <View style={styles.coverContainer}>
+              {profile.coverImage ? (
+                <Image source={{ uri: profile.coverImage }} style={styles.coverImage} />
+              ) : (
+                <View style={styles.coverPlaceholder}>
+                  <Ionicons name="image-outline" size={40} color={COLORS.gray} />
+                  <Text style={styles.coverPlaceholderText}>No cover image</Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={styles.coverUploadButton}
+                onPress={() => pickAndUpload('cover')}
+                disabled={uploadingCover}
+              >
+                <LinearGradient
+                  colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0.3)']}
+                  style={styles.coverUploadGradient}
+                >
+                  {uploadingCover ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="camera" size={18} color="#fff" />
+                      <Text style={styles.coverUploadText}>Change Cover</Text>
+                    </>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.logoWrapper}
+              onPress={() => pickAndUpload('logo')}
+              disabled={uploadingLogo}
+            >
+              {profile.logo ? (
+                <Image source={{ uri: profile.logo }} style={styles.logoImage} />
+              ) : (
+                <View style={styles.logoPlaceholder}>
+                  <Ionicons name="storefront-outline" size={28} color={COLORS.gray} />
+                </View>
+              )}
+
+              <View style={styles.logoBadge}>
+                {uploadingLogo ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Ionicons name="camera" size={12} color="#fff" />
+                )}
               </View>
-              <Text style={styles.headerTitle}>Shop Profile</Text>
-              <Text style={styles.headerSubtitle}>
-                Manage your shop information and settings
+            </TouchableOpacity>
+          </View>
+
+          {/* ====== IDENTITY (shop name + status) ====== */}
+          <View style={styles.identityContainer}>
+            <Text style={styles.identityTitle}>{profile.shopName || 'Shop Profile'}</Text>
+            <View style={styles.identityStatusRow}>
+              <View style={[styles.statusDot, { backgroundColor: profile.isActive ? COLORS.success : COLORS.danger }]} />
+              <Text style={styles.identityStatusText}>
+                {profile.isActive ? 'Open for orders' : 'Closed'}
               </Text>
             </View>
-          </LinearGradient>
+          </View>
+
+          {/* Storefront URL Card */}
+          {profile.storefrontUrl && (
+            <View style={styles.cardContainer}>
+              <LinearGradient
+                colors={['rgba(0, 100, 80, 0.2)', 'rgba(0, 60, 50, 0.3)']}
+                style={[styles.card, styles.storefrontCard]}
+              >
+                <View style={styles.storefrontHeader}>
+                  <Ionicons name="link" size={20} color={COLORS.primary} />
+                  <Text style={styles.storefrontTitle}>Your Storefront URL</Text>
+                  <View style={styles.storefrontBadge}>
+                    <Text style={styles.storefrontBadgeText}>LIVE</Text>
+                  </View>
+                </View>
+
+                <View style={styles.urlContainer}>
+                  <Text style={styles.urlText} numberOfLines={1}>
+                    {profile.storefrontUrl}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.copyButton}
+                    onPress={copyToClipboard}
+                  >
+                    <Ionicons name="copy-outline" size={20} color={COLORS.primary} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.storefrontActions}>
+                  <TouchableOpacity
+                    style={styles.shareButton}
+                    onPress={shareStorefront}
+                  >
+                    <LinearGradient
+                      colors={[Theme.Colors.primary, Theme.Colors.primaryDark]}
+                      style={styles.shareButtonGradient}
+                    >
+                      <Ionicons name="share-social" size={18} color={Theme.Colors.black} />
+                      <Text style={styles.shareButtonText}>Share Shop</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.previewButton}
+                    onPress={() => {
+                      if (profile.storefrontUrl) {
+                        Linking.openURL(profile.storefrontUrl);
+                      }
+                    }}
+                  >
+                    <Ionicons name="eye-outline" size={20} color={COLORS.primary} />
+                    <Text style={styles.previewButtonText}>Preview</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.storefrontNote}>
+                  Share this link with customers to view your products and place orders
+                </Text>
+              </LinearGradient>
+            </View>
+          )}
 
           {/* Shop Status Toggle Card */}
           <View style={styles.cardContainer}>
-            <LinearGradient
-              colors={['rgba(0, 100, 80, 0.2)', 'rgba(0, 60, 50, 0.3)']}
-              style={styles.card}
-            >
-              <ShopStatusToggle 
-                isActive={profile.isActive}
-                onToggle={handleToggleShopStatus}
-                loading={togglingStatus}
-              />
-            </LinearGradient>
+            <ShopStatusToggle
+              isActive={profile.isActive}
+              onToggle={handleToggleShopStatus}
+              loading={togglingStatus}
+            />
           </View>
 
           {/* Form Card */}
@@ -629,7 +841,7 @@ const VendorProfile = () => {
               style={styles.card}
             >
               <Text style={styles.cardTitle}>Shop Information</Text>
-              
+
               <InputField
                 label="Shop Name *"
                 value={profile.shopName}
@@ -700,7 +912,7 @@ const VendorProfile = () => {
             >
               <View style={styles.categoryManagementHeader}>
                 <Text style={styles.cardTitle}>Category Management</Text>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.addCategoryButton}
                   onPress={() => setShowCategoryModal(true)}
                 >
@@ -781,28 +993,28 @@ const VendorProfile = () => {
               style={styles.infoCard}
             >
               <Text style={styles.infoTitle}>Important Information</Text>
-              
+
               <View style={styles.infoItem}>
                 <Ionicons name="information-circle" size={20} color={COLORS.primary} />
                 <Text style={styles.infoText}>
                   Fields marked with * are required
                 </Text>
               </View>
-              
+
               <View style={styles.infoItem}>
                 <Ionicons name="lock-closed" size={20} color={COLORS.warning} />
                 <Text style={styles.infoText}>
                   Category changes require admin approval
                 </Text>
               </View>
-              
+
               <View style={styles.infoItem}>
                 <Ionicons name="pause-circle" size={20} color={COLORS.danger} />
                 <Text style={styles.infoText}>
                   When shop is closed, customers cannot place orders
                 </Text>
               </View>
-              
+
               <View style={styles.infoItem}>
                 <Ionicons name="shield-checkmark" size={20} color={COLORS.success} />
                 <Text style={styles.infoText}>
@@ -900,42 +1112,209 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  
-  // Header Styles
-  header: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingBottom: SPACING.xl,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 100, 80, 0.2)',
+
+  // ====== HERO (cover + overlapping logo) ======
+  heroContainer: {
+    marginBottom: 48,
   },
-  headerContent: {
-    paddingHorizontal: SPACING.lg,
-    alignItems: 'center',
+  coverContainer: {
+    width: '100%',
+    height: 160,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: 'rgba(0, 60, 50, 0.2)',
   },
-  headerIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(0, 200, 150, 0.15)',
+  coverImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  coverPlaceholder: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 100, 80, 0.3)',
+    borderStyle: 'dashed',
   },
-  headerTitle: {
+  coverPlaceholderText: {
+    fontSize: TYPOGRAPHY.caption,
+    color: COLORS.gray,
+    marginTop: SPACING.xs,
+  },
+  coverUploadButton: {
+    position: 'absolute',
+    bottom: SPACING.md,
+    right: SPACING.md,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  coverUploadGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+  },
+  coverUploadText: {
+    fontSize: TYPOGRAPHY.caption,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  logoWrapper: {
+    position: 'absolute',
+    left: SPACING.lg,
+    top: 160 - 40, // overlaps bottom edge of 160px cover, logo is 80px
+  },
+  logoImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 16,
+    borderWidth: 3,
+    borderColor: Theme.Colors.background,
+  },
+  logoPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 60, 50, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: Theme.Colors.background,
+  },
+  logoBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Theme.Colors.background,
+  },
+
+  // ====== IDENTITY ======
+  identityContainer: {
+    paddingHorizontal: SPACING.lg,
+    marginBottom: SPACING.lg,
+  },
+  identityTitle: {
     fontSize: TYPOGRAPHY.h1,
     fontWeight: 'bold',
     color: Theme.Colors.text,
-    textAlign: 'center',
   },
-  headerSubtitle: {
-    fontSize: TYPOGRAPHY.body,
+  identityStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginTop: SPACING.xs,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  identityStatusText: {
+    fontSize: TYPOGRAPHY.caption,
     color: Theme.Colors.textSecondary,
-    textAlign: 'center',
-    marginTop: SPACING.sm,
   },
-  
+
+  // Storefront URL Styles
+  storefrontCard: {
+    borderColor: 'rgba(0, 200, 150, 0.3)',
+    borderWidth: 1,
+  },
+  storefrontHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  storefrontTitle: {
+    fontSize: TYPOGRAPHY.body,
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  storefrontBadge: {
+    backgroundColor: COLORS.success,
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 'auto',
+  },
+  storefrontBadgeText: {
+    fontSize: 8,
+    color: Theme.Colors.black,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  urlContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderRadius: 8,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  urlText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.caption,
+    color: Theme.Colors.text,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  copyButton: {
+    padding: SPACING.xs,
+  },
+  storefrontActions: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  shareButton: {
+    flex: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  shareButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.sm,
+    gap: SPACING.xs,
+  },
+  shareButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Theme.Colors.black,
+  },
+  previewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    gap: SPACING.xs,
+  },
+  previewButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  storefrontNote: {
+    fontSize: TYPOGRAPHY.caption,
+    color: Theme.Colors.textSecondary,
+    marginTop: SPACING.xs,
+    textAlign: 'center',
+  },
+
   // Toggle Styles
   statusToggleContainer: {
     padding: SPACING.md,
@@ -1003,11 +1382,11 @@ const styles = StyleSheet.create({
   toggleButtonTextInactive: {
     color: COLORS.danger,
   },
-  
+
   // Card Styles
   cardContainer: {
-    padding: SPACING.lg,
-    paddingTop: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
+    marginBottom: SPACING.lg,
   },
   card: {
     borderRadius: 16,
@@ -1021,7 +1400,7 @@ const styles = StyleSheet.create({
     color: Theme.Colors.text,
     marginBottom: SPACING.lg,
   },
-  
+
   // Input Styles
   inputContainer: {
     marginBottom: SPACING.lg,
@@ -1086,7 +1465,7 @@ const styles = StyleSheet.create({
     color: COLORS.danger,
     marginLeft: SPACING.xs,
   },
-  
+
   // Category Styles
   categoryContainer: {
     backgroundColor: 'rgba(0, 60, 50, 0.2)',
@@ -1113,7 +1492,7 @@ const styles = StyleSheet.create({
   categoryHelp: {
     padding: SPACING.xs,
   },
-  
+
   // Category Management Styles
   categoryManagementHeader: {
     flexDirection: 'row',
@@ -1179,7 +1558,7 @@ const styles = StyleSheet.create({
   deleteCategoryButton: {
     padding: SPACING.sm,
   },
-  
+
   // Button Styles
   actionContainer: {
     paddingHorizontal: SPACING.lg,
@@ -1242,7 +1621,7 @@ const styles = StyleSheet.create({
   saveButton: {
     flex: 0.6,
   },
-  
+
   // Info Section Styles
   infoSection: {
     paddingHorizontal: SPACING.lg,
@@ -1272,7 +1651,7 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 20,
   },
-  
+
   // Modal Styles
   modalOverlay: {
     flex: 1,

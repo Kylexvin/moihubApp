@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,9 @@ import {
   RefreshControl,
   ActivityIndicator,
   Dimensions,
-  SafeAreaView
+  SafeAreaView,
+  TextInput,
+  Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,12 +23,43 @@ const { width, height } = Dimensions.get('window');
 
 const ProductsScreen = ({ navigation }) => {
   const [products, setProducts] = useState([]);
+  const [filteredProducts, setFilteredProducts] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  
+  // Animation for search bar
+  const searchAnim = useState(new Animated.Value(0))[0];
 
   useEffect(() => {
     fetchProducts();
   }, []);
+
+  // Filter products when search query changes
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredProducts(products);
+    } else {
+      const query = searchQuery.toLowerCase().trim();
+      const filtered = products.filter(product => 
+        product.name.toLowerCase().includes(query) ||
+        product.description?.toLowerCase().includes(query) ||
+        product.category?.toLowerCase().includes(query)
+      );
+      setFilteredProducts(filtered);
+    }
+  }, [searchQuery, products]);
+
+  // Animate search bar on focus
+  useEffect(() => {
+    Animated.spring(searchAnim, {
+      toValue: isSearchFocused ? 1 : 0,
+      useNativeDriver: false,
+      tension: 80,
+      friction: 10,
+    }).start();
+  }, [isSearchFocused]);
 
   const fetchProducts = async () => {
     try {
@@ -34,6 +67,7 @@ const ProductsScreen = ({ navigation }) => {
 
       if (response.data.success) {
         setProducts(response.data.data);
+        setFilteredProducts(response.data.data);
       }
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -87,6 +121,11 @@ const ProductsScreen = ({ navigation }) => {
       console.error('Error toggling availability:', error);
       Alert.alert('Error', 'Failed to update product availability');
     }
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setIsSearchFocused(false);
   };
 
   const renderProduct = ({ item }) => (
@@ -144,15 +183,28 @@ const ProductsScreen = ({ navigation }) => {
     </LinearGradient>
   );
 
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Ionicons name="storefront-outline" size={80} color={Theme.Colors.textTertiary} />
-      <Text style={styles.emptyStateText}>No products yet</Text>
-      <Text style={styles.emptyStateSubtext}>
-        Start by adding your first product
-      </Text>
-    </View>
-  );
+  const renderEmptyState = () => {
+    if (searchQuery.trim() !== '') {
+      return (
+        <View style={styles.emptyState}>
+          <Ionicons name="search-outline" size={60} color={Theme.Colors.textTertiary} />
+          <Text style={styles.emptyStateText}>No results found</Text>
+          <Text style={styles.emptyStateSubtext}>
+            Try adjusting your search terms
+          </Text>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.emptyState}>
+        <Ionicons name="storefront-outline" size={80} color={Theme.Colors.textTertiary} />
+        <Text style={styles.emptyStateText}>No products yet</Text>
+        <Text style={styles.emptyStateSubtext}>
+          Start by adding your first product
+        </Text>
+      </View>
+    );
+  };
 
   if (loading) {
     return (
@@ -168,12 +220,61 @@ const ProductsScreen = ({ navigation }) => {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Products</Text>
         <Text style={styles.productCount}>
-          {products.length} {products.length === 1 ? 'product' : 'products'}
+          {filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'}
         </Text>
+      </View>
+
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <Animated.View style={[
+          styles.searchWrapper,
+          {
+            borderColor: searchAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: ['rgba(0, 100, 80, 0.3)', Theme.Colors.primary]
+            }),
+            borderWidth: searchAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [1, 2]
+            }),
+          }
+        ]}>
+          <Ionicons 
+            name="search-outline" 
+            size={20} 
+            color={isSearchFocused ? Theme.Colors.primary : Theme.Colors.textTertiary} 
+            style={styles.searchIcon}
+          />
+          
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search products..."
+            placeholderTextColor={Theme.Colors.textTertiary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onFocus={() => setIsSearchFocused(true)}
+            onBlur={() => setIsSearchFocused(false)}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+          />
+          
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={handleClearSearch} style={styles.clearButton}>
+              <Ionicons name="close-circle" size={20} color={Theme.Colors.textTertiary} />
+            </TouchableOpacity>
+          )}
+        </Animated.View>
+        
+        {/* Search Results Count */}
+        {searchQuery.trim() !== '' && filteredProducts.length > 0 && (
+          <Text style={styles.searchResultCount}>
+            Found {filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'}
+          </Text>
+        )}
       </View>
       
       <FlatList
-        data={products}
+        data={filteredProducts}
         renderItem={renderProduct}
         keyExtractor={(item) => item._id}
         contentContainerStyle={styles.listContainer}
@@ -189,7 +290,7 @@ const ProductsScreen = ({ navigation }) => {
         ListEmptyComponent={renderEmptyState}
       />
       
-      {/* FAB Button - Positioned above bottom tab */}
+      {/* FAB Button */}
       <SafeAreaView style={styles.fabContainer}>
         <TouchableOpacity
           style={styles.fab}
@@ -214,6 +315,7 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 20,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0, 100, 80, 0.2)',
     backgroundColor: 'rgba(0, 60, 50, 0.3)',
@@ -228,9 +330,44 @@ const styles = StyleSheet.create({
     color: Theme.Colors.textSecondary,
     marginTop: 4,
   },
+  // Search Styles
+  searchContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+    backgroundColor: 'rgba(0, 60, 50, 0.15)',
+  },
+  searchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 44,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 100, 80, 0.2)',
+  },
+  searchIcon: {
+    marginRight: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: Theme.Colors.text,
+    paddingVertical: 8,
+  },
+  clearButton: {
+    padding: 4,
+  },
+  searchResultCount: {
+    fontSize: 12,
+    color: Theme.Colors.textSecondary,
+    marginTop: 6,
+    paddingLeft: 4,
+  },
   listContainer: {
     padding: 16,
-    paddingBottom: 100, // Add extra padding at bottom to prevent FAB overlap
+    paddingBottom: 100,
     flexGrow: 1,
   },
   productCard: {
@@ -299,7 +436,7 @@ const styles = StyleSheet.create({
     right: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 80, // Adjust based on your tab bar height (60 + some padding)
+    paddingBottom: 80,
     pointerEvents: 'box-none',
   },
   fab: {

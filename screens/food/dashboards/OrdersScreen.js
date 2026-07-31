@@ -9,7 +9,8 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
-  Modal,
+  Clipboard,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,14 +23,12 @@ const OrdersScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [updatingOrderId, setUpdatingOrderId] = useState(null);
-  const [selectedOrder, setSelectedOrder] = useState(null);
-  const [showStatusModal, setShowStatusModal] = useState(false);
 
   const baseURL = Platform.OS === 'ios'
     ? 'http://localhost:5000'
     : 'https://moihub.onrender.com';
 
-  // Order status configurations with theme colors
+  // Order status configurations
   const statusConfig = {
     pending: {
       color: theme.Colors.warning,
@@ -64,13 +63,11 @@ const OrdersScreen = () => {
       
       if (response.data.success) {
         setOrders(response.data.orders);
-        console.log('Orders fetched:', response.data.orders);
       } else {
         setError('Failed to fetch orders');
       }
     } catch (err) {
       console.error('Fetch orders error:', err);
-      
       if (err.response?.status === 401) {
         setError('Authentication failed. Please login again.');
       } else if (err.response?.data?.message) {
@@ -100,20 +97,109 @@ const OrdersScreen = () => {
               : order
           )
         );
-        
         Alert.alert('Success', 'Order status updated successfully');
       } else {
         Alert.alert('Error', response.data.message || 'Failed to update order status');
       }
     } catch (err) {
       console.error('Update order status error:', err);
-      Alert.alert(
-        'Error',
-        err.response?.data?.message || 'Failed to update order status'
-      );
+      Alert.alert('Error', err.response?.data?.message || 'Failed to update order status');
     } finally {
       setUpdatingOrderId(null);
-      setShowStatusModal(false);
+    }
+  };
+
+  // ========== EXTRACT PHONE FROM DELIVERY INSTRUCTIONS ==========
+  const extractPhoneFromInstructions = (instructions) => {
+    if (!instructions) return null;
+    
+    const phoneMatch = instructions.match(/PHONE:\s*([\d\s\-+()]+)/i);
+    if (phoneMatch) {
+      return phoneMatch[1].trim().replace(/\s/g, '');
+    }
+    
+    const phoneMatch2 = instructions.match(/Phone:\s*([\d\s\-+()]+)/i);
+    if (phoneMatch2) {
+      return phoneMatch2[1].trim().replace(/\s/g, '');
+    }
+    
+    const phoneMatch3 = instructions.match(/(07\d{8}|01\d{8}|02\d{8}|\+254\d{9})/);
+    if (phoneMatch3) {
+      return phoneMatch3[1];
+    }
+    
+    return null;
+  };
+
+  // ========== EXTRACT DELIVERY ADDRESS ==========
+  const extractDeliveryAddress = (instructions) => {
+    if (!instructions) return null;
+    const address = instructions.replace(/PHONE:\s*[\d\s\-+()]+\s*\|\s*/i, '').trim();
+    return address || null;
+  };
+
+  // ========== COPY PHONE ==========
+  const copyPhoneNumber = async (phoneNumber) => {
+    if (!phoneNumber) {
+      Alert.alert('Error', 'No phone number available');
+      return;
+    }
+
+    try {
+      await Clipboard.setString(phoneNumber);
+      Alert.alert('Success', `Phone number ${phoneNumber} copied to clipboard!`);
+    } catch (error) {
+      console.error('Copy error:', error);
+      Alert.alert('Error', 'Failed to copy phone number');
+    }
+  };
+
+  // ========== CALL PHONE ==========
+  const callPhoneNumber = async (phoneNumber) => {
+    if (!phoneNumber) {
+      Alert.alert('Error', 'No phone number available');
+      return;
+    }
+
+    try {
+      const url = `tel:${phoneNumber}`;
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Error', 'Cannot make calls on this device');
+      }
+    } catch (error) {
+      console.error('Call error:', error);
+      Alert.alert('Error', 'Failed to open dialer');
+    }
+  };
+
+  // ========== WHATSAPP ==========
+  const openWhatsApp = async (phoneNumber) => {
+    if (!phoneNumber) {
+      Alert.alert('Error', 'No phone number available');
+      return;
+    }
+
+    try {
+      // Remove any non-digit characters
+      const cleanNumber = phoneNumber.replace(/\D/g, '');
+      // Ensure it starts with 254 for Kenya
+      const formattedNumber = cleanNumber.startsWith('0') 
+        ? `254${cleanNumber.slice(1)}` 
+        : cleanNumber.startsWith('254') ? cleanNumber : `254${cleanNumber}`;
+      
+      const url = `whatsapp://send?phone=${formattedNumber}`;
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Error', 'WhatsApp is not installed on this device');
+      }
+    } catch (error) {
+      console.error('WhatsApp error:', error);
+      Alert.alert('Error', 'Failed to open WhatsApp');
     }
   };
 
@@ -162,21 +248,26 @@ const OrdersScreen = () => {
     return statusConfig[currentStatus]?.nextStatuses || [];
   };
 
-  const openStatusModal = (order) => {
-    setSelectedOrder(order);
-    setShowStatusModal(true);
+  const getCustomerName = (order) => {
+    if (typeof order.userId === 'object' && order.userId !== null) {
+      return order.userId.name || order.userId.username || `ID: ${order.userId?._id?.slice(-6)}`;
+    }
+    return `ID: ${order.userId?.slice(-6) || 'Unknown'}`;
   };
 
   const renderOrderItem = ({ item }) => {
     const isUpdating = updatingOrderId === item._id;
     const nextStatuses = getNextStatuses(item.status);
+    const customerName = getCustomerName(item);
+    const phoneNumber = extractPhoneFromInstructions(item.deliveryInstructions);
+    const deliveryAddress = extractDeliveryAddress(item.deliveryInstructions);
     
     return (
       <LinearGradient 
         colors={['rgba(255,255,255,0.03)', 'rgba(255,255,255,0.01)']}
         style={styles.orderCard}
       >
-        {/* Order Header */}
+        {/* ====== ORDER HEADER ====== */}
         <View style={styles.orderHeader}>
           <View style={styles.orderInfo}>
             <Text style={styles.orderId}>Order #{item._id?.slice(-6) || 'Unknown'}</Text>
@@ -194,19 +285,13 @@ const OrdersScreen = () => {
           </View>
         </View>
 
-        {/* Customer Info */}
-        <View style={styles.customerInfo}>
+        {/* ====== CUSTOMER NAME ====== */}
+        <View style={styles.customerRow}>
           <Ionicons name="person-outline" size={16} color={theme.Colors.primary} />
-          <Text style={styles.customerName}>
-            Customer: {
-              typeof item.userId === 'object' 
-                ? item.userId?.name || `ID: ${item.userId?._id?.slice(-6)}` 
-                : `ID: ${item.userId?.slice(-6) || 'N/A'}`
-            }
-          </Text>
+          <Text style={styles.customerName}>{customerName}</Text>
         </View>
 
-        {/* Order Items */}
+        {/* ====== ORDER ITEMS ====== */}
         <View style={styles.orderItems}>
           {item.items && item.items.length > 0 ? (
             item.items.map((orderItem, index) => (
@@ -232,24 +317,86 @@ const OrdersScreen = () => {
           )}
         </View>
 
-        {/* Order Total */}
+        {/* ====== ORDER TOTAL ====== */}
         <View style={styles.orderTotal}>
           <Text style={styles.totalLabel}>Total Amount</Text>
           <Text style={styles.totalAmount}>{formatPrice(item.totalPrice || 0)}</Text>
         </View>
 
-        {/* Delivery Instructions */}
+        {/* ====== DELIVERY ADDRESS ====== */}
         {item.deliveryInstructions && (
-          <View style={styles.instructionsContainer}>
-            <View style={styles.instructionsHeader}>
-              <Ionicons name="information-circle-outline" size={16} color={theme.Colors.primary} />
-              <Text style={styles.instructionsLabel}>Delivery Instructions</Text>
+          <View style={styles.deliverySection}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="location-outline" size={16} color={theme.Colors.primary} />
+              <Text style={styles.sectionTitle}>Delivery Address</Text>
             </View>
-            <Text style={styles.instructions}>{item.deliveryInstructions}</Text>
+            <Text style={styles.deliveryText}>
+              {deliveryAddress || item.deliveryInstructions}
+            </Text>
           </View>
         )}
 
-        {/* Status Actions */}
+        {/* ====== CUSTOMER CONTACT ====== */}
+        {phoneNumber && (
+          <View style={styles.contactSection}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="call-outline" size={16} color={theme.Colors.primary} />
+              <Text style={styles.sectionTitle}>Customer Contact</Text>
+            </View>
+            
+            <View style={styles.contactRow}>
+              {/* Phone Number Display */}
+              <View style={styles.phoneDisplay}>
+                <Ionicons name="phone-portrait-outline" size={16} color={theme.Colors.textSecondary} />
+                <Text style={styles.phoneNumber}>{phoneNumber}</Text>
+              </View>
+              
+              {/* Action Buttons */}
+              <View style={styles.contactActions}>
+                {/* Copy Button */}
+                <TouchableOpacity
+                  style={styles.contactActionButton}
+                  onPress={() => copyPhoneNumber(phoneNumber)}
+                >
+                  <LinearGradient
+                    colors={['rgba(80, 200, 120, 0.15)', 'rgba(80, 200, 120, 0.05)']}
+                    style={styles.contactActionGradient}
+                  >
+                    <Ionicons name="copy-outline" size={18} color={theme.Colors.primary} />
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                {/* Call Button */}
+                <TouchableOpacity
+                  style={styles.contactActionButton}
+                  onPress={() => callPhoneNumber(phoneNumber)}
+                >
+                  <LinearGradient
+                    colors={['rgba(52, 152, 219, 0.15)', 'rgba(52, 152, 219, 0.05)']}
+                    style={styles.contactActionGradient}
+                  >
+                    <Ionicons name="call-outline" size={18} color="#3498db" />
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                {/* WhatsApp Button */}
+                <TouchableOpacity
+                  style={styles.contactActionButton}
+                  onPress={() => openWhatsApp(phoneNumber)}
+                >
+                  <LinearGradient
+                    colors={['rgba(37, 211, 102, 0.15)', 'rgba(37, 211, 102, 0.05)']}
+                    style={styles.contactActionGradient}
+                  >
+                    <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* ====== STATUS ACTIONS ====== */}
         {nextStatuses.length > 0 && (
           <View style={styles.actionsContainer}>
             <Text style={styles.actionsLabel}>Update Status</Text>
@@ -486,6 +633,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.Spacing.md,
     padding: theme.Spacing.md,
   },
+  // ====== HEADER ======
   orderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -521,19 +669,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  customerInfo: {
+  // ====== CUSTOMER ======
+  customerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: theme.Spacing.md,
-    paddingBottom: theme.Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.Colors.cardBorder,
     gap: theme.Spacing.xs,
   },
   customerName: {
     ...theme.Typography.bodySmall,
     color: theme.Colors.textSecondary,
   },
+  // ====== ORDER ITEMS ======
   orderItems: {
     marginBottom: theme.Spacing.sm,
     gap: theme.Spacing.xs,
@@ -579,6 +726,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     padding: theme.Spacing.sm,
   },
+  // ====== TOTAL ======
   orderTotal: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -587,6 +735,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: theme.Colors.cardBorder,
     marginTop: theme.Spacing.xs,
+    marginBottom: theme.Spacing.sm,
   },
   totalLabel: {
     ...theme.Typography.body,
@@ -596,30 +745,73 @@ const styles = StyleSheet.create({
     ...theme.Typography.h3,
     color: theme.Colors.primary,
   },
-  instructionsContainer: {
+  // ====== DELIVERY SECTION ======
+  deliverySection: {
     backgroundColor: 'rgba(80, 200, 120, 0.05)',
     borderRadius: theme.BorderRadius.sm,
     padding: theme.Spacing.sm,
-    marginTop: theme.Spacing.sm,
+    marginBottom: theme.Spacing.sm,
   },
-  instructionsHeader: {
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.Spacing.xs,
     marginBottom: 4,
   },
-  instructionsLabel: {
+  sectionTitle: {
     ...theme.Typography.bodySmall,
     color: theme.Colors.primary,
     fontWeight: '600',
   },
-  instructions: {
+  deliveryText: {
     ...theme.Typography.bodySmall,
     color: theme.Colors.textSecondary,
-    fontStyle: 'italic',
+    paddingLeft: 24,
   },
+  // ====== CONTACT SECTION ======
+  contactSection: {
+    backgroundColor: 'rgba(52, 152, 219, 0.05)',
+    borderRadius: theme.BorderRadius.sm,
+    padding: theme.Spacing.sm,
+    marginBottom: theme.Spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(52, 152, 219, 0.1)',
+  },
+  contactRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingLeft: 24,
+  },
+  phoneDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.Spacing.xs,
+  },
+  phoneNumber: {
+    ...theme.Typography.body,
+    color: theme.Colors.text,
+    fontWeight: '600',
+  },
+  contactActions: {
+    flexDirection: 'row',
+    gap: theme.Spacing.xs,
+  },
+  contactActionButton: {
+    borderRadius: theme.BorderRadius.round,
+    overflow: 'hidden',
+  },
+  contactActionGradient: {
+    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+    borderRadius: theme.BorderRadius.round,
+  },
+  // ====== STATUS ACTIONS ======
   actionsContainer: {
-    marginTop: theme.Spacing.md,
+    marginTop: theme.Spacing.sm,
   },
   actionsLabel: {
     ...theme.Typography.bodySmall,
