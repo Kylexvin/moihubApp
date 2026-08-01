@@ -4,7 +4,8 @@ const exclusionList = require('metro-config/src/defaults/exclusionList');
 
 const config = getDefaultConfig(__dirname);
 
-config.resolver.blacklistRE = exclusionList([
+
+config.resolver.blockList = exclusionList([
   /node_modules\/@supabase\/realtime-js\/.*/,
 ]);
 

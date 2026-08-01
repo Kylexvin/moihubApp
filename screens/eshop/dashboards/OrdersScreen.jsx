@@ -14,6 +14,7 @@ import {
   Platform,
   StatusBar,
   AppState,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -22,6 +23,7 @@ import axios from 'axios';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSocket } from '../../../context/SocketContext';
 import Theme from '../../theme/Theme';
+import * as Clipboard from 'expo-clipboard';
 
 const { width, height } = Dimensions.get('window');
 
@@ -34,6 +36,7 @@ const OrdersScreen = ({ navigation }) => {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [filter, setFilter] = useState('all'); 
   const [newOrderCount, setNewOrderCount] = useState(0);
+  const [copiedNumber, setCopiedNumber] = useState(null);
   const socket = useSocket(); 
 
   // Status colors
@@ -49,6 +52,60 @@ const OrdersScreen = ({ navigation }) => {
     processing: 'sync-outline',
     completed: 'checkmark-circle-outline',
     cancelled: 'close-circle-outline',
+  };
+
+  // Helper function to format phone number for WhatsApp
+  const formatWhatsAppNumber = (number) => {
+    const cleaned = number.replace(/\D/g, '');
+    if (cleaned.startsWith('0')) {
+      return '234' + cleaned.slice(1);
+    }
+    return cleaned;
+  };
+
+  // Helper function to copy to clipboard
+  const copyToClipboard = async (number) => {
+    try {
+      await Clipboard.setStringAsync(number);
+      setCopiedNumber(number);
+      setTimeout(() => setCopiedNumber(null), 2000);
+      Alert.alert('Copied!', 'Phone number copied to clipboard');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to copy number');
+    }
+  };
+
+  // Helper function to make a call
+  const makeCall = (number) => {
+    const url = `tel:${number}`;
+    Linking.canOpenURL(url)
+      .then((supported) => {
+        if (supported) {
+          Linking.openURL(url);
+        } else {
+          Alert.alert('Error', 'Phone calls are not supported on this device');
+        }
+      })
+      .catch(() => {
+        Alert.alert('Error', 'Failed to open dialer');
+      });
+  };
+
+  // Helper function to open WhatsApp
+  const openWhatsApp = (number) => {
+    const waNumber = formatWhatsAppNumber(number);
+    const url = `https://wa.me/${waNumber}`;
+    Linking.canOpenURL(url)
+      .then((supported) => {
+        if (supported) {
+          Linking.openURL(url);
+        } else {
+          Alert.alert('Error', 'WhatsApp is not installed on this device');
+        }
+      })
+      .catch(() => {
+        Alert.alert('Error', 'Failed to open WhatsApp');
+      });
   };
 
   // Fetch orders from API
@@ -131,7 +188,7 @@ const OrdersScreen = ({ navigation }) => {
       setNewOrderCount(prev => prev + 1);
       
       Alert.alert(
-        'New Order! 🎉',
+        'New Order!',
         `New order from ${orderData.user?.email || 'customer'} for ${formatCurrency(orderData.totalAmount)}`,
         [
           { 
@@ -248,6 +305,43 @@ const OrdersScreen = ({ navigation }) => {
         </Text>
       </View>
 
+      {/* Contact Actions Row */}
+      <View style={styles.contactActions}>
+        <View style={styles.contactInfo}>
+          <Ionicons name="call-outline" size={14} color={Theme.Colors.textSecondary} />
+          <Text style={styles.contactNumber}>{item.contactNumber}</Text>
+        </View>
+        <View style={styles.actionButtons}>
+          {/* Copy Button */}
+          <TouchableOpacity
+            onPress={() => copyToClipboard(item.contactNumber)}
+            style={styles.actionButton}
+          >
+            {copiedNumber === item.contactNumber ? (
+              <Ionicons name="checkmark" size={18} color={Theme.Colors.success} />
+            ) : (
+              <Ionicons name="copy-outline" size={18} color={Theme.Colors.textSecondary} />
+            )}
+          </TouchableOpacity>
+          
+          {/* Call Button */}
+          <TouchableOpacity
+            onPress={() => makeCall(item.contactNumber)}
+            style={[styles.actionButton, styles.callButton]}
+          >
+            <Ionicons name="call-outline" size={18} color="#007AFF" />
+          </TouchableOpacity>
+          
+          {/* WhatsApp Button */}
+          <TouchableOpacity
+            onPress={() => openWhatsApp(item.contactNumber)}
+            style={[styles.actionButton, styles.whatsappButton]}
+          >
+            <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
       <View style={styles.orderFooter}>
         <Text style={styles.totalAmount}>{formatCurrency(item.totalAmount)}</Text>
         <Ionicons name="chevron-forward" size={16} color={Theme.Colors.textTertiary} />
@@ -319,7 +413,38 @@ const OrdersScreen = ({ navigation }) => {
                 </View>
                 <View style={styles.orderInfoRow}>
                   <Text style={styles.orderInfoLabel}>Contact:</Text>
-                  <Text style={styles.orderInfoValue}>{selectedOrder.contactNumber}</Text>
+                  <View style={styles.modalContactActions}>
+                    <Text style={styles.orderInfoValue}>{selectedOrder.contactNumber}</Text>
+                    <View style={styles.modalActionButtons}>
+                      {/* Copy Button */}
+                      <TouchableOpacity
+                        onPress={() => copyToClipboard(selectedOrder.contactNumber)}
+                        style={styles.modalActionButton}
+                      >
+                        {copiedNumber === selectedOrder.contactNumber ? (
+                          <Ionicons name="checkmark" size={20} color={Theme.Colors.success} />
+                        ) : (
+                          <Ionicons name="copy-outline" size={20} color={Theme.Colors.textSecondary} />
+                        )}
+                      </TouchableOpacity>
+                      
+                      {/* Call Button */}
+                      <TouchableOpacity
+                        onPress={() => makeCall(selectedOrder.contactNumber)}
+                        style={[styles.modalActionButton, styles.modalCallButton]}
+                      >
+                        <Ionicons name="call-outline" size={20} color="#007AFF" />
+                      </TouchableOpacity>
+                      
+                      {/* WhatsApp Button */}
+                      <TouchableOpacity
+                        onPress={() => openWhatsApp(selectedOrder.contactNumber)}
+                        style={[styles.modalActionButton, styles.modalWhatsappButton]}
+                      >
+                        <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
                 </View>
                 <View style={styles.orderInfoRow}>
                   <Text style={styles.orderInfoLabel}>Address:</Text>
@@ -600,7 +725,7 @@ const styles = StyleSheet.create({
     color: Theme.Colors.textSecondary,
   },
   orderDetails: {
-    marginBottom: 12,
+    marginBottom: 8,
   },
   customerEmail: {
     fontSize: 14,
@@ -610,6 +735,43 @@ const styles = StyleSheet.create({
   itemCount: {
     fontSize: 12,
     color: Theme.Colors.textSecondary,
+  },
+  contactActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 100, 80, 0.1)',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  contactInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  contactNumber: {
+    fontSize: 13,
+    color: Theme.Colors.textSecondary,
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  actionButton: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0, 60, 50, 0.2)',
+  },
+  callButton: {
+    backgroundColor: 'rgba(0, 122, 255, 0.15)',
+  },
+  whatsappButton: {
+    backgroundColor: 'rgba(37, 211, 102, 0.15)',
   },
   orderFooter: {
     flexDirection: 'row',
@@ -689,6 +851,29 @@ const styles = StyleSheet.create({
     color: Theme.Colors.text,
     flex: 1,
     textAlign: 'right',
+  },
+  modalContactActions: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalActionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  modalActionButton: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0, 60, 50, 0.2)',
+  },
+  modalCallButton: {
+    backgroundColor: 'rgba(0, 122, 255, 0.2)',
+  },
+  modalWhatsappButton: {
+    backgroundColor: 'rgba(37, 211, 102, 0.2)',
   },
   itemsCard: {
     borderRadius: 12,

@@ -213,22 +213,54 @@ const ProfileScreen = () => {
   };
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
-  const getDashboardInfo = (role) => {
-    switch (role) {
-      case 'vendor':
-        return { title: 'VENDOR PORTAL', subtitle: 'Access Vendor Dashboard', icon: 'cube', route: 'VendorDashboard' };
-      case 'shopowner':
-        return { title: 'SHOP MANAGER', subtitle: 'Access Shop Dashboard', icon: 'storefront', route: 'Eshop' };
-      case 'SERVICE_PROVIDER':
-        return { title: 'SERVICE PROVIDER', subtitle: 'Manage Shop & Services', icon: 'construct', route: 'ServiceProviderDashboard' };
-      case 'writer':
-        return { title: 'WRITER PORTAL', subtitle: 'Manage your blog posts', icon: 'create', route: 'WriterNavigator' };
-      case 'admin':
-        return { title: 'WRITER PORTAL', subtitle: 'Manage blog posts as admin', icon: 'create', route: 'WriterNavigator' };
-      default:
-        return null;
+const getDashboardInfo = (role) => {
+  switch (role) {
+    case 'vendor':
+      return [{ 
+        title: 'VENDOR PORTAL', 
+        subtitle: 'Access Vendor Dashboard', 
+        icon: 'cube', 
+        route: 'VendorDashboard' 
+      }];
+    case 'shopowner':
+      return [{ 
+        title: 'SHOP MANAGER', 
+        subtitle: 'Access Shop Dashboard', 
+        icon: 'storefront', 
+        route: 'Eshop' 
+      }];
+    case 'SERVICE_PROVIDER':
+      return [{ 
+        title: 'SERVICE PROVIDER', 
+        subtitle: 'Manage Shop & Services', 
+        icon: 'construct', 
+        route: 'ServiceProviderDashboard' 
+      }];
+    case 'writer':
+      return [{ 
+        title: 'WRITER PORTAL', 
+        subtitle: 'Manage your blog posts', 
+        icon: 'create', 
+        route: 'WriterNavigator' 
+      }];
+case 'admin':
+  return [
+    { 
+      title: 'BLOG MANAGEMENT', 
+      subtitle: 'Manage blog posts as admin', 
+      icon: 'create', 
+      route: 'WriterNavigator' 
+    },
+    { 
+      title: 'PLATFORM STORE', 
+      subtitle: 'Manage Moihub Official Store', 
+      icon: 'storefront', 
+      route: 'Eshop'  
     }
-  };
+  ];
+  }
+};
+
 
   const getRoleColor = (role) => {
     switch (role) {
@@ -386,35 +418,36 @@ const ProfileScreen = () => {
         </View>
 
         {/* ── Dashboard Card ── */}
-        {showDashboardCard && (() => {
-          const info = getDashboardInfo(currentUser.role);
-          if (!info) return null;
-          return (
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => navigateToDashboard(info.route)} // ✅ Fixed: using helper
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={['rgba(89, 173, 110, 0.2)', 'rgba(160, 85, 255, 0.2)']}
-                style={styles.actionGradient}
-              >
-                <View style={styles.actionContent}>
-                  <View style={styles.actionIcon}>
-                    <Ionicons name={info.icon} size={24} color="#6c7ce7" />
-                  </View>
-                  <View style={styles.actionInfo}>
-                    <Text style={styles.actionTitle}>{info.title}</Text>
-                    <Text style={styles.actionSubtitle}>{info.subtitle}</Text>
-                  </View>
-                  <View style={styles.actionArrow}>
-                    <Ionicons name="chevron-forward" size={20} color="#6c7ce7" />
-                  </View>
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-          );
-        })()}
+{showDashboardCard && (() => {
+  const dashboards = getDashboardInfo(currentUser.role);
+  if (!dashboards.length) return null;
+  return dashboards.map((info, index) => (
+    <TouchableOpacity
+      key={index}
+      style={styles.actionCard}
+      onPress={() => navigateToDashboard(info.route)}
+      activeOpacity={0.8}
+    >
+      <LinearGradient
+        colors={['rgba(89, 173, 110, 0.2)', 'rgba(160, 85, 255, 0.2)']}
+        style={styles.actionGradient}
+      >
+        <View style={styles.actionContent}>
+          <View style={styles.actionIcon}>
+            <Ionicons name={info.icon} size={24} color="#6c7ce7" />
+          </View>
+          <View style={styles.actionInfo}>
+            <Text style={styles.actionTitle}>{info.title}</Text>
+            <Text style={styles.actionSubtitle}>{info.subtitle}</Text>
+          </View>
+          <View style={styles.actionArrow}>
+            <Ionicons name="chevron-forward" size={20} color="#6c7ce7" />
+          </View>
+        </View>
+      </LinearGradient>
+    </TouchableOpacity>
+  ));
+})()}
 
         {/* ── Logout ── */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.8}>

@@ -94,7 +94,9 @@
           }
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-font",
+      "@react-native-community/datetimepicker"
     ],
     "updates": {
       "fallbackToCacheTimeout": 0
