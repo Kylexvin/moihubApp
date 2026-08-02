@@ -15,6 +15,7 @@ import {
   Animated,
   StatusBar,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
@@ -27,23 +28,23 @@ const { width } = Dimensions.get('window');
 
 // Royal Purple & Gold theme colors
 const ShopColors = {
-  primary: '#6B4EFF',      // Royal Purple
-  secondary: '#9F7AEA',     // Lavender
-  accent: '#FFD700',        // Gold
-  success: '#4CAF50',       // Green
-  warning: '#FF9800',       // Orange
-  info: '#00ACC1',          // Cyan
-  danger: '#F44336',        // Red
-  background: '#0A0A0F',    // Deep Dark
-  surface: '#1A1A2E',       // Dark Purple
-  card: '#26264D',          // Royal Card
-  text: '#FFFFFF',          // White
-  textSecondary: '#E0B0FF', // Light Purple
-  textMuted: '#9F8BB3',     // Muted Purple
-  border: '#3D3D6B',        // Purple Border
-  gold: '#FFD700',          // Pure Gold
-  goldLight: '#FFE55C',     // Light Gold
-  purpleLight: '#8B6FF6',   // Light Purple
+  primary: '#6B4EFF',
+  secondary: '#9F7AEA',
+  accent: '#FFD700',
+  success: '#4CAF50',
+  warning: '#FF9800',
+  info: '#00ACC1',
+  danger: '#F44336',
+  background: '#0A0A0F',
+  surface: '#1A1A2E',
+  card: '#26264D',
+  text: '#FFFFFF',
+  textSecondary: '#E0B0FF',
+  textMuted: '#9F8BB3',
+  border: '#3D3D6B',
+  gold: '#FFD700',
+  goldLight: '#FFE55C',
+  purpleLight: '#8B6FF6',
 };
 
 // Header Component
@@ -89,15 +90,15 @@ const CartScreen = ({ navigation }) => {
     getCartTotal 
   } = useCart();
 
-  const [shippingAddress, setShippingAddress] = useState('');
+  const [inquiryMessage, setInquiryMessage] = useState('');
   const [contactNumber, setContactNumber] = useState('');
-  const [placingOrder, setPlacingOrder] = useState(false);
+  const [sendingInquiry, setSendingInquiry] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useEffect(() => {
     StatusBar.setBarStyle('light-content', true);
     
-    // Fade in animation
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 300,
@@ -107,7 +108,7 @@ const CartScreen = ({ navigation }) => {
     if (!isAuthenticated) {
       Alert.alert(
         'Authentication Required',
-        'Please log in to view your cart and place orders.',
+        'Please log in to view your cart and send inquiries.',
         [
           {
             text: 'Login',
@@ -158,7 +159,7 @@ const CartScreen = ({ navigation }) => {
 
   const validateForm = () => {
     if (!isAuthenticated || !token) {
-      Alert.alert('Error', 'Please log in to place an order');
+      Alert.alert('Error', 'Please log in to send an inquiry');
       return false;
     }
 
@@ -167,8 +168,8 @@ const CartScreen = ({ navigation }) => {
       return false;
     }
     
-    if (!shippingAddress.trim()) {
-      Alert.alert('Missing Information', 'Please enter your delivery address');
+    if (!inquiryMessage.trim()) {
+      Alert.alert('Missing Information', 'Please enter your inquiry message');
       return false;
     }
     
@@ -180,10 +181,10 @@ const CartScreen = ({ navigation }) => {
     return true;
   };
 
-  const placeOrder = async () => {
+  const sendInquiry = async () => {
     if (!validateForm()) return;
     
-    setPlacingOrder(true);
+    setSendingInquiry(true);
     
     try {
       // Group items by shop
@@ -203,8 +204,8 @@ const CartScreen = ({ navigation }) => {
         return groups;
       }, {});
 
-      // Place order for each shop
-      const orderPromises = Object.values(itemsByShop).map(async (shopOrder) => {
+      // Send inquiry for each shop
+      const inquiryPromises = Object.values(itemsByShop).map(async (shopInquiry) => {
         const response = await fetch('https://moihub.onrender.com/api/eshop/orders/place', {
           method: 'POST',
           headers: {
@@ -212,9 +213,9 @@ const CartScreen = ({ navigation }) => {
             'Authorization': `Bearer ${token}`,
           },
           body: JSON.stringify({
-            shopId: shopOrder.shopId,
-            items: shopOrder.items,
-            shippingAddress: shippingAddress.trim(),
+            shopId: shopInquiry.shopId,
+            items: shopInquiry.items,
+            shippingAddress: inquiryMessage.trim(),
             contactNumber: contactNumber.trim(),
             userId: currentUser?.id || currentUser?._id,
           }),
@@ -226,41 +227,23 @@ const CartScreen = ({ navigation }) => {
           if (response.status === 401) {
             throw new Error('Authentication failed. Please log in again.');
           }
-          throw new Error(data.message || `Failed to place order for ${shopOrder.shopName}`);
+          throw new Error(data.message || `Failed to send inquiry for ${shopInquiry.shopName}`);
         }
         
         if (!data.success) {
-          throw new Error(data.message || `Failed to place order for ${shopOrder.shopName}`);
+          throw new Error(data.message || `Failed to send inquiry for ${shopInquiry.shopName}`);
         }
         
         return data;
       });
 
-      await Promise.all(orderPromises);
+      await Promise.all(inquiryPromises);
       
-      Alert.alert(
-        'Order Placed Successfully! 🎉',
-        'Your order has been submitted. The shop owner will contact you shortly.',
-        [
-          {
-            text: 'Track Orders',
-            onPress: () => {
-              clearCart();
-              navigation.navigate('Orders');
-            }
-          },
-          {
-            text: 'Continue Shopping',
-            onPress: () => {
-              clearCart();
-              navigation.navigate('EshopHome');
-            }
-          }
-        ]
-      );
+      // Show success modal instead of alert
+      setShowSuccessModal(true);
       
     } catch (error) {
-      console.error('Error placing order:', error);
+      console.error('Error sending inquiry:', error);
       
       if (error.message.includes('Authentication failed')) {
         Alert.alert(
@@ -274,17 +257,22 @@ const CartScreen = ({ navigation }) => {
           ]
         );
       } else {
-        Alert.alert('Order Failed', error.message || 'Unable to place order. Please try again.');
+        Alert.alert('Inquiry Failed', error.message || 'Unable to send inquiry. Please try again.');
       }
     } finally {
-      setPlacingOrder(false);
+      setSendingInquiry(false);
     }
+  };
+
+  const handleSuccessModalClose = () => {
+    setShowSuccessModal(false);
+    clearCart();
+    navigation.navigate('EshopHome');
   };
 
   const CartItem = ({ item, index }) => {
     const [scaleAnim] = useState(new Animated.Value(1));
     
-    // Default placeholder image
     const DEFAULT_PLACEHOLDER = 'https://via.placeholder.com/300x300?text=No+Image';
 
     const getImageUrl = () => {
@@ -322,7 +310,6 @@ const CartScreen = ({ navigation }) => {
             end={{ x: 1, y: 1 }}
             style={styles.itemGradient}
           >
-            {/* Gold Accent Line */}
             <View style={styles.itemGoldAccent} />
             
             <View style={styles.itemImageContainer}>
@@ -408,6 +395,71 @@ const CartScreen = ({ navigation }) => {
     </View>
   );
 
+  // Success Modal Component
+  const SuccessModal = () => (
+    <Modal
+      animationType="fade"
+      transparent={true}
+      visible={showSuccessModal}
+      onRequestClose={handleSuccessModalClose}
+    >
+      <View style={styles.modalOverlay}>
+        <Animatable.View 
+          animation="bounceIn" 
+          duration={600}
+          style={styles.modalContainer}
+        >
+          <LinearGradient
+            colors={[ShopColors.card, ShopColors.surface]}
+            style={styles.modalContent}
+          >
+            <View style={styles.modalIconContainer}>
+              <Text style={styles.modalEmoji}>🎉</Text>
+            </View>
+            
+            <Text style={styles.modalTitle}>Inquiry Sent!</Text>
+            
+            <Text style={styles.modalMessage}>
+              Your inquiry has been shared with the shop owner. They will contact you shortly to confirm availability, pricing, delivery, and payment.
+            </Text>
+            
+            <View style={styles.modalDivider} />
+            
+            <View style={styles.modalInfoBox}>
+              <Text style={styles.modalInfoTitle}>What happens next?</Text>
+              <View style={styles.modalInfoItem}>
+                <Icon name="check-circle" size={16} color={ShopColors.gold} />
+                <Text style={styles.modalInfoText}>Your inquiry is sent to the shop owner.</Text>
+              </View>
+              <View style={styles.modalInfoItem}>
+                <Icon name="check-circle" size={16} color={ShopColors.gold} />
+                <Text style={styles.modalInfoText}>The shop owner will contact you to confirm availability, delivery, and payment.</Text>
+              </View>
+              <View style={styles.modalInfoItem}>
+                <Icon name="check-circle" size={16} color={ShopColors.gold} />
+                <Text style={styles.modalInfoText}>No payment is required at this stage.</Text>
+              </View>
+            </View>
+            
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={handleSuccessModalClose}
+            >
+              <LinearGradient
+                colors={[ShopColors.primary, ShopColors.secondary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.modalButtonGradient}
+              >
+                <Text style={styles.modalButtonText}>Continue Shopping</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </LinearGradient>
+        </Animatable.View>
+      </View>
+    </Modal>
+  );
+
   // Show loading or login prompt if not authenticated
   if (!isAuthenticated) {
     return (
@@ -421,7 +473,7 @@ const CartScreen = ({ navigation }) => {
             </View>
             <Text style={styles.emptyTitle}>Login Required</Text>
             <Text style={styles.emptyText}>
-              Please log in to view your cart and place orders
+              Please log in to view your cart and send inquiries
             </Text>
             <TouchableOpacity
               style={styles.emptyActionButton}
@@ -486,7 +538,7 @@ const CartScreen = ({ navigation }) => {
         <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
           <Header 
             navigation={navigation} 
-            title="Shopping Cart" 
+            title="Inquiry Cart" 
             itemCount={cartItems.length}
           />
           
@@ -495,7 +547,6 @@ const CartScreen = ({ navigation }) => {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
           >
-
             {/* User Info */}
             {currentUser && (
               <View style={styles.section}>
@@ -530,7 +581,7 @@ const CartScreen = ({ navigation }) => {
               />
             </View>
 
-            {/* Delivery Address */}
+            {/* Inquiry Message */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Ionicons name="chatbubble-outline" size={20} color={ShopColors.gold} />
@@ -542,10 +593,10 @@ const CartScreen = ({ navigation }) => {
               >
                 <TextInput
                   style={styles.textInput}
-                  placeholder="Enter your message"
+                  placeholder="What would you like to inquire about?"
                   placeholderTextColor={ShopColors.textMuted}
-                  value={shippingAddress}
-                  onChangeText={setShippingAddress}
+                  value={inquiryMessage}
+                  onChangeText={setInquiryMessage}
                   multiline
                   numberOfLines={3}
                   textAlignVertical="top"
@@ -565,7 +616,7 @@ const CartScreen = ({ navigation }) => {
               >
                 <TextInput
                   style={styles.textInput}
-                  placeholder="Enter your phone number (calls)"
+                  placeholder="Enter your phone number for calls"
                   placeholderTextColor={ShopColors.textMuted}
                   value={contactNumber}
                   onChangeText={setContactNumber}
@@ -608,9 +659,9 @@ const CartScreen = ({ navigation }) => {
                 <View style={styles.infoContent}>
                   <Text style={styles.infoTitle}>What happens next?</Text>
                   <Text style={styles.infoText}>
-                    • Shop owners will contact you to confirm your order{'\n'}
-                    • Payment and delivery details will be arranged directly{'\n'}
-                    • Track your orders in the "Orders" section
+                    • Your inquiry is sent to the shop owner.{'\n'}
+                    • The shop owner will contact you to confirm availability, delivery, and payment.{'\n'}
+                    • No payment is required at this stage.
                   </Text>
                 </View>
               </LinearGradient>
@@ -619,30 +670,28 @@ const CartScreen = ({ navigation }) => {
             <View style={styles.bottomSpacing} />
           </ScrollView>
 
-          {/* Place Order Button */}
+          {/* Send Inquiry Button */}
           <View style={styles.bottomContainer}>
             <TouchableOpacity
-              style={[styles.placeOrderButton, placingOrder && styles.buttonDisabled]}
-              onPress={placeOrder}
-              disabled={placingOrder}
+              style={[styles.sendInquiryButton, sendingInquiry && styles.buttonDisabled]}
+              onPress={sendInquiry}
+              disabled={sendingInquiry}
             >
               <LinearGradient
-                colors={placingOrder ? [ShopColors.textMuted, ShopColors.border] : [ShopColors.success, '#2E7D32']}
+                colors={sendingInquiry ? [ShopColors.textMuted, ShopColors.border] : [ShopColors.primary, ShopColors.secondary]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={styles.placeOrderGradient}
+                style={styles.sendInquiryGradient}
               >
-                {placingOrder ? (
+                {sendingInquiry ? (
                   <>
                     <ActivityIndicator size={20} color={ShopColors.gold} />
-                    <Text style={styles.placeOrderText}>Placing Inquiry...</Text>
+                    <Text style={styles.sendInquiryText}>Sending Inquiry...</Text>
                   </>
                 ) : (
                   <>
                     <Icon name="send" size={20} color={ShopColors.gold} />
-                    <Text style={styles.placeOrderText}>
-                      Inquire - {formatPrice(getSubtotal())}
-                    </Text>
+                    <Text style={styles.sendInquiryText}>Send Inquiry</Text>
                   </>
                 )}
               </LinearGradient>
@@ -650,6 +699,9 @@ const CartScreen = ({ navigation }) => {
           </View>
         </Animated.View>
       </SafeAreaView>
+
+      {/* Success Modal */}
+      <SuccessModal />
     </LinearGradient>
   );
 };
@@ -976,7 +1028,7 @@ const styles = StyleSheet.create({
     borderTopColor: ShopColors.gold + '20',
     backdropFilter: 'blur(10px)',
   },
-  placeOrderButton: {
+  sendInquiryButton: {
     borderRadius: 12,
     overflow: 'hidden',
     elevation: 4,
@@ -985,7 +1037,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
   },
-  placeOrderGradient: {
+  sendInquiryGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -995,7 +1047,7 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.7,
   },
-  placeOrderText: {
+  sendInquiryText: {
     color: ShopColors.gold,
     fontSize: 16,
     fontWeight: '700',
@@ -1050,6 +1102,91 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContainer: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  modalContent: {
+    padding: 24,
+    borderWidth: 1,
+    borderColor: ShopColors.gold + '30',
+    borderRadius: 16,
+  },
+  modalIconContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalEmoji: {
+    fontSize: 48,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: ShopColors.gold,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  modalMessage: {
+    fontSize: 15,
+    color: ShopColors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: ShopColors.gold + '20',
+    marginVertical: 16,
+  },
+  modalInfoBox: {
+    backgroundColor: ShopColors.background,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: ShopColors.gold + '20',
+  },
+  modalInfoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: ShopColors.gold,
+    marginBottom: 12,
+  },
+  modalInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  modalInfoText: {
+    fontSize: 14,
+    color: ShopColors.textSecondary,
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 20,
+  },
+  modalButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  modalButtonGradient: {
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    color: ShopColors.gold,
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
 

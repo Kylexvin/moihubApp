@@ -1,5 +1,5 @@
 // screens/eshop/EshopHomeScreen.js
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   StyleSheet,
   SafeAreaView,
   ActivityIndicator,
-  Alert,
   Dimensions,
   ScrollView,
   Linking,
@@ -17,6 +16,7 @@ import {
   StatusBar,
   TextInput,
   Keyboard,
+  Animated,
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -46,64 +46,192 @@ const ShopColors = {
   purpleLight: '#8B6FF6',
 };
 
+// ==================== TOAST COMPONENT ====================
+const Toast = ({ message, visible }) => {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.timing(translateY, { toValue: 0, duration: 200, useNativeDriver: true }),
+      ]).start();
+
+      const timer = setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+          Animated.timing(translateY, { toValue: 20, duration: 200, useNativeDriver: true }),
+        ]).start();
+      }, 1600);
+
+      return () => clearTimeout(timer);
+    }
+  }, [visible, message]);
+
+  if (!visible) return null;
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.toastContainer,
+        { opacity, transform: [{ translateY }] },
+      ]}
+    >
+      <View style={styles.toastContent}>
+        <Icon name="check-circle" size={18} color={ShopColors.success} />
+        <Text style={styles.toastText} numberOfLines={1}>{message}</Text>
+      </View>
+    </Animated.View>
+  );
+};
+
+// ==================== SKELETON COMPONENTS ====================
+const SkeletonBlock = ({ style }) => {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.7, duration: 700, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+
+  return <Animated.View style={[styles.skeletonBase, style, { opacity }]} />;
+};
+
+const TrendingSkeleton = () => (
+  <View style={styles.trendingList}>
+    {[1, 2, 3].map((i) => (
+      <View key={i} style={styles.trendingCard}>
+        <SkeletonBlock style={{ width: '100%', height: 120 }} />
+        <View style={{ padding: 10 }}>
+          <SkeletonBlock style={{ width: '80%', height: 12, marginBottom: 6 }} />
+          <SkeletonBlock style={{ width: '50%', height: 12, marginBottom: 6 }} />
+          <SkeletonBlock style={{ width: '60%', height: 10 }} />
+        </View>
+      </View>
+    ))}
+  </View>
+);
+
+const CategorySkeleton = () => {
+  const numColumns = 2;
+  const gap = 12;
+  const horizontalPadding = 32;
+  const cardWidth = (width - horizontalPadding - gap) / numColumns;
+
+  return (
+    <View style={styles.categoriesGrid}>
+      {[1, 2, 3, 4].map((i) => (
+        <SkeletonBlock key={i} style={{ width: cardWidth, height: 110, borderRadius: 12, marginBottom: 12 }} />
+      ))}
+    </View>
+  );
+};
+
+const PlatformBannerSkeleton = () => (
+  <SkeletonBlock style={{ width: '100%', height: 128, borderRadius: 16 }} />
+);
+
 const EshopHomeScreen = ({ navigation }) => {
   const [categories, setCategories] = useState([]);
   const [trendingProducts, setTrendingProducts] = useState([]);
+  const [platformProducts, setPlatformProducts] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  const [errors, setErrors] = useState({ categories: false, trending: false, platform: false });
+
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState({ shops: [], products: [] });
   const [isSearching, setIsSearching] = useState(false);
-  
+  const [searchError, setSearchError] = useState(false);
+
+  const [toast, setToast] = useState({ visible: false, message: '' });
+
   const { cartItems, addToCart } = useCart();
 
-  const API_BASE = 'https://moihub.onrender.com/api/eshop/vendor';
+  const API_BASE = 'http://192.168.100.10:5000/api/eshop/vendor';
+
+  // Search is only "active" once the user has actually typed and submitted something
+  const isSearchActive = searchQuery.trim().length > 0;
 
   useEffect(() => {
     fetchData();
   }, []);
 
   useFocusEffect(
-    useCallback(() => {
-      // Cart count is derived from cartItems in the FAB render
-    }, [cartItems])
+    useCallback(() => {}, [cartItems])
   );
 
+  const showToast = (message) => {
+    setToast({ visible: false, message: '' });
+    // re-trigger on next tick so repeated adds still animate
+    requestAnimationFrame(() => setToast({ visible: true, message }));
+  };
+
   const fetchData = async () => {
-    try {
-      setLoading(true);
-      await Promise.all([
-        fetchCategories(),
-        fetchTrendingProducts()
-      ]);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true);
+    await Promise.all([
+      fetchCategories(),
+      fetchTrendingProducts(),
+      fetchPlatformProducts(),
+    ]);
+    setLoading(false);
   };
 
   const fetchCategories = async () => {
     try {
+      setErrors((prev) => ({ ...prev, categories: false }));
       const response = await fetch(`${API_BASE}/categories`);
       const data = await response.json();
       if (data.success) {
         setCategories(data.data);
+      } else {
+        setErrors((prev) => ({ ...prev, categories: true }));
       }
     } catch (error) {
       console.error('Error fetching categories:', error);
+      setErrors((prev) => ({ ...prev, categories: true }));
     }
   };
 
   const fetchTrendingProducts = async () => {
     try {
+      setErrors((prev) => ({ ...prev, trending: false }));
       const response = await fetch(`${API_BASE}/trending?limit=10`);
       const data = await response.json();
       if (data.success) {
         setTrendingProducts(data.data);
+      } else {
+        setErrors((prev) => ({ ...prev, trending: true }));
       }
     } catch (error) {
       console.error('Error fetching trending products:', error);
+      setErrors((prev) => ({ ...prev, trending: true }));
+    }
+  };
+
+  const fetchPlatformProducts = async () => {
+    try {
+      setErrors((prev) => ({ ...prev, platform: false }));
+      const response = await fetch(`${API_BASE}/platform-products?limit=6`);
+      const data = await response.json();
+      if (data.success) {
+        setPlatformProducts(data.data);
+      } else {
+        setErrors((prev) => ({ ...prev, platform: true }));
+      }
+    } catch (error) {
+      console.error('Error fetching platform products:', error);
+      setErrors((prev) => ({ ...prev, platform: true }));
     }
   };
 
@@ -115,7 +243,7 @@ const EshopHomeScreen = ({ navigation }) => {
 
   const handleSearch = async () => {
     Keyboard.dismiss();
-    
+
     if (!searchQuery.trim()) {
       setSearchResults({ shops: [], products: [] });
       setIsSearching(false);
@@ -123,17 +251,21 @@ const EshopHomeScreen = ({ navigation }) => {
     }
 
     setIsSearching(true);
+    setSearchError(false);
     try {
       const response = await fetch(`${API_BASE}/search?q=${encodeURIComponent(searchQuery.trim())}`);
       const data = await response.json();
       if (data.success) {
         setSearchResults({
           shops: data.data.shops || [],
-          products: data.data.products || []
+          products: data.data.products || [],
         });
+      } else {
+        setSearchError(true);
       }
     } catch (error) {
       console.error('Search error:', error);
+      setSearchError(true);
     } finally {
       setIsSearching(false);
     }
@@ -143,6 +275,7 @@ const EshopHomeScreen = ({ navigation }) => {
     setSearchQuery('');
     setSearchResults({ shops: [], products: [] });
     setIsSearching(false);
+    setSearchError(false);
     Keyboard.dismiss();
   };
 
@@ -174,7 +307,7 @@ const EshopHomeScreen = ({ navigation }) => {
 
   const handleAddToCart = (product) => {
     if (!product.shop || !product.shop._id) {
-      Alert.alert('Error', 'Shop information missing for this product');
+      showToast('Unable to add — shop info missing');
       return;
     }
 
@@ -186,8 +319,8 @@ const EshopHomeScreen = ({ navigation }) => {
       shopId: product.shop._id,
       shopName: product.shop.shopName,
     });
-    
-    Alert.alert('Added to Cart', `${product.name} added to your cart`);
+
+    showToast(`${product.name} added to cart`);
   };
 
   const handleWhatsAppPress = () => {
@@ -195,7 +328,7 @@ const EshopHomeScreen = ({ navigation }) => {
     const message = 'Hi! I need help with the E-Shop in Moihub app.';
     const whatsappUrl = `https://wa.me/${phoneNumber.replace('+', '')}?text=${encodeURIComponent(message)}`;
     Linking.openURL(whatsappUrl).catch(() => {
-      Alert.alert('Error', 'Unable to open WhatsApp. Please make sure it is installed.');
+      showToast('Unable to open WhatsApp');
     });
   };
 
@@ -205,26 +338,6 @@ const EshopHomeScreen = ({ navigation }) => {
 
   const handleOnboardingPress = () => {
     navigation.navigate('OnboardingNavigator');
-  };
-
-  const getIconName = (categoryName) => {
-    const name = categoryName.toLowerCase();
-    if (name.includes('boutique') || name.includes('fashion') || name.includes('clothing')) return 'checkroom';
-    if (name.includes('gift') || name.includes('accessories') || name.includes('jewelry')) return 'card-giftcard';
-    if (name.includes('food') || name.includes('restaurant') || name.includes('cafe')) return 'restaurant';
-    if (name.includes('electronics') || name.includes('gadgets') || name.includes('tech')) return 'devices';
-    if (name.includes('home') || name.includes('furniture') || name.includes('decor')) return 'home';
-    if (name.includes('pharmacy') || name.includes('medical') || name.includes('health')) return 'local-pharmacy';
-    if (name.includes('mali') || name.includes('general') || name.includes('variety')) return 'store';
-    if (name.includes('beauty') || name.includes('cosmetics') || name.includes('salon')) return 'face';
-    if (name.includes('sports') || name.includes('fitness') || name.includes('gym')) return 'fitness-center';
-    if (name.includes('books') || name.includes('stationery') || name.includes('education')) return 'menu-book';
-    if (name.includes('auto') || name.includes('car') || name.includes('vehicle')) return 'directions-car';
-    if (name.includes('pet') || name.includes('animal')) return 'pets';
-    if (name.includes('toy') || name.includes('kids') || name.includes('children')) return 'toys';
-    if (name.includes('flower') || name.includes('garden') || name.includes('plant')) return 'local-florist';
-    if (name.includes('shoe') || name.includes('footwear')) return 'shopping-bag';
-    return 'storefront';
   };
 
   // ==================== RENDER COMPONENTS ====================
@@ -261,20 +374,14 @@ const EshopHomeScreen = ({ navigation }) => {
         colors={[ShopColors.surface, ShopColors.card]}
         style={styles.quickActionsContainer}
       >
-        <TouchableOpacity
-          style={styles.quickActionButton}
-          onPress={handleMyOrdersPress}
-        >
+        <TouchableOpacity style={styles.quickActionButton} onPress={handleMyOrdersPress}>
           <View style={styles.quickActionIcon}>
             <Icon name="receipt-long" size={24} color={ShopColors.gold} />
           </View>
           <Text style={styles.quickActionText}>Orders</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.quickActionButton}
-          onPress={handleWhatsAppPress}
-        >
+        <TouchableOpacity style={styles.quickActionButton} onPress={handleWhatsAppPress}>
           <View style={styles.quickActionIcon}>
             <Icon name="chat" size={24} color={ShopColors.gold} />
           </View>
@@ -294,12 +401,10 @@ const EshopHomeScreen = ({ navigation }) => {
     </Animatable.View>
   );
 
-  // 3. Search Results - Shops + Products
+  // 3. Search Results - Shops + Products (only rendered while isSearchActive)
   const renderSearchResults = () => {
     const { shops = [], products = [] } = searchResults;
-    
-    if (!isSearching && shops.length === 0 && products.length === 0) return null;
-    
+
     if (isSearching) {
       return (
         <View style={styles.searchResultsContainer}>
@@ -309,16 +414,30 @@ const EshopHomeScreen = ({ navigation }) => {
       );
     }
 
+    if (searchError) {
+      return (
+        <View style={styles.searchResultsContainer}>
+          <View style={styles.errorState}>
+            <Icon name="error-outline" size={36} color={ShopColors.error} />
+            <Text style={styles.errorStateText}>Couldn't complete the search</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={handleSearch}>
+              <Icon name="refresh" size={16} color={ShopColors.gold} />
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+
+    const hasResults = shops.length > 0 || products.length > 0;
+
     return (
       <View style={styles.searchResultsContainer}>
-        {/* Shops Section */}
         {shops.length > 0 && (
           <>
             <View style={styles.searchSectionHeader}>
               <Icon name="storefront" size={16} color={ShopColors.gold} />
-              <Text style={styles.searchResultsSectionTitle}>
-                Shops ({shops.length})
-              </Text>
+              <Text style={styles.searchResultsSectionTitle}>Shops ({shops.length})</Text>
             </View>
             {shops.map((shop) => (
               <TouchableOpacity
@@ -343,14 +462,18 @@ const EshopHomeScreen = ({ navigation }) => {
                     <Text style={styles.searchShopProducts}>
                       {shop.productCount || 0} products
                     </Text>
-                    <View style={[
-                      styles.shopStatusDot,
-                      { backgroundColor: shop.isOpen ? ShopColors.success : ShopColors.error }
-                    ]} />
-                    <Text style={[
-                      styles.shopStatusText,
-                      { color: shop.isOpen ? ShopColors.success : ShopColors.error }
-                    ]}>
+                    <View
+                      style={[
+                        styles.shopStatusDot,
+                        { backgroundColor: shop.isOpen ? ShopColors.success : ShopColors.error },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.shopStatusText,
+                        { color: shop.isOpen ? ShopColors.success : ShopColors.error },
+                      ]}
+                    >
                       {shop.isOpen ? 'Open' : 'Closed'}
                     </Text>
                   </View>
@@ -361,14 +484,11 @@ const EshopHomeScreen = ({ navigation }) => {
           </>
         )}
 
-        {/* Products Section */}
         {products.length > 0 && (
           <>
             <View style={styles.searchSectionHeader}>
               <Icon name="shopping-bag" size={16} color={ShopColors.gold} />
-              <Text style={styles.searchResultsSectionTitle}>
-                Products ({products.length})
-              </Text>
+              <Text style={styles.searchResultsSectionTitle}>Products ({products.length})</Text>
             </View>
             {products.map((product) => (
               <TouchableOpacity
@@ -402,19 +522,20 @@ const EshopHomeScreen = ({ navigation }) => {
           </>
         )}
 
-        {shops.length === 0 && products.length === 0 && (
+        {!hasResults && (
           <View style={styles.searchEmptyContainer}>
             <Icon name="search-off" size={40} color={ShopColors.textMuted} />
-            <Text style={styles.searchResultsEmpty}>
-              No results found for "{searchQuery}"
-            </Text>
+            <Text style={styles.searchResultsEmpty}>No results found for "{searchQuery}"</Text>
             <Text style={styles.searchResultsEmptySub}>
               Try different keywords or browse categories
             </Text>
+            <TouchableOpacity style={styles.searchClearButton} onPress={clearSearch}>
+              <Text style={styles.searchClearText}>Back to home</Text>
+            </TouchableOpacity>
           </View>
         )}
 
-        {(shops.length > 0 || products.length > 0) && (
+        {hasResults && (
           <TouchableOpacity style={styles.searchClearButton} onPress={clearSearch}>
             <Text style={styles.searchClearText}>Clear Results</Text>
           </TouchableOpacity>
@@ -423,18 +544,105 @@ const EshopHomeScreen = ({ navigation }) => {
     );
   };
 
-  // 4. Trending Products
+  // 4. Platform Store Section
+  const renderPlatformStore = () => {
+    if (loading) return <PlatformBannerSkeleton />;
+
+    if (errors.platform) {
+      return (
+        <View style={styles.errorState}>
+          <Icon name="error-outline" size={28} color={ShopColors.error} />
+          <Text style={styles.errorStateText}>Couldn't load the official store</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={fetchPlatformProducts}>
+            <Icon name="refresh" size={16} color={ShopColors.gold} />
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (platformProducts.length === 0) return null;
+
+    return (
+      <Animatable.View animation="fadeInUp" delay={250} duration={500}>
+        <View style={styles.platformBannerContainer}>
+          <TouchableOpacity
+            style={styles.platformBanner}
+            onPress={() => {
+              if (platformProducts[0]?.shop) {
+                handleShopPress(platformProducts[0].shop);
+              }
+            }}
+            activeOpacity={0.9}
+          >
+            <LinearGradient
+              colors={['#6B4EFF', '#9F7AEA']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.platformBannerGradient}
+            >
+              <View style={styles.platformBannerContent}>
+                <View style={styles.platformBannerBadge}>
+                  <Icon name="verified" size={14} color={ShopColors.gold} />
+                  <Text style={styles.platformBannerBadgeText}>Official Store</Text>
+                </View>
+                <Text style={styles.platformBannerTitle}>Moihub Official Store</Text>
+                <Text style={styles.platformBannerSubtitle}>
+                  Trusted products • Verified quality • Fast delivery
+                </Text>
+                <View style={styles.platformBannerCTA}>
+                  <Text style={styles.platformBannerCTAText}>Shop Now</Text>
+                  <Icon name="arrow-forward" size={18} color={ShopColors.gold} />
+                </View>
+              </View>
+              <View style={styles.platformBannerIcon}>
+                <Icon name="storefront" size={50} color={ShopColors.gold} />
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </Animatable.View>
+    );
+  };
+
+  // 5. Trending Products
   const renderTrendingProducts = () => {
+    if (loading) {
+      return (
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Trending Products</Text>
+          </View>
+          <TrendingSkeleton />
+        </View>
+      );
+    }
+
+    if (errors.trending) {
+      return (
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Trending Products</Text>
+          </View>
+          <View style={styles.errorState}>
+            <Icon name="error-outline" size={28} color={ShopColors.error} />
+            <Text style={styles.errorStateText}>Couldn't load trending products</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={fetchTrendingProducts}>
+              <Icon name="refresh" size={16} color={ShopColors.gold} />
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+
     if (trendingProducts.length === 0) return null;
 
     return (
       <Animatable.View animation="fadeInUp" delay={300} duration={500}>
         <View style={styles.sectionContainer}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>🔥 Trending Products</Text>
-            <TouchableOpacity>
-              <Text style={styles.seeAllText}>See All</Text>
-            </TouchableOpacity>
+            <Text style={styles.sectionTitle}>Trending Products</Text>
           </View>
 
           <FlatList
@@ -448,11 +656,20 @@ const EshopHomeScreen = ({ navigation }) => {
                 onPress={() => handleProductPress(item)}
                 activeOpacity={0.8}
               >
-                <Image
-                  source={{ uri: item.image }}
-                  style={styles.trendingImage}
-                  resizeMode="cover"
-                />
+                <View style={styles.trendingImageWrapper}>
+                  <Image
+                    source={{ uri: item.image }}
+                    style={styles.trendingImage}
+                    resizeMode="cover"
+                  />
+                  <TouchableOpacity
+                    style={styles.trendingAddButton}
+                    onPress={() => handleAddToCart(item)}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    <Icon name="add-shopping-cart" size={16} color={ShopColors.gold} />
+                  </TouchableOpacity>
+                </View>
                 <View style={styles.trendingInfo}>
                   <Text style={styles.trendingName} numberOfLines={1}>
                     {item.name}
@@ -462,12 +679,6 @@ const EshopHomeScreen = ({ navigation }) => {
                     {item.shop?.shopName}
                   </Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.trendingAddButton}
-                  onPress={() => handleAddToCart(item)}
-                >
-                  <Icon name="add-shopping-cart" size={16} color={ShopColors.gold} />
-                </TouchableOpacity>
               </TouchableOpacity>
             )}
             contentContainerStyle={styles.trendingList}
@@ -477,38 +688,70 @@ const EshopHomeScreen = ({ navigation }) => {
     );
   };
 
-  // 5. Categories - Grid (3 columns with proper sizing)
+  // 6. Categories - 2-Column Grid with Images
   const renderCategories = () => {
-    if (categories.length === 0) return null;
-
-    const numColumns = 3;
-    const gap = 8;
+    const numColumns = 2;
+    const gap = 12;
     const horizontalPadding = 32;
-    const chipWidth = (width - horizontalPadding - (numColumns - 1) * gap) / numColumns;
+    const cardWidth = (width - horizontalPadding - gap) / numColumns;
+
+    if (loading) {
+      return (
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Shop Categories</Text>
+          </View>
+          <CategorySkeleton />
+        </View>
+      );
+    }
+
+    if (errors.categories) {
+      return (
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Shop Categories</Text>
+          </View>
+          <View style={styles.errorState}>
+            <Icon name="error-outline" size={28} color={ShopColors.error} />
+            <Text style={styles.errorStateText}>Couldn't load categories</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={fetchCategories}>
+              <Icon name="refresh" size={16} color={ShopColors.gold} />
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+
+    if (categories.length === 0) return null;
 
     return (
       <Animatable.View animation="fadeInUp" delay={400} duration={500}>
         <View style={styles.sectionContainer}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>📂 Shop Categories</Text>
+            <Text style={styles.sectionTitle}>Shop Categories</Text>
           </View>
 
           <View style={styles.categoriesGrid}>
             {categories.map((item) => (
               <TouchableOpacity
                 key={item._id}
-                style={[styles.categoryChip, { width: chipWidth }]}
+                style={[styles.categoryCard, { width: cardWidth }]}
                 onPress={() => handleCategoryPress(item)}
-                activeOpacity={0.7}
+                activeOpacity={0.8}
               >
+                <Image
+                  source={{ uri: item.image || 'https://via.placeholder.com/400x200' }}
+                  style={styles.categoryCardImage}
+                  resizeMode="cover"
+                />
                 <LinearGradient
-                  colors={[ShopColors.card, ShopColors.surface]}
-                  style={styles.categoryChipGradient}
+                  colors={['transparent', 'rgba(0,0,0,0.8)', 'rgba(0,0,0,0.95)']}
+                  locations={[0, 0.5, 1]}
+                  style={styles.categoryCardGradient}
                 >
-                  <Icon name={getIconName(item.name)} size={18} color={ShopColors.gold} />
-                  <Text style={styles.categoryChipText} numberOfLines={1}>
-                    {item.name}
-                  </Text>
+                  <Text style={styles.categoryCardName}>{item.name}</Text>
                 </LinearGradient>
               </TouchableOpacity>
             ))}
@@ -518,7 +761,7 @@ const EshopHomeScreen = ({ navigation }) => {
     );
   };
 
-  // 6. Want Your Shop Here
+  // 7. Want Your Shop Here
   const renderShopHere = () => (
     <Animatable.View animation="fadeInUp" delay={600} duration={500}>
       <View style={styles.shopHereSection}>
@@ -527,10 +770,7 @@ const EshopHomeScreen = ({ navigation }) => {
           onPress={handleOnboardingPress}
           activeOpacity={0.8}
         >
-          <LinearGradient
-            colors={[ShopColors.card, ShopColors.surface]}
-            style={styles.shopHereGradient}
-          >
+          <LinearGradient colors={[ShopColors.card, ShopColors.surface]} style={styles.shopHereGradient}>
             <View style={styles.shopHereGoldAccent} />
 
             <View style={styles.shopHereIconContainer}>
@@ -558,10 +798,10 @@ const EshopHomeScreen = ({ navigation }) => {
     </Animatable.View>
   );
 
-  // 7. Cart FAB - Badge OUTSIDE the gradient
+  // 8. Cart FAB
   const renderCartFAB = () => {
     const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
-    
+
     return (
       <Animatable.View
         animation="bounceIn"
@@ -575,10 +815,7 @@ const EshopHomeScreen = ({ navigation }) => {
           onPress={() => navigation.navigate('Cart')}
           activeOpacity={0.8}
         >
-          <LinearGradient
-            colors={[ShopColors.primary, ShopColors.secondary]}
-            style={styles.fabGradient}
-          >
+          <LinearGradient colors={[ShopColors.primary, ShopColors.secondary]} style={styles.fabGradient}>
             <Icon name="shopping-cart" size={28} color={ShopColors.gold} />
           </LinearGradient>
           {totalItems > 0 && (
@@ -590,24 +827,6 @@ const EshopHomeScreen = ({ navigation }) => {
       </Animatable.View>
     );
   };
-
-  // ==================== LOADING STATE ====================
-  if (loading) {
-    return (
-      <LinearGradient colors={[ShopColors.background, ShopColors.surface]} style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={ShopColors.primary} />
-        <View style={styles.loadingContainer}>
-          <Animatable.View animation="pulse" iterationCount="infinite">
-            <View style={styles.loadingIcon}>
-              <Icon name="storefront" size={60} color={ShopColors.gold} />
-            </View>
-          </Animatable.View>
-          <ActivityIndicator size="large" color={ShopColors.gold} />
-          <Text style={styles.loadingText}>Loading your shopping experience...</Text>
-        </View>
-      </LinearGradient>
-    );
-  }
 
   // ==================== MAIN RENDER ====================
   return (
@@ -653,25 +872,16 @@ const EshopHomeScreen = ({ navigation }) => {
             </LinearGradient>
           </Animatable.View>
 
-          {/* Search Bar */}
           {renderSearchBar()}
-
-          {/* Quick Actions */}
           {renderQuickActions()}
 
-          {/* Search Results - Shops + Products */}
-          {renderSearchResults()}
-
-          {/* Only show other sections if not searching and no results */}
-          {!isSearching && searchResults.shops.length === 0 && searchResults.products.length === 0 && (
+          {isSearchActive ? (
+            renderSearchResults()
+          ) : (
             <>
-              {/* Trending Products */}
+              {renderPlatformStore()}
               {renderTrendingProducts()}
-
-              {/* Categories */}
               {renderCategories()}
-
-              {/* Want Your Shop Here */}
               {renderShopHere()}
             </>
           )}
@@ -679,8 +889,8 @@ const EshopHomeScreen = ({ navigation }) => {
           <View style={styles.bottomPadding} />
         </ScrollView>
 
-        {/* Cart FAB */}
         {renderCartFAB()}
+        <Toast message={toast.message} visible={toast.visible} />
       </SafeAreaView>
     </LinearGradient>
   );
@@ -709,48 +919,10 @@ const styles = StyleSheet.create({
     opacity: 0.1,
     color: ShopColors.gold,
   },
-  icon1: {
-    top: '10%',
-    right: '5%',
-    transform: [{ rotate: '15deg' }],
-  },
-  icon2: {
-    top: '30%',
-    left: '5%',
-    transform: [{ rotate: '-10deg' }],
-  },
-  icon3: {
-    bottom: '20%',
-    right: '10%',
-    transform: [{ rotate: '25deg' }],
-  },
-  icon4: {
-    bottom: '40%',
-    left: '8%',
-    transform: [{ rotate: '-15deg' }],
-  },
-  // Loading
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingIcon: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: ShopColors.card,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: ShopColors.gold + '40',
-  },
-  loadingText: {
-    marginTop: 15,
-    fontSize: 16,
-    color: ShopColors.textSecondary,
-  },
+  icon1: { top: '10%', right: '5%', transform: [{ rotate: '15deg' }] },
+  icon2: { top: '30%', left: '5%', transform: [{ rotate: '-10deg' }] },
+  icon3: { bottom: '20%', right: '10%', transform: [{ rotate: '25deg' }] },
+  icon4: { bottom: '40%', left: '8%', transform: [{ rotate: '-15deg' }] },
   // Header
   header: {
     paddingHorizontal: 20,
@@ -853,37 +1025,13 @@ const styles = StyleSheet.create({
     marginRight: 12,
     backgroundColor: ShopColors.surface,
   },
-  searchShopInfo: {
-    flex: 1,
-  },
-  searchShopName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: ShopColors.text,
-  },
-  searchShopCategory: {
-    fontSize: 12,
-    color: ShopColors.textSecondary,
-  },
-  searchShopMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  searchShopProducts: {
-    fontSize: 11,
-    color: ShopColors.textMuted,
-  },
-  shopStatusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  shopStatusText: {
-    fontSize: 10,
-    fontWeight: '500',
-  },
+  searchShopInfo: { flex: 1 },
+  searchShopName: { fontSize: 14, fontWeight: '600', color: ShopColors.text },
+  searchShopCategory: { fontSize: 12, color: ShopColors.textSecondary },
+  searchShopMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  searchShopProducts: { fontSize: 11, color: ShopColors.textMuted },
+  shopStatusDot: { width: 6, height: 6, borderRadius: 3 },
+  shopStatusText: { fontSize: 10, fontWeight: '500' },
   // Product Items
   searchResultItem: {
     flexDirection: 'row',
@@ -899,23 +1047,10 @@ const styles = StyleSheet.create({
     marginRight: 12,
     backgroundColor: ShopColors.surface,
   },
-  searchResultInfo: {
-    flex: 1,
-  },
-  searchResultName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: ShopColors.text,
-  },
-  searchResultPrice: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: ShopColors.gold,
-  },
-  searchResultShop: {
-    fontSize: 11,
-    color: ShopColors.textMuted,
-  },
+  searchResultInfo: { flex: 1 },
+  searchResultName: { fontSize: 14, fontWeight: '600', color: ShopColors.text },
+  searchResultPrice: { fontSize: 13, fontWeight: '700', color: ShopColors.gold },
+  searchResultShop: { fontSize: 11, color: ShopColors.textMuted },
   searchResultAddButton: {
     padding: 8,
     borderRadius: 20,
@@ -923,30 +1058,49 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: ShopColors.gold + '20',
   },
-  searchClearButton: {
-    alignItems: 'center',
-    paddingTop: 10,
-  },
-  searchClearText: {
-    color: ShopColors.textMuted,
-    fontSize: 13,
-  },
-  searchEmptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  searchResultsEmpty: {
-    textAlign: 'center',
-    color: ShopColors.textMuted,
-    fontSize: 14,
-    marginTop: 8,
-  },
+  searchClearButton: { alignItems: 'center', paddingTop: 10 },
+  searchClearText: { color: ShopColors.textMuted, fontSize: 13 },
+  searchEmptyContainer: { alignItems: 'center', paddingVertical: 20 },
+  searchResultsEmpty: { textAlign: 'center', color: ShopColors.textMuted, fontSize: 14, marginTop: 8 },
   searchResultsEmptySub: {
     textAlign: 'center',
     color: ShopColors.textMuted,
     fontSize: 12,
     marginTop: 4,
     opacity: 0.7,
+  },
+  // Error state (shared)
+  errorState: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    gap: 8,
+  },
+  errorStateText: {
+    color: ShopColors.textMuted,
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: ShopColors.primary + '20',
+    borderWidth: 1,
+    borderColor: ShopColors.gold + '30',
+  },
+  retryButtonText: {
+    color: ShopColors.gold,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  // Skeletons
+  skeletonBase: {
+    backgroundColor: ShopColors.card,
+    borderRadius: 8,
   },
   // Quick Actions
   quickActionsContainer: {
@@ -959,11 +1113,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: ShopColors.gold + '30',
   },
-  quickActionButton: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 6,
-  },
+  quickActionButton: { flex: 1, alignItems: 'center', paddingVertical: 6 },
   quickActionIcon: {
     width: 40,
     height: 40,
@@ -973,35 +1123,73 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 4,
   },
-  quickActionText: {
-    fontSize: 11,
-    color: ShopColors.textSecondary,
-    fontWeight: '500',
-  },
+  quickActionText: { fontSize: 11, color: ShopColors.textSecondary, fontWeight: '500' },
   // Section
-  sectionContainer: {
-    marginHorizontal: 16,
-    marginBottom: 20,
-  },
+  sectionContainer: { marginHorizontal: 16, marginBottom: 20 },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: ShopColors.gold,
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: ShopColors.gold },
+  // Platform Banner
+  platformBannerContainer: { marginHorizontal: 16, marginBottom: 20 },
+  platformBanner: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: ShopColors.gold + '40',
   },
-  seeAllText: {
-    fontSize: 13,
-    color: ShopColors.textMuted,
+  platformBannerGradient: {
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  platformBannerContent: { flex: 1 },
+  platformBannerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,215,0,0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    gap: 4,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: ShopColors.gold + '40',
+  },
+  platformBannerBadgeText: { fontSize: 10, color: ShopColors.gold, fontWeight: '600' },
+  platformBannerTitle: { fontSize: 20, fontWeight: '700', color: ShopColors.gold, marginBottom: 4 },
+  platformBannerSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginBottom: 12 },
+  platformBannerCTA: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,215,0,0.15)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: ShopColors.gold + '30',
+  },
+  platformBannerCTAText: { fontSize: 14, fontWeight: '600', color: ShopColors.gold },
+  platformBannerIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255,215,0,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: ShopColors.gold + '30',
+    marginLeft: 12,
   },
   // Trending Products
-  trendingList: {
-    paddingRight: 4,
-  },
+  trendingList: { paddingRight: 4 },
   trendingCard: {
     width: 140,
     backgroundColor: ShopColors.card,
@@ -1011,89 +1199,71 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: ShopColors.gold + '20',
   },
-  trendingImage: {
+  trendingImageWrapper: {
     width: '100%',
     height: 120,
+    position: 'relative',
+  },
+  trendingImage: {
+    width: '100%',
+    height: '100%',
     backgroundColor: ShopColors.surface,
   },
   trendingInfo: {
     padding: 10,
   },
-  trendingName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: ShopColors.text,
-    marginBottom: 2,
-  },
-  trendingPrice: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: ShopColors.gold,
-    marginBottom: 2,
-  },
-  trendingShop: {
-    fontSize: 11,
-    color: ShopColors.textMuted,
-  },
+  trendingName: { fontSize: 13, fontWeight: '600', color: ShopColors.text, marginBottom: 2 },
+  trendingPrice: { fontSize: 14, fontWeight: '700', color: ShopColors.gold, marginBottom: 2 },
+  trendingShop: { fontSize: 11, color: ShopColors.textMuted },
+  // Add-to-cart now floats on the image, never over text
   trendingAddButton: {
     position: 'absolute',
-    bottom: 10,
-    right: 10,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: ShopColors.primary + '30',
+    top: 8,
+    right: 8,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(10,10,15,0.65)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: ShopColors.gold + '30',
+    borderColor: ShopColors.gold + '50',
   },
-  // Categories - Grid (3 columns)
-  categoriesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-start',
-    gap: 8,
-  },
-  categoryChip: {
-    borderRadius: 20,
+  // Categories
+  categoriesGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  categoryCard: {
+    borderRadius: 12,
     overflow: 'hidden',
+    marginBottom: 12,
+    backgroundColor: ShopColors.card,
     borderWidth: 1,
     borderColor: ShopColors.gold + '20',
-    marginBottom: 8,
-  },
-  categoryChipGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-    gap: 6,
-    minHeight: 48,
-  },
-  categoryChipText: {
-    fontSize: 12,
-    color: ShopColors.text,
-    fontWeight: '500',
-    flexShrink: 1,
-  },
-  // Want Your Shop Here - KEPT
-  shopHereSection: {
-    marginHorizontal: 16,
-    marginBottom: 30,
-  },
-  shopHereCard: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: ShopColors.gold + '30',
-  },
-  shopHereGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
+    height: 110,
     position: 'relative',
   },
+  categoryCardImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  categoryCardGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    minHeight: 50,
+    justifyContent: 'flex-end',
+  },
+  categoryCardName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  // Want Your Shop Here - KEPT
+  shopHereSection: { marginHorizontal: 16, marginBottom: 30 },
+  shopHereCard: { borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: ShopColors.gold + '30' },
+  shopHereGradient: { flexDirection: 'row', alignItems: 'center', padding: 16, position: 'relative' },
   shopHereGoldAccent: {
     position: 'absolute',
     top: 0,
@@ -1102,34 +1272,13 @@ const styles = StyleSheet.create({
     height: 2,
     backgroundColor: ShopColors.gold,
   },
-  shopHereIconContainer: {
-    marginRight: 12,
-  },
-  shopHereIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  shopHereContent: {
-    flex: 1,
-  },
-  shopHereTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: ShopColors.gold,
-    marginBottom: 2,
-  },
-  shopHereSubtitle: {
-    fontSize: 12,
-    color: ShopColors.textMuted,
-    lineHeight: 16,
-  },
-  shopHereArrow: {
-    marginLeft: 8,
-  },
-  // Cart FAB - Badge outside gradient
+  shopHereIconContainer: { marginRight: 12 },
+  shopHereIcon: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
+  shopHereContent: { flex: 1 },
+  shopHereTitle: { fontSize: 16, fontWeight: '700', color: ShopColors.gold, marginBottom: 2 },
+  shopHereSubtitle: { fontSize: 12, color: ShopColors.textMuted, lineHeight: 16 },
+  shopHereArrow: { marginLeft: 8 },
+  // Cart FAB
   fabContainer: {
     position: 'absolute',
     bottom: 24,
@@ -1151,12 +1300,7 @@ const styles = StyleSheet.create({
     zIndex: 9999,
     position: 'relative',
   },
-  fabGradient: {
-    flex: 1,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  fabGradient: { flex: 1, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
   fabBadge: {
     position: 'absolute',
     top: -6,
@@ -1177,14 +1321,39 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
   },
-  fabBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-    textAlign: 'center',
+  fabBadgeText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700', textAlign: 'center' },
+  bottomPadding: { height: 80 },
+  // Toast
+  toastContainer: {
+    position: 'absolute',
+    bottom: 100,
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    zIndex: 10001,
   },
-  bottomPadding: {
-    height: 80,
+  toastContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: ShopColors.card,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: ShopColors.gold + '40',
+    maxWidth: '90%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  toastText: {
+    color: ShopColors.text,
+    fontSize: 13,
+    fontWeight: '500',
+    flexShrink: 1,
   },
 });
 

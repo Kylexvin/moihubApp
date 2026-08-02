@@ -1,5 +1,5 @@
 // screens/eshop/CategoryShopsScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
-  ActivityIndicator,
-  Alert,
   Dimensions,
-  StatusBar
+  StatusBar,
+  TextInput,
+  Keyboard,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
@@ -36,32 +36,61 @@ const ShopColors = {
   gold: '#FFD700',          // Pure Gold
   goldLight: '#FFE55C',     // Light Gold
   purpleLight: '#8B6FF6',   // Light Purple
+  skeleton: '#2E2E52',
 };
+
+// ==================== SKELETON ====================
+const SkeletonBlock = ({ style }) => (
+  <Animatable.View
+    animation="pulse"
+    iterationCount="infinite"
+    duration={1200}
+    style={[styles.skeletonBlock, style]}
+  />
+);
+
+const ShopCardSkeleton = () => (
+  <View style={styles.shopCard}>
+    <View style={[styles.cardGradient, { backgroundColor: ShopColors.card }]}>
+      <View style={styles.shopHeader}>
+        <SkeletonBlock style={{ width: 56, height: 56, borderRadius: 16, marginRight: 12 }} />
+        <View style={{ flex: 1 }}>
+          <SkeletonBlock style={{ width: '70%', height: 16, marginBottom: 8 }} />
+          <SkeletonBlock style={{ width: '90%', height: 12, marginBottom: 6 }} />
+          <SkeletonBlock style={{ width: '50%', height: 12 }} />
+        </View>
+      </View>
+    </View>
+  </View>
+);
 
 const CategoryShopsScreen = ({ navigation, route }) => {
   const { categorySlug, categoryName, categoryId } = route.params;
   const [shops, setShops] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchShops();
   }, []);
 
   const fetchShops = async () => {
+    setLoading(true);
+    setError(false);
     try {
-      setLoading(true);
       const response = await fetch(`https://moihub.onrender.com/api/eshop/vendor/categories/${categorySlug}/shops`);
       const data = await response.json();
-      
+
       if (data.success) {
         setShops(data.data);
       } else {
-        Alert.alert('Error', 'Failed to fetch shops');
+        setError(true);
       }
-    } catch (error) {
-      console.error('Error fetching shops:', error);
-      Alert.alert('Error', 'Network error. Please check your connection.');
+    } catch (err) {
+      console.error('Error fetching shops:', err);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -69,9 +98,34 @@ const CategoryShopsScreen = ({ navigation, route }) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchShops();
-    setRefreshing(false);
+    setError(false);
+    try {
+      const response = await fetch(`https://moihub.onrender.com/api/eshop/vendor/categories/${categorySlug}/shops`);
+      const data = await response.json();
+      if (data.success) {
+        setShops(data.data);
+      } else {
+        setError(true);
+      }
+    } catch (err) {
+      console.error('Error refreshing shops:', err);
+      setError(true);
+    } finally {
+      setRefreshing(false);
+    }
   };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    Keyboard.dismiss();
+  };
+
+  // Simple client-side filter over the shops already fetched for this category
+  const filteredShops = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return shops;
+    return shops.filter((shop) => shop.shopName?.toLowerCase().includes(q));
+  }, [shops, searchQuery]);
 
   const handleShopPress = (shop) => {
     navigation.navigate('ShopProducts', {
@@ -107,13 +161,13 @@ const CategoryShopsScreen = ({ navigation, route }) => {
 
   const renderShopItem = ({ item, index }) => {
     const status = getShopStatus(item);
-    const isAvailable = item.isActive && item.isOpen && item.isApproved && 
+    const isAvailable = item.isActive && item.isOpen && item.isApproved &&
                        new Date(item.subscriptionEndDate) > new Date();
 
     return (
-      <Animatable.View 
-        animation="fadeInUp" 
-        delay={index * 100}
+      <Animatable.View
+        animation="fadeInUp"
+        delay={Math.min(index, 8) * 100}
         duration={500}
       >
         <TouchableOpacity
@@ -132,7 +186,7 @@ const CategoryShopsScreen = ({ navigation, route }) => {
           >
             {/* Gold Accent Line */}
             <View style={styles.cardGoldAccent} />
-            
+
             {/* Decorative Pattern */}
             <View style={styles.cardPattern}>
               <Text style={styles.patternIcon}>👑</Text>
@@ -149,7 +203,7 @@ const CategoryShopsScreen = ({ navigation, route }) => {
                   <Icon name={getShopIcon(index)} size={32} color={ShopColors.gold} />
                 </LinearGradient>
               </View>
-              
+
               <View style={styles.shopInfo}>
                 <View style={styles.shopTitleRow}>
                   <Text style={styles.shopName} numberOfLines={1}>{item.shopName}</Text>
@@ -158,11 +212,11 @@ const CategoryShopsScreen = ({ navigation, route }) => {
                     <Text style={[styles.statusText, { color: status.color }]}>{status.text}</Text>
                   </View>
                 </View>
-                
+
                 <Text style={styles.shopDescription} numberOfLines={2}>
                   {item.description || 'Quality products and excellent service'}
                 </Text>
-                
+
                 <View style={styles.shopMeta}>
                   {item.address && (
                     <View style={styles.metaItem}>
@@ -204,57 +258,70 @@ const CategoryShopsScreen = ({ navigation, route }) => {
   };
 
   const renderHeader = () => (
-    <Animatable.View animation="fadeInDown" duration={500}>
-      <LinearGradient
-        colors={[ShopColors.primary, ShopColors.secondary]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.headerInfo}
-      >
-        <View style={styles.categoryHeader}>
-          <View style={styles.categoryIconContainer}>
-            <Icon name="category" size={28} color={ShopColors.gold} />
+    <>
+      <Animatable.View animation="fadeInDown" duration={500}>
+        <LinearGradient
+          colors={[ShopColors.primary, ShopColors.secondary]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerInfo}
+        >
+          <View style={styles.categoryHeader}>
+            <View style={styles.categoryIconContainer}>
+              <Icon name="category" size={28} color={ShopColors.gold} />
+            </View>
+            <View style={styles.categoryDetails}>
+              <Text style={styles.categoryTitle}>{categoryName}</Text>
+              <Text style={styles.shopsCount}>
+                {shops.length} {shops.length === 1 ? 'shop' : 'shops'} available
+              </Text>
+            </View>
           </View>
-          <View style={styles.categoryDetails}>
-            <Text style={styles.categoryTitle}>{categoryName}</Text>
-            <Text style={styles.shopsCount}>
-              {shops.length} {shops.length === 1 ? 'shop' : 'shops'} available
-            </Text>
-          </View>
-        </View>
-        
-        {shops.length > 0 && (
-          <View style={styles.filterContainer}>
-            <TouchableOpacity style={styles.filterButton}>
-              <Icon name="filter-list" size={16} color={ShopColors.gold} />
-              <Text style={styles.filterText}>Filter</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.filterButton}>
-              <Icon name="sort" size={16} color={ShopColors.gold} />
-              <Text style={styles.filterText}>Sort</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
-        {/* Gold Glow Effect */}
-        <View style={styles.headerGlow} />
-      </LinearGradient>
-    </Animatable.View>
+          {/* Gold Glow Effect */}
+          <View style={styles.headerGlow} />
+        </LinearGradient>
+      </Animatable.View>
+
+      {/* Search Panel - filters the shops already loaded for this category */}
+      {shops.length > 0 && (
+        <Animatable.View animation="fadeIn" duration={400}>
+          <View style={styles.searchContainer}>
+            <View style={styles.searchBar}>
+              <Icon name="search" size={20} color={ShopColors.textMuted} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder={`Search shops in ${categoryName}...`}
+                placeholderTextColor={ShopColors.textMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                returnKeyType="search"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={clearSearch}>
+                  <Icon name="close" size={18} color={ShopColors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </Animatable.View>
+      )}
+    </>
   );
 
   if (loading) {
     return (
       <LinearGradient colors={[ShopColors.background, ShopColors.surface]} style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={ShopColors.primary} />
-        <View style={styles.loadingContainer}>
-          <Animatable.View animation="pulse" iterationCount="infinite">
-            <View style={styles.loadingIcon}>
-              <Icon name="storefront" size={60} color={ShopColors.gold} />
-            </View>
-          </Animatable.View>
-          <ActivityIndicator size="large" color={ShopColors.gold} />
-          <Text style={styles.loadingText}>Finding shops in {categoryName}...</Text>
-        </View>
+        <SafeAreaView style={styles.safeArea}>
+          <View style={{ paddingTop: 16 }}>
+            <SkeletonBlock style={{ height: 110, marginHorizontal: 16, marginBottom: 16, borderRadius: 20 }} />
+            <SkeletonBlock style={{ height: 46, marginHorizontal: 16, marginBottom: 16 }} />
+            <ShopCardSkeleton />
+            <ShopCardSkeleton />
+            <ShopCardSkeleton />
+          </View>
+        </SafeAreaView>
       </LinearGradient>
     );
   }
@@ -262,7 +329,7 @@ const CategoryShopsScreen = ({ navigation, route }) => {
   return (
     <LinearGradient colors={[ShopColors.background, ShopColors.surface]} style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={ShopColors.primary} />
-      
+
       {/* Floating Icons */}
       <View style={styles.floatingIcons}>
         <Text style={[styles.floatingIcon, styles.icon1]}>👑</Text>
@@ -273,7 +340,7 @@ const CategoryShopsScreen = ({ navigation, route }) => {
 
       <SafeAreaView style={styles.safeArea}>
         <FlatList
-          data={shops}
+          data={error ? [] : filteredShops}
           renderItem={renderShopItem}
           keyExtractor={(item) => item._id}
           ListHeaderComponent={renderHeader}
@@ -281,28 +348,61 @@ const CategoryShopsScreen = ({ navigation, route }) => {
           showsVerticalScrollIndicator={false}
           refreshing={refreshing}
           onRefresh={onRefresh}
+          keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
-            <Animatable.View animation="fadeIn" duration={500} style={styles.emptyContainer}>
-              <View style={styles.emptyIconContainer}>
-                <Icon name="store" size={60} color={ShopColors.textMuted} />
-              </View>
-              <Text style={styles.emptyTitle}>No Shops Found</Text>
-              <Text style={styles.emptyText}>
-                No shops are currently available in the {categoryName} category.
-              </Text>
-              <Text style={styles.emptySubtext}>
-                Check back later or try refreshing.
-              </Text>
-              <TouchableOpacity style={styles.retryButton} onPress={fetchShops}>
-                <LinearGradient
-                  colors={[ShopColors.primary, ShopColors.secondary]}
-                  style={styles.retryGradient}
-                >
-                  <Icon name="refresh" size={16} color={ShopColors.gold} />
-                  <Text style={styles.retryText}>Retry</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </Animatable.View>
+            error ? (
+              <Animatable.View animation="fadeIn" duration={500} style={styles.emptyContainer}>
+                <View style={styles.emptyIconContainer}>
+                  <Icon name="error-outline" size={60} color={ShopColors.error} />
+                </View>
+                <Text style={styles.emptyTitle}>Couldn't Load Shops</Text>
+                <Text style={styles.emptyText}>
+                  Something went wrong while fetching shops in {categoryName}.
+                </Text>
+                <Text style={styles.emptySubtext}>Check your connection and try again.</Text>
+                <TouchableOpacity style={styles.retryButton} onPress={fetchShops}>
+                  <LinearGradient colors={[ShopColors.primary, ShopColors.secondary]} style={styles.retryGradient}>
+                    <Icon name="refresh" size={16} color={ShopColors.gold} />
+                    <Text style={styles.retryText}>Retry</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </Animatable.View>
+            ) : searchQuery.trim().length > 0 ? (
+              <Animatable.View animation="fadeIn" duration={400} style={styles.emptyContainer}>
+                <View style={styles.emptyIconContainer}>
+                  <Icon name="search-off" size={60} color={ShopColors.textMuted} />
+                </View>
+                <Text style={styles.emptyTitle}>No Matches</Text>
+                <Text style={styles.emptyText}>
+                  No shops in {categoryName} match "{searchQuery}".
+                </Text>
+                <TouchableOpacity style={styles.retryButton} onPress={clearSearch}>
+                  <LinearGradient colors={[ShopColors.primary, ShopColors.secondary]} style={styles.retryGradient}>
+                    <Icon name="close" size={16} color={ShopColors.gold} />
+                    <Text style={styles.retryText}>Clear Search</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </Animatable.View>
+            ) : (
+              <Animatable.View animation="fadeIn" duration={500} style={styles.emptyContainer}>
+                <View style={styles.emptyIconContainer}>
+                  <Icon name="store" size={60} color={ShopColors.textMuted} />
+                </View>
+                <Text style={styles.emptyTitle}>No Shops Found</Text>
+                <Text style={styles.emptyText}>
+                  No shops are currently available in the {categoryName} category.
+                </Text>
+                <Text style={styles.emptySubtext}>
+                  Check back later or try refreshing.
+                </Text>
+                <TouchableOpacity style={styles.retryButton} onPress={fetchShops}>
+                  <LinearGradient colors={[ShopColors.primary, ShopColors.secondary]} style={styles.retryGradient}>
+                    <Icon name="refresh" size={16} color={ShopColors.gold} />
+                    <Text style={styles.retryText}>Retry</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </Animatable.View>
+            )
           }
         />
       </SafeAreaView>
@@ -316,6 +416,10 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+  },
+  skeletonBlock: {
+    backgroundColor: ShopColors.skeleton,
+    borderRadius: 8,
   },
   floatingIcons: {
     position: 'absolute',
@@ -349,31 +453,10 @@ const styles = StyleSheet.create({
     left: '8%',
     transform: [{ rotate: '-15deg' }],
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingIcon: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: ShopColors.card,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: ShopColors.gold + '40',
-  },
-  loadingText: {
-    marginTop: 15,
-    fontSize: 16,
-    color: ShopColors.textSecondary,
-  },
   headerInfo: {
     marginHorizontal: 16,
     marginTop: 16,
-    marginBottom: 20,
+    marginBottom: 16,
     borderRadius: 20,
     padding: 20,
     position: 'relative',
@@ -391,7 +474,6 @@ const styles = StyleSheet.create({
   categoryHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
   },
   categoryIconContainer: {
     backgroundColor: ShopColors.gold + '20',
@@ -415,31 +497,31 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.8)',
     fontWeight: '500',
   },
-  filterContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
+  // Search Panel
+  searchContainer: {
+    marginHorizontal: 16,
+    marginBottom: 16,
   },
-  filterButton: {
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: ShopColors.gold + '15',
-    paddingHorizontal: 16,
+    backgroundColor: ShopColors.card,
+    borderRadius: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 25,
-    flex: 1,
-    justifyContent: 'center',
     borderWidth: 1,
     borderColor: ShopColors.gold + '30',
   },
-  filterText: {
-    fontSize: 14,
-    color: ShopColors.gold,
-    fontWeight: '600',
-    marginLeft: 6,
+  searchInput: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 15,
+    color: ShopColors.text,
+    paddingVertical: 2,
   },
   shopsList: {
     paddingBottom: 20,
+    flexGrow: 1,
   },
   shopCard: {
     marginHorizontal: 16,
@@ -540,6 +622,7 @@ const styles = StyleSheet.create({
     color: ShopColors.textMuted,
     marginLeft: 6,
     flex: 1,
+    flexShrink: 1,
   },
   shopFooter: {
     flexDirection: 'row',
