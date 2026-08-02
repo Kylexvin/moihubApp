@@ -187,6 +187,8 @@ const EshopHomeScreen = ({ navigation }) => {
     setLoading(false);
   };
 
+
+  
   const fetchCategories = async () => {
     try {
       setErrors((prev) => ({ ...prev, categories: false }));
