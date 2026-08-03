@@ -158,7 +158,8 @@ const EshopHomeScreen = ({ navigation }) => {
 
   const { cartItems, addToCart } = useCart();
 
-  const API_BASE = 'http://192.168.100.10:5000/api/eshop/vendor';
+  
+  const API_BASE = 'https://moihub.onrender.com/api/eshop/vendor';
 
   // Search is only "active" once the user has actually typed and submitted something
   const isSearchActive = searchQuery.trim().length > 0;
@@ -578,7 +579,7 @@ const fetchPlatformProducts = async () => {
   }
 
   if (platformProducts.length === 0) return null;
-  
+
     return (
       <Animatable.View animation="fadeInUp" delay={250} duration={500}>
         <View style={styles.platformBannerContainer}>
