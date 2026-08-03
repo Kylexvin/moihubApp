@@ -187,8 +187,6 @@ const EshopHomeScreen = ({ navigation }) => {
     setLoading(false);
   };
 
-
-  
   const fetchCategories = async () => {
     try {
       setErrors((prev) => ({ ...prev, categories: false }));
@@ -221,21 +219,37 @@ const EshopHomeScreen = ({ navigation }) => {
     }
   };
 
-  const fetchPlatformProducts = async () => {
-    try {
+const fetchPlatformProducts = async () => {
+  try {
+    setErrors((prev) => ({ ...prev, platform: false }));
+    const response = await fetch(`${API_BASE}/platform-products?limit=6`);
+    
+    // If 404, it means no platform shop or closed - just hide it
+    if (response.status === 404) {
+      setPlatformProducts([]);
       setErrors((prev) => ({ ...prev, platform: false }));
-      const response = await fetch(`${API_BASE}/platform-products?limit=6`);
-      const data = await response.json();
-      if (data.success) {
-        setPlatformProducts(data.data);
+      return;
+    }
+    
+    const data = await response.json();
+    if (data.success) {
+      setPlatformProducts(data.data);
+    } else {
+      // Only set error if it's not a "not found" case
+      if (data.message?.toLowerCase().includes('not found')) {
+        setPlatformProducts([]);
+        setErrors((prev) => ({ ...prev, platform: false }));
       } else {
         setErrors((prev) => ({ ...prev, platform: true }));
       }
-    } catch (error) {
-      console.error('Error fetching platform products:', error);
-      setErrors((prev) => ({ ...prev, platform: true }));
     }
-  };
+  } catch (error) {
+    console.error('Error fetching platform products:', error);
+    
+    setPlatformProducts([]);
+    setErrors((prev) => ({ ...prev, platform: false }));
+  }
+};
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -550,21 +564,21 @@ const EshopHomeScreen = ({ navigation }) => {
   const renderPlatformStore = () => {
     if (loading) return <PlatformBannerSkeleton />;
 
-    if (errors.platform) {
-      return (
-        <View style={styles.errorState}>
-          <Icon name="error-outline" size={28} color={ShopColors.error} />
-          <Text style={styles.errorStateText}>Couldn't load the official store</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={fetchPlatformProducts}>
-            <Icon name="refresh" size={16} color={ShopColors.gold} />
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
+  if (errors.platform) {
+    return (
+      <View style={styles.errorState}>
+        <Icon name="error-outline" size={28} color={ShopColors.error} />
+        <Text style={styles.errorStateText}>Couldn't load the official store</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchPlatformProducts}>
+          <Icon name="refresh" size={16} color={ShopColors.gold} />
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
-    if (platformProducts.length === 0) return null;
-
+  if (platformProducts.length === 0) return null;
+  
     return (
       <Animatable.View animation="fadeInUp" delay={250} duration={500}>
         <View style={styles.platformBannerContainer}>
