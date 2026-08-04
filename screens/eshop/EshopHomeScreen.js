@@ -158,7 +158,6 @@ const EshopHomeScreen = ({ navigation }) => {
 
   const { cartItems, addToCart } = useCart();
 
-  
   const API_BASE = 'https://moihub.onrender.com/api/eshop/vendor';
 
   // Search is only "active" once the user has actually typed and submitted something
