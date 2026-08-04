@@ -106,7 +106,7 @@ const SkeletonBlock = ({ style }) => {
 };
 
 const TrendingSkeleton = () => (
-  <View style={styles.trendingList}>
+  <View style={styles.skeletonTrendingRow}>
     {[1, 2, 3].map((i) => (
       <View key={i} style={styles.trendingCard}>
         <SkeletonBlock style={{ width: '100%', height: 120 }} />
@@ -1371,6 +1371,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     flexShrink: 1,
   },
+  skeletonTrendingRow: {
+  flexDirection: 'row',
+  paddingRight: 4,
+}
 });
 
 export default EshopHomeScreen;
