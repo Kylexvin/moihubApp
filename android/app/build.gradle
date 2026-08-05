@@ -92,7 +92,7 @@ android {
         applicationId 'com.kylexvin.moihub'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 6
+        versionCode 13
         versionName "1.2.0"
     }
     signingConfigs {
